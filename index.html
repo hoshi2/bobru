@@ -119,6 +119,12 @@ input[type=text],input[type=number],input[type=datetime-local],input[type=date],
   width:100%;background:var(--card2);border:1px solid var(--line2);border-radius:var(--radius-s);
   padding:11px 12px;color:var(--txt);outline:none;transition:border-color .15s;
 }
+/* iOS Safari の日付入力は内容ぶんの最小幅を持ち width:100% では縮まないので、
+   ネイティブ描画を切って枠からはみ出さないようにする（値の中央寄せも解除） */
+input[type=datetime-local],input[type=date]{
+  -webkit-appearance:none;appearance:none;
+  min-width:0;max-width:100%;text-align:left;
+}
 input:focus,select:focus,textarea:focus{border-color:var(--blue)}
 input.err,select.err{border-color:var(--red)}
 textarea{resize:vertical;min-height:64px;line-height:1.5}
