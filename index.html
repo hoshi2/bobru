@@ -156,6 +156,39 @@ html[data-theme="light"] .btn.primary{color:#fff}
 .btnrow{display:flex;gap:9px}
 .btnrow .btn{flex:1}
 
+/* ---- Morning Brief（環境認識） ---- */
+.bhead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:11px}
+.bhead .bk{font-size:13px;color:var(--txt2);font-weight:600;letter-spacing:.03em}
+.bhead .bdate{font-size:12px;color:var(--txt3);font-weight:600;font-variant-numeric:tabular-nums}
+.trendrow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
+.trendcell{background:var(--card2);border:1px solid var(--line);border-radius:var(--radius-s);padding:9px 4px;text-align:center}
+.trendcell .tf{font-size:11px;color:var(--txt3);font-weight:600;margin-bottom:2px}
+.trendcell .tv{font-size:18px;font-weight:700;line-height:1.2}
+.trendcell .tl{font-size:10.5px;color:var(--txt3);font-weight:600}
+.evrow{display:grid;grid-template-columns:72px 1fr 58px 26px;gap:6px;align-items:center;margin-bottom:8px}
+.evrow input{padding-left:10px;padding-right:6px}
+.evrow input.evtime{text-align:center;font-variant-numeric:tabular-nums}
+.evrow select{padding-left:9px;padding-right:22px;background-position:right 6px center}
+.evrow .evdel{background:none;border:0;color:var(--txt3);font-size:19px;line-height:1;padding:6px 0}
+.evline{display:flex;align-items:center;gap:9px;font-size:13.5px;padding:7px 0;border-bottom:1px solid var(--line)}
+.evline:last-child{border-bottom:0}
+.evline .evt{font-variant-numeric:tabular-nums;color:var(--txt2);font-weight:700;flex:0 0 auto}
+.evline .evn{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.imp{font-size:10.5px;font-weight:700;padding:2px 8px;border-radius:20px;border:1px solid var(--line2);color:var(--txt3);flex:0 0 auto}
+.imp.high{color:var(--red);border-color:color-mix(in srgb,var(--red) 50%,var(--line2))}
+.imp.mid{color:var(--gold);border-color:color-mix(in srgb,var(--gold) 50%,var(--line2))}
+.scen{border-left:3px solid var(--line2);padding-left:11px;margin-bottom:12px}
+.scen:last-child{margin-bottom:0}
+.scen.bull{border-left-color:var(--green)}
+.scen.bear{border-left-color:var(--red)}
+.scen.nt{border-left-color:var(--txt3)}
+.scen .sl{font-size:11.5px;color:var(--txt3);font-weight:700;letter-spacing:.04em;margin-bottom:3px}
+.scen .sv{font-size:13px;color:var(--txt2);white-space:pre-wrap;word-break:break-word}
+.blist .bl{display:flex;justify-content:space-between;align-items:center;gap:10px;padding:11px 2px;border-bottom:1px solid var(--line);cursor:pointer}
+.blist .bl:last-child{border-bottom:0}
+.blist .bl .bld{font-weight:700;font-size:13.5px;font-variant-numeric:tabular-nums}
+.blist .bl .blt{font-size:14px;color:var(--txt2);font-variant-numeric:tabular-nums;letter-spacing:.08em}
+
 /* live calc panel */
 .calc{background:var(--card2);border:1px solid var(--line);border-radius:var(--radius-s);padding:13px;margin-bottom:13px}
 .calc .cline{display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line);font-size:13.5px}
@@ -273,6 +306,7 @@ html[data-theme="light"] .filterbar button.on{color:#fff}
 
 <nav id="nav"><div class="navwrap">
   <button data-tab="home"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>ホーム</button>
+  <button data-tab="brief"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 18h18"/><path d="M7 18a5 5 0 0110 0"/><path d="M12 3v3M4.6 8.6l2.1 2.1M19.4 8.6l-2.1 2.1"/></svg>環境</button>
   <button data-tab="plan"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 5v14M5 12h14"/></svg>計画</button>
   <button data-tab="trades"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg>トレード</button>
   <button data-tab="growth"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V5M4 19h16M8 15l3-4 3 3 4-6"/></svg>成長</button>
@@ -407,6 +441,7 @@ function defaultDB(){
     version:1,
     settings:defaultSettings(),
     accounts:[{id:uid(),name:"Fintokei",type:"Fintokei Challenge Swing",initialBalance:100000,created:now()}],
+    briefs:[],       // Morning Brief（1日1件・date をキーに扱う）
     tradePlans:[],   // 下書き（計画中）
     trades:[],       // status: open / closed / cancelled
     rules:defaultRules(),
@@ -443,7 +478,7 @@ function clsSign(v){ if(!isNum(v)||v===0) return ""; return v>0?"pos":"neg"; }
 var DB=null;      // 本体
 var IMG={};       // {tradeId_entry:dataURL, tradeId_exit:dataURL}
 var TAB="home";
-var UI={ tradeTab:"open", growthPeriod:"30d", growthCustom:{from:"",to:""} };
+var UI={ tradeTab:"open", growthPeriod:"30d", growthCustom:{from:"",to:""}, briefDate:"" };
 var _saving=false;
 
 /* ---------- ロード/セーブ ---------- */
@@ -473,6 +508,7 @@ function migrate(p){
   db.version=1;
   db.settings=mergeSettings(base.settings, p.settings);
   db.accounts=Array.isArray(p.accounts)&&p.accounts.length?p.accounts:base.accounts;
+  db.briefs=Array.isArray(p.briefs)?p.briefs:[];
   db.tradePlans=Array.isArray(p.tradePlans)?p.tradePlans:[];
   db.trades=Array.isArray(p.trades)?p.trades:[];
   db.rules=Array.isArray(p.rules)&&p.rules.length?p.rules:base.rules;
@@ -533,7 +569,8 @@ function syncData(mode, code){
 function tradesToCSV(){
   var cols=["id","status","createdAt","closedAt","symbol","dir","pattern","h4env","m15purple","trigger",
     "entry","sl","tp","lot","contractSize","balanceAtEntry","plannedLoss","plannedProfit","plannedRR",
-    "realizedPL","fee","swap","result","ruleOk","sawLower","emotion","realizedR","reviewMemo","learn","tags"];
+    "realizedPL","fee","swap","result","ruleOk","sawLower","emotion","realizedR","reviewMemo","learn","tags",
+    "briefId","briefDate","trendDaily","trendH4","trendH1"];
   var esc2=function(v){ if(v===null||v===undefined) v=""; v=String(v); if(/[",\n]/.test(v)) v='"'+v.replace(/"/g,'""')+'"'; return v; };
   var rows=[cols.join(",")];
   DB.trades.forEach(function(t){
@@ -542,6 +579,9 @@ function tradesToCSV(){
       t.entry,t.sl,t.tp,t.lot,t.contractSize,t.balanceAtEntry,round2(c.plannedLoss),round2(c.plannedProfit),
       isNum(c.rr)?c.rr.toFixed(2):"",t.realizedPL,t.fee,t.swap,t.result||"",t.ruleOk||"",t.sawLower||"",t.emotion||"",
       isNum(c.realizedR)?c.realizedR.toFixed(3):"",t.reviewMemo||"",t.learn||"",(t.tags||[]).join("|")];
+    var b=briefOfTrade(t);
+    var bt=b?normalizeBrief(b):null;
+    line.push(t.briefId||"", bt?bt.date:"", bt?bt.trend.daily:"", bt?bt.trend.h4:"", bt?bt.trend.h1:"");
     rows.push(line.map(esc2).join(","));
   });
   return rows.join("\n");
@@ -699,6 +739,7 @@ function render(){
   var app=document.getElementById("app");
   var html="";
   if(TAB==="home") html=viewHome();
+  else if(TAB==="brief") html=viewBrief();
   else if(TAB==="plan") html=viewPlan();
   else if(TAB==="trades") html=viewTrades();
   else if(TAB==="growth") html=viewGrowth();
@@ -763,6 +804,10 @@ function viewHome(){
   h+=stat("直近30日 勝率", st30.winRate!==null?("<span class='tabular'>"+fmtPct(st30.winRate,0)+"</span>"):"<span class='muted'>—</span>", true);
   h+="</div>";
 
+  // 今日の環境認識
+  h+="<div class='sect-title'>環境認識</div>";
+  h+=homeBriefCard();
+
   // Fintokei メーター
   h+="<div class='sect-title'>Fintokei 状況</div>";
   h+="<div class='card'>";
@@ -801,6 +846,329 @@ function meter(lab,right,pct,color){
     "<div class='bar'><div class='fill' style='width:"+Math.max(0,Math.min(100,pct))+"%;background:"+color+"'></div></div></div>";
 }
 
+/* =========================================================================
+   Morning Brief（環境認識）
+   1日1件。date をキーに upsert する。外部APIは使わず手入力のみ。
+   ========================================================================= */
+var BRIEF=null;   // 編集中の作業コピー（DBの実体ではない）
+var _briefSaving=false;   // 二重送信ガード（他画面と共有の _saving とは別に持つ）
+var TREND_OPTS=[["up","上昇"],["down","下降"],["range","レンジ"],["na","判断不能"]];
+
+function freshBrief(date){
+  return {
+    id:null, date:date||today(), symbol:"XAUUSD",
+    createdAt:null, updatedAt:null,
+    trend:{daily:"",h4:"",h1:""},
+    levels:{prevHigh:null,prevLow:null,weekHigh:null,weekLow:null,supports:[],resistances:[],zone:""},
+    events:[],
+    scenarios:{bull:"",bear:"",noTrade:""},
+    memo:"", aiSummary:""
+  };
+}
+// 保存済み／未知の形でも安全に扱えるよう欠損キーを既定で埋める
+function normalizeBrief(b){
+  var f=freshBrief(b&&b.date);
+  if(!b||typeof b!=="object") return f;
+  f.id=b.id||null; f.symbol=b.symbol||"XAUUSD";
+  f.createdAt=b.createdAt||null; f.updatedAt=b.updatedAt||null;
+  if(b.trend&&typeof b.trend==="object"){
+    f.trend.daily=b.trend.daily||""; f.trend.h4=b.trend.h4||""; f.trend.h1=b.trend.h1||"";
+  }
+  if(b.levels&&typeof b.levels==="object"){
+    f.levels.prevHigh=toNum(b.levels.prevHigh); f.levels.prevLow=toNum(b.levels.prevLow);
+    f.levels.weekHigh=toNum(b.levels.weekHigh); f.levels.weekLow=toNum(b.levels.weekLow);
+    f.levels.supports=Array.isArray(b.levels.supports)?b.levels.supports.slice():[];
+    f.levels.resistances=Array.isArray(b.levels.resistances)?b.levels.resistances.slice():[];
+    f.levels.zone=b.levels.zone||"";
+  }
+  f.events=Array.isArray(b.events)?b.events.map(function(e){
+    return {time:(e&&e.time)||"", name:(e&&e.name)||"", importance:(e&&e.importance)||"mid"};
+  }):[];
+  if(b.scenarios&&typeof b.scenarios==="object"){
+    f.scenarios.bull=b.scenarios.bull||""; f.scenarios.bear=b.scenarios.bear||""; f.scenarios.noTrade=b.scenarios.noTrade||"";
+  }
+  f.memo=b.memo||""; f.aiSummary=b.aiSummary||"";
+  return f;
+}
+function briefOn(date){ for(var i=0;i<DB.briefs.length;i++){ if(DB.briefs[i].date===date) return DB.briefs[i]; } return null; }
+function todayBrief(){ return briefOn(today()); }
+function findBrief(id){ for(var i=0;i<DB.briefs.length;i++){ if(DB.briefs[i].id===id) return DB.briefs[i]; } return null; }
+// トレード → その日の環境認識（briefId 優先・無ければ日付で解決）
+function briefOfTrade(t){
+  if(!t) return null;
+  if(t.briefId){ var b=findBrief(t.briefId); if(b) return b; }
+  var d=localDateOf(t.createdAt); if(!d) return null;
+  return briefOn(d);
+}
+function labelTrend(v){ return {up:"上昇",down:"下降",range:"レンジ",na:"判断不能"}[v]||"未記入"; }
+function arrowTrend(v){ return {up:"↑",down:"↓",range:"→",na:"?"}[v]||"—"; }
+function clsTrend(v){ return v==="up"?"pos":v==="down"?"neg":"muted"; }
+function labelImp(v){ return {high:"高",mid:"中",low:"低"}[v]||"中"; }
+function numListToStr(a){ return (a||[]).join(", "); }
+function strToNumList(str){
+  return String(str||"").split(",").map(function(x){ return toNum(x.trim()); }).filter(function(x){ return isNum(x); });
+}
+// "2130" "9:5" "２１：３０" などを "21:30" に寄せる。解釈できなければ入力をそのまま残す
+function normalizeTimeStr(v){
+  var t=String(v||"").trim();
+  if(!t) return "";
+  t=t.replace(/[０-９]/g,function(c){ return String.fromCharCode(c.charCodeAt(0)-0xFEE0); }).replace(/：/g,":");
+  var hh=null, mm=null, m;
+  if((m=/^(\d{1,2})\s*:\s*(\d{1,2})$/.exec(t))){ hh=Number(m[1]); mm=Number(m[2]); }
+  else if((m=/^(\d{3,4})$/.exec(t))){ hh=Number(m[1].slice(0,-2)); mm=Number(m[1].slice(-2)); }
+  else if((m=/^(\d{1,2})$/.exec(t))){ hh=Number(m[1]); mm=0; }        // 「21」＝21:00
+  if(hh===null||hh>23||mm>59) return t;
+  return ("0"+hh).slice(-2)+":"+("0"+mm).slice(-2);
+}
+// 並び順のキー。06:00 より前は「翌朝＝その日の終盤」とみなして後ろに送る
+// （21:30 CPI → 04:00 FOMC の順に並ぶ。深夜の指標を朝と取り違えないため）
+function eventSortKey(e){
+  var m=/^(\d{1,2}):(\d{2})$/.exec(String(e&&e.time||""));
+  if(!m) return 1e9;                      // 時刻未入力は末尾
+  var mins=Number(m[1])*60+Number(m[2]);
+  return mins<360 ? mins+1440 : mins;
+}
+function eventsSorted(list){
+  return (list||[]).filter(function(e){ return e.time||e.name; })
+    .slice().sort(function(a,b){ return eventSortKey(a)-eventSortKey(b); });
+}
+function briefTrendRow(raw){
+  var b=normalizeBrief(raw);
+  var c=function(lab,v){
+    return "<div class='trendcell'><div class='tf'>"+esc(lab)+"</div><div class='tv "+clsTrend(v)+"'>"+arrowTrend(v)+
+           "</div><div class='tl'>"+esc(labelTrend(v))+"</div></div>";
+  };
+  return "<div class='trendrow'>"+c("日足",b.trend.daily)+c("4時間足",b.trend.h4)+c("1時間足",b.trend.h1)+"</div>";
+}
+function eventLine(e){
+  return "<div class='evline'><span class='evt'>"+esc(e.time||"--:--")+"</span><span class='evn'>"+esc(e.name||"")+
+         "</span><span class='imp "+esc(e.importance||"mid")+"'>"+esc(labelImp(e.importance))+"</span></div>";
+}
+// 1行サマリ（日足↑ / 4H↑ / 1H→）
+function briefTrendText(raw){
+  var b=normalizeBrief(raw);
+  return "日足"+arrowTrend(b.trend.daily)+" / 4H"+arrowTrend(b.trend.h4)+" / 1H"+arrowTrend(b.trend.h1);
+}
+
+/* ---------- Brief 画面 ---------- */
+function viewBrief(){
+  if(!UI.briefDate) UI.briefDate=today();
+  if(!BRIEF) BRIEF=normalizeBrief(briefOn(UI.briefDate)||{date:UI.briefDate});
+  BRIEF.date=UI.briefDate;
+  var saved=briefOn(UI.briefDate);
+  var isToday=UI.briefDate===today();
+
+  var h=topbar(isToday?"今日の環境認識":"過去の環境認識");
+
+  h+="<div class='card'>";
+  h+="<div class='row2'>";
+  h+=field("日付","<input type='date' id='b_date' value='"+esc(UI.briefDate)+"' onchange='setBriefDate()'>");
+  h+=field("銘柄","<input type='text' id='b_sym' value='"+esc(BRIEF.symbol)+"' autocomplete='off'>");
+  h+="</div>";
+  if(!isToday) h+="<button class='btn ghost sm' onclick='gotoBriefToday()'>今日に戻る</button>";
+  h+="</div>";
+
+  // 上位足
+  h+="<div class='card'><h2>上位足の方向</h2>";
+  h+=briefChipField("日足","daily",BRIEF.trend.daily);
+  h+=briefChipField("4時間足","h4",BRIEF.trend.h4);
+  h+=briefChipField("1時間足","h1",BRIEF.trend.h1);
+  h+="</div>";
+
+  // 重要価格
+  h+="<div class='card'><h2>重要価格</h2>";
+  h+="<div class='row2'>"+
+     field("前日高値","<input type='number' inputmode='decimal' step='any' id='b_ph' value='"+esc(BRIEF.levels.prevHigh)+"' placeholder='0.00'>")+
+     field("前日安値","<input type='number' inputmode='decimal' step='any' id='b_pl' value='"+esc(BRIEF.levels.prevLow)+"' placeholder='0.00'>")+"</div>";
+  h+="<div class='row2'>"+
+     field("週足高値","<input type='number' inputmode='decimal' step='any' id='b_wh' value='"+esc(BRIEF.levels.weekHigh)+"' placeholder='0.00'>")+
+     field("週足安値","<input type='number' inputmode='decimal' step='any' id='b_wl' value='"+esc(BRIEF.levels.weekLow)+"' placeholder='0.00'>")+"</div>";
+  h+=field("主要サポート（カンマ区切り）","<input type='text' inputmode='decimal' id='b_sup' value='"+esc(numListToStr(BRIEF.levels.supports))+"' placeholder='例）3280, 3265'>");
+  h+=field("主要レジスタンス（カンマ区切り）","<input type='text' inputmode='decimal' id='b_res' value='"+esc(numListToStr(BRIEF.levels.resistances))+"' placeholder='例）3320, 3335'>");
+  h+=field("注目ゾーン（任意）","<input type='text' id='b_zone' value='"+esc(BRIEF.levels.zone)+"' placeholder='例）3300〜3310で反応を見る'>");
+  h+="</div>";
+
+  // 経済指標
+  h+="<div class='card'><h2>今日の経済指標・イベント</h2>";
+  if(BRIEF.events.length===0){
+    h+="<div class='smallnote' style='margin:0 0 11px'>まだありません。トレードを避ける時間帯の目印になります。</div>";
+  }
+  BRIEF.events.forEach(function(e,i){
+    h+="<div class='evrow'>";
+    h+="<input type='text' class='evtime' inputmode='numeric' maxlength='5' id='b_evt_"+i+"' value='"+esc(e.time)+"' placeholder='21:30' autocomplete='off'>";
+    h+="<input type='text' id='b_evn_"+i+"' value='"+esc(e.name)+"' placeholder='例）CPI' autocomplete='off'>";
+    h+="<select id='b_evi_"+i+"'>"+
+       [["high","高"],["mid","中"],["low","低"]].map(function(o){
+         return "<option value='"+o[0]+"' "+(e.importance===o[0]?"selected":"")+">"+o[1]+"</option>";
+       }).join("")+"</select>";
+    h+="<button type='button' class='evdel' onclick='delBriefEvent("+i+")'>×</button>";
+    h+="</div>";
+  });
+  h+="<button class='btn ghost sm' onclick='addBriefEvent()'>指標を追加</button>";
+  h+="</div>";
+
+  // シナリオ
+  h+="<div class='card'><h2>今日のシナリオ</h2>";
+  h+=field("Bull シナリオ","<textarea id='b_bull' placeholder='条件と、そうなったら何を探すか'>"+esc(BRIEF.scenarios.bull)+"</textarea>");
+  h+=field("Bear シナリオ","<textarea id='b_bear' placeholder='条件と、そうなったら何を探すか'>"+esc(BRIEF.scenarios.bear)+"</textarea>");
+  h+=field("No Trade 条件","<textarea id='b_nt' placeholder='この状況なら見送る'>"+esc(BRIEF.scenarios.noTrade)+"</textarea>");
+  h+="<div class='smallnote'>ここでは売買の指示ではなく「こうなったら何を探すか」を書きます。</div>";
+  h+="</div>";
+
+  h+="<div class='card'>";
+  h+=field("メモ（市場材料など）","<textarea id='b_memo' placeholder='ドル・金利・株価指数・地政学など'>"+esc(BRIEF.memo)+"</textarea>");
+  h+="</div>";
+
+  h+="<button class='btn primary' onclick='saveBrief()'>"+(saved?"環境認識を更新":"環境認識を保存")+"</button>";
+  if(saved){
+    h+="<button class='btn danger' style='margin-top:9px' onclick='deleteBrief()'>この日の環境認識を削除</button>";
+    h+="<div class='smallnote' style='text-align:center'>最終更新 "+fmtWhen(saved.updatedAt||saved.createdAt)+"</div>";
+  }
+
+  // 過去分
+  if(DB.briefs.length){
+    h+="<div class='sect-title'>これまでの環境認識</div>";
+    h+="<div class='card blist'>";
+    DB.briefs.slice().sort(function(a,b){ return String(b.date).localeCompare(String(a.date)); }).slice(0,14).forEach(function(b){
+      h+="<div class='bl' onclick=\"gotoBriefDate('"+esc(b.date)+"')\">"+
+         "<span class='bld'>"+esc(b.date)+(b.date===UI.briefDate?" ・編集中":"")+"</span>"+
+         "<span class='blt'>"+briefTrendText(b)+"</span></div>";
+    });
+    h+="</div>";
+  }
+  return h;
+}
+function briefChipField(label,key,cur){
+  var c="<div class='field'><label>"+esc(label)+"</label><div class='chips'>";
+  TREND_OPTS.forEach(function(o){
+    c+="<button type='button' class='chip"+(cur===o[0]?" on":"")+"' onclick=\"briefChipPick('"+key+"','"+o[0]+"')\">"+esc(o[1])+"</button>";
+  });
+  c+="</div></div>"; return c;
+}
+// 画面上の入力を BRIEF に取り込む（日付だけは setBriefDate 側で扱う）
+function syncBriefFromDOM(){
+  if(!BRIEF) return;
+  var g=function(id){ var e=document.getElementById(id); return e?e.value:null; };
+  var sym=g("b_sym"); if(sym!==null) BRIEF.symbol=sym.trim()||"XAUUSD";
+  var ph=g("b_ph"); if(ph!==null) BRIEF.levels.prevHigh=toNum(ph);
+  var pl=g("b_pl"); if(pl!==null) BRIEF.levels.prevLow=toNum(pl);
+  var wh=g("b_wh"); if(wh!==null) BRIEF.levels.weekHigh=toNum(wh);
+  var wl=g("b_wl"); if(wl!==null) BRIEF.levels.weekLow=toNum(wl);
+  var sup=g("b_sup"); if(sup!==null) BRIEF.levels.supports=strToNumList(sup);
+  var res=g("b_res"); if(res!==null) BRIEF.levels.resistances=strToNumList(res);
+  var zone=g("b_zone"); if(zone!==null) BRIEF.levels.zone=zone;
+  var bull=g("b_bull"); if(bull!==null) BRIEF.scenarios.bull=bull;
+  var bear=g("b_bear"); if(bear!==null) BRIEF.scenarios.bear=bear;
+  var nt=g("b_nt"); if(nt!==null) BRIEF.scenarios.noTrade=nt;
+  var memo=g("b_memo"); if(memo!==null) BRIEF.memo=memo;
+  BRIEF.events.forEach(function(e,i){
+    var t=g("b_evt_"+i), n=g("b_evn_"+i), im=g("b_evi_"+i);
+    if(t!==null) e.time=normalizeTimeStr(t);
+    if(n!==null) e.name=n;
+    if(im!==null) e.importance=im;
+  });
+}
+// 未保存の差分があるか
+function briefSnapshot(b){
+  var n=normalizeBrief(b);
+  return JSON.stringify([n.symbol,n.trend,n.levels,n.events,n.scenarios,n.memo]);
+}
+function briefDirty(){
+  if(!BRIEF) return false;
+  return briefSnapshot(BRIEF)!==briefSnapshot(briefOn(BRIEF.date)||{date:BRIEF.date});
+}
+// chip や行追加での再描画でスクロール位置を保つ（フォームが長いため）
+function rerenderBrief(){ var y=window.pageYOffset||document.documentElement.scrollTop||0; render(); window.scrollTo(0,y); }
+
+window.briefChipPick=function(key,val){
+  if(!BRIEF) return;
+  syncBriefFromDOM();
+  BRIEF.trend[key]=(BRIEF.trend[key]===val?"":val);
+  rerenderBrief();
+};
+window.addBriefEvent=function(){
+  syncBriefFromDOM();
+  BRIEF.events.push({time:"",name:"",importance:"mid"});
+  rerenderBrief();
+};
+window.delBriefEvent=function(i){
+  syncBriefFromDOM();
+  BRIEF.events.splice(i,1);
+  rerenderBrief();
+};
+function switchBriefDate(d){
+  if(!d || d===UI.briefDate) return false;
+  syncBriefFromDOM();
+  if(briefDirty() && !confirm("保存していない変更があります。破棄して "+d+" を開きますか？")) return false;
+  UI.briefDate=d; BRIEF=null; render(); return true;
+}
+window.setBriefDate=function(){
+  var el=document.getElementById("b_date"); if(!el) return;
+  var d=el.value;
+  if(!d){ el.value=UI.briefDate; return; }
+  if(!switchBriefDate(d)) el.value=UI.briefDate;
+};
+window.gotoBriefDate=function(d){ switchBriefDate(d); };
+window.gotoBriefToday=function(){
+  if(UI.briefDate===today() && TAB==="brief") return;
+  if(TAB==="brief"){ switchBriefDate(today()); return; }
+  UI.briefDate=today(); BRIEF=null; TAB="brief"; render();
+};
+window.saveBrief=function(){
+  if(_briefSaving) return; _briefSaving=true; setTimeout(function(){_briefSaving=false;},400);
+  syncBriefFromDOM();
+  if(!BRIEF.date){ toast("日付を入力して下さい"); return; }
+  var rec=normalizeBrief(BRIEF);
+  rec.date=BRIEF.date;
+  var ex=briefOn(rec.date);
+  if(ex){
+    rec.id=ex.id||uid(); rec.createdAt=ex.createdAt||now(); rec.updatedAt=now();
+    for(var i=0;i<DB.briefs.length;i++){ if(DB.briefs[i]===ex){ DB.briefs[i]=rec; break; } }
+  }else{
+    rec.id=uid(); rec.createdAt=now(); rec.updatedAt=now();
+    DB.briefs.unshift(rec);
+  }
+  BRIEF=normalizeBrief(rec);
+  if(saveData()) toast(ex?"環境認識を更新しました":"環境認識を保存しました");
+  render();
+};
+window.deleteBrief=function(){
+  var ex=briefOn(UI.briefDate); if(!ex) return;
+  if(!confirm(UI.briefDate+" の環境認識を削除しますか？（トレード記録は消えません）")) return;
+  DB.briefs=DB.briefs.filter(function(b){ return b!==ex; });
+  BRIEF=null; saveData(); toast("削除しました"); render();
+};
+
+/* ---------- ホーム用の要約カード ---------- */
+function homeBriefCard(){
+  var raw=todayBrief();
+  if(!raw){
+    var h0="<div class='card'>";
+    h0+="<div class='bhead'><div class='bk'>今日の環境認識</div><div class='bdate'>"+esc(today())+"</div></div>";
+    h0+="<div class='smallnote' style='margin:0 0 11px'>まだ作成されていません。先に相場を整理しておくと、あとで「どんな環境なら勝てているか」を振り返れます。</div>";
+    h0+="<button class='btn ghost sm' onclick='gotoBriefToday()'>環境認識をつくる</button>";
+    h0+="</div>";
+    return h0;
+  }
+  var b=normalizeBrief(raw);
+  var h="<div class='card'>";
+  h+="<div class='bhead'><div class='bk'>今日の環境認識</div><div class='bdate'>"+esc(b.symbol)+"</div></div>";
+  h+=briefTrendRow(b);
+  var ev=eventsSorted(b.events);
+  if(ev.length){
+    h+="<div style='margin-top:11px'>";
+    ev.slice(0,4).forEach(function(e){ h+=eventLine(e); });
+    if(ev.length>4) h+="<div class='smallnote'>ほか "+(ev.length-4)+" 件</div>";
+    h+="</div>";
+  }
+  if(b.scenarios.noTrade){
+    h+="<div class='scen nt' style='margin-top:12px'><div class='sl'>NO TRADE</div><div class='sv'>"+esc(b.scenarios.noTrade)+"</div></div>";
+  }
+  h+="<button class='btn ghost sm' style='margin-top:12px' onclick='gotoBriefToday()'>環境認識をひらく</button>";
+  h+="</div>";
+  return h;
+}
+
 /* ---------- 計画 ---------- */
 var PLAN={};   // 現在編集中の計画入力
 function freshPlan(){
@@ -825,6 +1193,10 @@ function viewPlan(){
   h+=field("銘柄","<input type='text' id='p_sym' value='"+esc(PLAN.symbol)+"' autocomplete='off'>");
   h+="<div class='field'><label>方向</label><div class='seg ls'>"+
      segBtn("p_dir","long","ロング",PLAN.dir)+segBtn("p_dir","short","ショート",PLAN.dir)+"</div></div>";
+  var _tb=todayBrief();
+  h+="<div class='smallnote'>"+(_tb
+      ? ("今日の環境認識："+esc(briefTrendText(_tb))+"（この計画に紐付きます）")
+      : "今日の環境認識はまだありません。<a href='#' onclick='gotoBriefToday();return false;'>環境タブで作成</a>")+"</div>";
   h+="</div>";
 
   h+="<div class='card'>";
@@ -994,6 +1366,7 @@ function planToRecord(status){
     entry:toNum(PLAN.entry), sl:toNum(PLAN.sl), tp:toNum(PLAN.tp),
     lot:toNum(PLAN.lot), balanceAtEntry:toNum(PLAN.balance), contractSize:toNum(PLAN.contractSize),
     sawLower:PLAN.sawLower, memo:PLAN.memo, tags:PLAN.tags||[],
+    briefId:(todayBrief()||{}).id||null,
     // 決済系（未設定）
     closedAt:null, closePrice:null, realizedPL:null, fee:null, swap:null,
     result:null, ruleOk:null, closeSawLower:null, emotion:null, reviewMemo:"", learn:"",
