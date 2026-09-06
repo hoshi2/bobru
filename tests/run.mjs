@@ -41,8 +41,9 @@ const group = n => console.log("\n" + n);
 
 const browser = await chromium.launch();
 const pageErrors = [];
-async function open(width = 375, height = 812) {
-  const ctx = await browser.newContext({ viewport: { width, height }, locale: "ja-JP" });
+async function open(width = 375, height = 812, timezoneId) {
+  const ctx = await browser.newContext({ viewport: { width, height }, locale: "ja-JP",
+    ...(timezoneId ? { timezoneId } : {}) });
   const page = await ctx.newPage();
   page.on("pageerror", e => pageErrors.push(`${width}px: ${e.message}`));
   page.on("console", m => { if (m.type() === "error") pageErrors.push(`${width}px console: ${m.text()}`); });
@@ -277,16 +278,18 @@ group("6. CSV");
 {
   const page = await open();
   const head = await page.evaluate(() => {
-    DB.briefs = [{ id:"b", date:today(), symbol:"XAUUSD", trend:{daily:"up",h4:"down",h1:"range"}, levels:{}, events:[], scenarios:{}, memo:"" }];
+    DB.briefs = [{ id:"b", date:today(), symbol:"XAUUSD", trend:{daily:"up",h4:"down",h1:"range",m15:"up"},
+      bias:"long", levels:{}, events:[], scenarios:{}, memo:"" }];
     DB.trades = [{ id:"t", status:"closed", symbol:"XAUUSD", dir:"long", entry:3300, sl:3290, tp:3320, lot:1,
       contractSize:100, balanceAtEntry:100000, realizedPL:1660, result:"win", briefId:"b",
       createdAt:new Date().toISOString(), closedAt:new Date().toISOString(), tags:[] }];
     const rows = tradesToCSV().split("\n");
     return { cols: rows[0].split(","), row: rows[1].split(",") };
   });
-  ok("新しい列は末尾に付く", head.cols.slice(-5).join(",") === "briefId,briefDate,trendDaily,trendH4,trendH1");
-  ok("既存の列順が変わっていない", head.cols[0] === "id" && head.cols[head.cols.length - 6] === "tags");
-  ok("環境認識の内容が書き出される", head.row.slice(-3).join(",") === "up,down,range");
+  ok("新しい列は末尾に付く",
+     head.cols.slice(-7).join(",") === "briefId,briefDate,trendDaily,trendH4,trendH1,trendM15,bias");
+  ok("既存の列順が変わっていない", head.cols[0] === "id" && head.cols[head.cols.length - 8] === "tags");
+  ok("環境認識の内容が書き出される", head.row.slice(-5).join(",") === "up,down,range,up,long");
   await page.close();
 }
 
@@ -339,6 +342,157 @@ for (const [w, h] of [[375, 812], [1024, 768], [1440, 900]]) {
   const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   ok(`${w}px: 横スクロールが出ない（表は容器内で収める）`, over <= 1);
 
+  await page.close();
+}
+
+/* =======================================================================
+   8. セッション時間（サマータイム）
+   ======================================================================= */
+group("8. セッション時間（サマータイム）");
+{
+  const page = await open();
+  const probe = () => page.evaluate(() => {
+    const pick = (d, k) => sessionWindows(d).filter(x => x.key === k)[0] || null;
+    return {
+      wAsia: pick("2026-01-15", "asia"),   sAsia: pick("2026-07-15", "asia"),
+      wLdn:  pick("2026-01-15", "london"), sLdn:  pick("2026-07-15", "london"),
+      wNy:   pick("2026-01-15", "newyork"),sNy:   pick("2026-07-15", "newyork"),
+      trans: pick("2026-03-29", "london"),
+    };
+  });
+  const w = await probe();
+
+  ok("東京は年間を通じて UTC+9（夏時間なし）",
+     w.wAsia.offsetMin === 540 && w.sAsia.offsetMin === 540 && !w.wAsia.dst && !w.sAsia.dst);
+  ok("ロンドンは冬 UTC+0 / 夏 UTC+1",
+     w.wLdn.offsetMin === 0 && w.sLdn.offsetMin === 60 && !w.wLdn.dst && w.sLdn.dst);
+  ok("ニューヨークは冬 UTC-5 / 夏 UTC-4",
+     w.wNy.offsetMin === -300 && w.sNy.offsetMin === -240 && !w.wNy.dst && w.sNy.dst);
+
+  // 固定UTCではなく「現地08:00」に追従しているか（夏冬で UTC 時刻が1時間ずれる）
+  ok("ロンドンの窓は現地08:00に追従する",
+     w.wLdn.startISO === "2026-01-15T08:00:00.000Z" && w.sLdn.startISO === "2026-07-15T07:00:00.000Z");
+  ok("ニューヨークの窓は現地08:00に追従する",
+     w.wNy.startISO === "2026-01-15T13:00:00.000Z" && w.sNy.startISO === "2026-07-15T12:00:00.000Z");
+  ok("東京の窓は現地09:00で動かない",
+     w.wAsia.startISO === "2026-01-15T00:00:00.000Z" && w.sAsia.startISO === "2026-07-15T00:00:00.000Z");
+  ok("切り替え当日も現地時刻で解ける（2026-03-29 ロンドン）",
+     w.trans.startISO === "2026-03-29T07:00:00.000Z" && w.trans.dst === true);
+  ok("窓の終わりは始まりより後",
+     [w.wAsia, w.sLdn, w.wNy].every(x => new Date(x.endISO) > new Date(x.startISO)));
+  await page.close();
+
+  // 端末のタイムゾーンが変わっても窓そのものは動かない
+  const la = await open(375, 812, "America/Los_Angeles");
+  const w2 = await la.evaluate(() => {
+    const pick = (d, k) => sessionWindows(d).filter(x => x.key === k)[0];
+    return { ldn: pick("2026-07-15", "london").startISO, ny: pick("2026-01-15", "newyork").startISO };
+  });
+  ok("端末のタイムゾーンに左右されない",
+     w2.ldn === w.sLdn.startISO && w2.ny === w.wNy.startISO);
+  await la.close();
+}
+
+/* =======================================================================
+   9. 朝分析と marketDataProvider
+   ======================================================================= */
+group("9. 朝分析と marketDataProvider");
+{
+  const page = await open();
+  await page.click('#nav button[data-tab="brief"]');
+
+  ok("既定の取得先は未接続",
+     (await page.evaluate(() => marketDataProvider.list().map(p => p.name).join(","))) === "none,demo" &&
+     (await page.evaluate(() => currentProviderName())) === "none");
+
+  // --- 未接続: 配線は通るが値は入らない。手入力を壊さない ---
+  await page.fill("#b_ph", "3333.3");
+  await page.fill("#b_memo", "手で書いたメモ");
+  answer(page, true);
+  await page.click("#b_run");
+  await page.waitForTimeout(400);
+  ok("未接続でも朝分析は実行できる",
+     (await page.$eval("#b_anastat", e => e.textContent)).includes("未接続"));
+  ok("取れない項目は推測で埋めない（データなしのまま）",
+     (await page.evaluate(() => [BRIEF.price.last, BRIEF.ema.e200, BRIEF.sessions.asia.high, BRIEF.bias]
+        .every(v => v === null || v === ""))) === true);
+  ok("未接続の朝分析で手入力が消えない",
+     (await page.inputValue("#b_ph")) === "3333.3" && (await page.inputValue("#b_memo")) === "手で書いたメモ");
+
+  // --- デモ: 取れた項目だけがフォームに入る ---
+  await page.selectOption("#b_provider", "demo");
+  await page.waitForTimeout(150);
+  answer(page, true);
+  await page.click("#b_run");
+  await page.waitForTimeout(400);
+  const f = await page.evaluate(() => ({
+    price: BRIEF.price.last, e10: BRIEF.ema.e10, e200: BRIEF.ema.e200,
+    m15: BRIEF.trend.m15, daily: BRIEF.trend.daily, bias: BRIEF.bias,
+    rh: BRIEF.levels.recentHigh, rl: BRIEF.levels.recentLow,
+    asia: BRIEF.sessions.asia.high, ldn: BRIEF.sessions.london.low, ny: BRIEF.sessions.newyork.high,
+    sum: BRIEF.aiSummary, demo: BRIEF.analysis.demo, src: BRIEF.analysis.source,
+    memo: BRIEF.memo,
+  }));
+  ok("Issue #2 の必要項目が埋まる",
+     [f.price, f.e10, f.e200, f.rh, f.rl, f.asia, f.ldn, f.ny].every(v => typeof v === "number") &&
+     ["up", "down", "range"].includes(f.m15) && ["up", "down", "range"].includes(f.daily) &&
+     ["long", "short", "wait"].includes(f.bias) && f.sum.length > 0);
+  ok("取得層が触らない項目（メモ）は手入力のまま", f.memo === "手で書いたメモ");
+  ok("デモ値には出所の印がつく", f.demo === true && f.src.includes("デモ"));
+  ok("デモ値には警告が出る", (await page.$eval(".demowarn", e => e.textContent)).includes("デモ"));
+  ok("結果が入力欄にも反映される", (await page.inputValue("#b_price")) === String(f.price));
+  ok("編集してから保存できる（保存前は未保存表示）",
+     (await page.$eval("#b_dirty", e => e.textContent)).includes("未保存"));
+
+  // 手で直してから保存 → リロードしても残る
+  await page.fill("#b_price", "3301.5");
+  answer(page, true);   // デモ値のまま保存するかの確認
+  await page.click('button:has-text("環境認識を保存")');
+  await page.waitForTimeout(250);
+  await page.reload();
+  await page.waitForSelector("#app .topbar");
+  const kept = await page.evaluate(() => {
+    const b = DB.briefs[0];
+    return { n: DB.briefs.length, price: b.price.last, m15: b.trend.m15, bias: b.bias,
+             ny: b.sessions.newyork.high, e200: b.ema.e200, src: b.analysis.source };
+  });
+  ok("朝分析の結果を編集した内容が保存される", kept.price === 3301.5);
+  ok("新しい項目がリロード後も残る",
+     kept.n === 1 && kept.m15 === f.m15 && kept.bias === f.bias &&
+     kept.ny === f.ny && kept.e200 === f.e200 && kept.src.includes("デモ"));
+
+  // --- 差し替え口そのものの確認 ---
+  const ext = await page.evaluate(async () => {
+    marketDataProvider.register("t_ok", { label: "テスト取得先",
+      fetch: () => Promise.resolve({ price: 1234.5, trend: { h1: "down" }, notes: ["ok"] }) });
+    marketDataProvider.register("t_err", { label: "こわれた取得先",
+      fetch: () => { throw new Error("boom"); } });
+    const req = { symbol: "XAUUSD", date: today(), sessions: sessionWindows(today()) };
+    const a = await marketDataProvider.fetch("t_ok", req);
+    const b = await marketDataProvider.fetch("t_err", req);
+    const c = await marketDataProvider.fetch("いない取得先", req);
+    return { aOk: a.ok, aPrice: a.snapshot.price, aH1: a.snapshot.trend.h1, aDaily: a.snapshot.trend.daily,
+             bOk: b.ok, bNote: b.snapshot.notes[0] || "", cOk: c.ok, cNote: c.snapshot.notes[0] || "" };
+  });
+  ok("あとから取得先を足せる（画面側は変更不要）",
+     ext.aOk === true && ext.aPrice === 1234.5 && ext.aH1 === "down");
+  ok("返さなかった項目は null のまま（データなし）", ext.aDaily === null);
+  ok("取得先が落ちても画面は止まらない", ext.bOk === false && ext.bNote.includes("失敗"));
+  ok("知らない取得先はエラーとして返る", ext.cOk === false && ext.cNote.includes("見つかりません"));
+
+  // 取得層はセッション窓を受け取る（Bookmap 等が高安を集計するための入口）
+  const gotWindows = await page.evaluate(async () => {
+    let seen = null;
+    marketDataProvider.register("t_req", { label: "受け取り確認",
+      fetch: (req) => { seen = req; return Promise.resolve({}); } });
+    await marketDataProvider.fetch("t_req", { symbol: "XAUUSD", date: "2026-07-15",
+      sessions: sessionWindows("2026-07-15") });
+    return { n: seen.sessions.length, keys: seen.sessions.map(s => s.key).join(","),
+             hasIso: seen.sessions.every(s => !!s.startISO && !!s.endISO), sym: seen.symbol };
+  });
+  ok("取得先にセッション窓が渡る",
+     gotWindows.n === 3 && gotWindows.keys === "asia,london,newyork" &&
+     gotWindows.hasIso && gotWindows.sym === "XAUUSD");
   await page.close();
 }
 
