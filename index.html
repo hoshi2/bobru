@@ -20,7 +20,7 @@
   --gold:#c9a227; --blue:#4f7fd6;
   --accent:var(--gold);
   --radius:14px; --radius-s:10px;
-  --nav-h:62px; --pad:16px;
+  --nav-h:62px; --pad:16px; --side-w:212px;
   --sat:env(safe-area-inset-top,0px);
   --sab:env(safe-area-inset-bottom,0px);
 }
@@ -155,6 +155,8 @@ html[data-theme="light"] .btn.primary{color:#fff}
 .btn.sm{padding:10px;font-size:13.5px;border-radius:9px}
 .btnrow{display:flex;gap:9px}
 .btnrow .btn{flex:1}
+
+.statwrap,.pair,.pair>div,.chartgrid,.tablegrid{display:contents}
 
 /* ---- Morning Brief（環境認識） ---- */
 .bhead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:11px}
@@ -299,6 +301,71 @@ html[data-theme="light"] .btn.primary{color:#fff}
 .filterbar button{white-space:nowrap;background:var(--card);border:1px solid var(--line);color:var(--txt2);border-radius:20px;padding:7px 13px;font-size:12.5px;font-weight:600}
 .filterbar button.on{background:var(--accent);border-color:var(--accent);color:#12140c}
 html[data-theme="light"] .filterbar button.on{color:#fff}
+
+/* =========================================================================
+   PC レイアウト（900px 以上）
+   下部タブ → 左サイドバー、本文を広く。900px 未満はこれまでと同一。
+   ========================================================================= */
+@media (min-width:900px){
+  body{ padding-bottom:0; padding-left:var(--side-w); }
+
+  nav#nav{
+    top:0; bottom:0; left:0; right:auto;
+    width:var(--side-w); height:100%;
+    padding-bottom:0;
+    border-top:0; border-right:1px solid var(--line);
+    background:var(--bg2);
+    backdrop-filter:none; -webkit-backdrop-filter:none;
+    display:block; overflow-y:auto;
+  }
+  nav#nav .navwrap{ flex-direction:column; max-width:none; width:100%; padding:18px 12px; gap:3px; }
+  nav#nav button{
+    flex:0 0 auto; width:100%;
+    flex-direction:row; justify-content:flex-start; align-items:center; gap:12px;
+    padding:11px 13px; font-size:14px; letter-spacing:0; border-radius:10px;
+  }
+  nav#nav button .ic{ width:19px; height:19px; }
+  nav#nav button:hover{ background:var(--card2); color:var(--txt2); }
+  nav#nav button.on{ background:color-mix(in srgb,var(--accent) 13%, transparent); }
+  nav#nav button.on:hover{ color:var(--accent); }
+
+  #app{ max-width:780px; padding:26px 24px 64px; }
+  .topbar{ margin-bottom:18px; }
+  .topbar h1{ font-size:21px; }
+  .topbar .sub{ font-size:12px; }
+
+  /* トーストはサイドバーと重ならないよう右下へ */
+  .toast{ left:auto; right:26px; bottom:26px; transform:none; }
+  .toast.show{ transform:none; }
+
+  /* ポインタ操作向けの控えめなホバー */
+  .btn:hover{ border-color:var(--line2); }
+  .btn.ghost:hover,.btn:not(.primary):not(.blue):not(.danger):hover{ background:var(--card2); }
+  .chip:hover{ border-color:var(--txt3); }
+  .tcard:hover,.rcard:hover{ border-color:var(--line2); }
+  .folder > .fh:hover{ background:var(--card2); }
+  .blist .bl:hover .bld{ color:var(--accent); }
+  .btn:active{ transform:none; }
+}
+
+/* ---- 広い画面（1180px 以上）ではダッシュボードを2カラムに ---- */
+@media (min-width:1180px){
+  #app.tab-home,#app.tab-growth{ max-width:1120px; }
+
+  /* ホーム: 本日の指標を横1列に */
+  #app.tab-home .statwrap{ display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin-bottom:12px; }
+  #app.tab-home .statwrap > .grid3{ display:contents; }
+
+  /* ホーム: 環境認識と Fintokei を左右に */
+  #app.tab-home .pair{ display:grid; grid-template-columns:1fr 1fr; gap:0 18px; align-items:start; }
+  #app.tab-home .pair > div{ display:block; min-width:0; }
+
+  /* 成長: グラフと集計表を2列に */
+  #app.tab-growth .chartgrid,
+  #app.tab-growth .tablegrid{ display:grid; grid-template-columns:1fr 1fr; gap:0 16px; align-items:start; }
+  #app.tab-growth .chartgrid > .card,
+  #app.tab-growth .tablegrid > .card{ min-width:0; }
+}
 </style>
 </head>
 <body>
@@ -746,6 +813,7 @@ function render(){
   else if(TAB==="rules") html=viewRules();
   else if(TAB==="settings") html=viewSettings();
   app.innerHTML=html;
+  app.className="tab-"+TAB;
   // nav状態
   Array.prototype.forEach.call(document.querySelectorAll("#nav button"),function(b){
     b.classList.toggle("on", b.getAttribute("data-tab")===TAB);
@@ -791,6 +859,7 @@ function viewHome(){
   h+="</div>";
 
   // 本日
+  h+="<div class='statwrap'>";
   h+="<div class='grid3'>";
   h+=stat("本日の損益", (tp.n?("<span class='"+clsSign(tp.pl)+"'>"+fmtSigned(tp.pl)+"</span>"):"<span class='muted'>—</span>"), true);
   h+=stat("本日のR", tp.r!==null?("<span class='"+clsSign(tp.r)+"'>"+fmtR(tp.r)+"</span>"):"<span class='muted'>—</span>", true);
@@ -803,12 +872,17 @@ function viewHome(){
   h+=stat("保有中", "<span class='tabular'>"+openN+"</span>", true);
   h+=stat("直近30日 勝率", st30.winRate!==null?("<span class='tabular'>"+fmtPct(st30.winRate,0)+"</span>"):"<span class='muted'>—</span>", true);
   h+="</div>";
+  h+="</div>";
 
-  // 今日の環境認識
+  // 環境認識 と Fintokei（PCの広い画面では左右に並ぶ）
+  h+="<div class='pair'>";
+
+  h+="<div>";
   h+="<div class='sect-title'>環境認識</div>";
   h+=homeBriefCard();
+  h+="</div>";
 
-  // Fintokei メーター
+  h+="<div>";
   h+="<div class='sect-title'>Fintokei 状況</div>";
   h+="<div class='card'>";
   // ステップ1目標
@@ -833,6 +907,8 @@ function viewHome(){
   var totalUsedPct=maxLimit>0?Math.min(100,totalLoss/maxLimit*100):0;
   h+=meter("全体損失上限（"+fmtPct(toNum(s.fin.maxLossPct)||10,0)+" / "+fmtMoney(maxLimit)+"）",
       "残り "+fmtMoney(Math.max(0,totalRemain)), totalUsedPct, totalUsedPct>70?"var(--red)":"var(--green)");
+  h+="</div>";
+  h+="</div>";
   h+="</div>";
 
   if(DB.trades.length===0){
@@ -1742,15 +1818,18 @@ function viewGrowth(){
   h+=stat("最大連敗","<span class='neg tabular'>"+s.maxLossStreak+"</span>",true);
   h+="</div></div>";
 
-  // グラフ
+  // グラフ（PCの広い画面では2列に並ぶ）
+  h+="<div class='chartgrid'>";
   h+="<div class='card'><h2>累積損益</h2><div class='chartbox'><canvas id='c_cumpl' height='150'></canvas></div></div>";
   h+="<div class='card'><h2>累積R</h2><div class='chartbox'><canvas id='c_cumr' height='150'></canvas></div></div>";
   h+="<div class='card'><h2>口座残高推移</h2><div class='chartbox'><canvas id='c_equity' height='150'></canvas></div></div>";
   h+="<div class='card'><h2>パターン別 平均R</h2><div class='chartbox'><canvas id='c_patr' height='150'></canvas></div><div id='c_patr_lab' class='chartlab'></div></div>";
   h+="<div class='card'><h2>4時間足環境別 平均R</h2><div class='chartbox'><canvas id='c_h4r' height='150'></canvas></div><div id='c_h4r_lab' class='chartlab'></div></div>";
+  h+="</div>";
 
-  // 分類別集計テーブル
+  // 分類別集計テーブル（PCの広い画面では2列に並ぶ）
   h+="<div class='sect-title'>分類別 集計</div>";
+  h+="<div class='tablegrid'>";
   h+=classTable("パターン", list, [
     ["パターンA",function(t){return t.pattern==="A";}],
     ["パターンB",function(t){return t.pattern==="B";}],
@@ -1774,6 +1853,7 @@ function viewGrowth(){
     ["遵守",function(t){return t.ruleOk==="yes";}],
     ["逸脱",function(t){return t.ruleOk==="no"||t.ruleOk==="partial";}]
   ]);
+  h+="</div>";
   return h;
 }
 window.setGrowthPeriod=function(p){ UI.growthPeriod=p; render(); };
@@ -2101,6 +2181,13 @@ function compressImage(file, onok, onerr){
 }
 
 /* ---------- チャート（Canvas 軽量描画） ---------- */
+// PCでは縦にも余裕があるのでグラフを高くする（描画は resize で追従）
+function chartH(base){
+  var w=window.innerWidth||0;
+  if(w>=1180) return Math.round(base*1.5);
+  if(w>=900)  return Math.round(base*1.3);
+  return base;
+}
 function cssVar(name){ return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
 function setupCanvas(cv,cssH){
   var dpr=window.devicePixelRatio||1;
@@ -2190,7 +2277,7 @@ function drawEquitySpark(){
   var pts=[{x:0,y:init}]; var eq=init;
   closed.forEach(function(t,i){ var pl=toNum(t.realizedPL); if(isNum(pl)) eq+=pl; pts.push({x:i+1,y:eq}); });
   if(pts.length<2){ pts.push({x:1,y:init}); }
-  drawLineChart(cv,84,pts,cssVar("--gold"),{padL:38,baseline0:false,fmt:function(v){return abbr(v);}});
+  drawLineChart(cv,chartH(84),pts,cssVar("--gold"),{padL:38,baseline0:false,fmt:function(v){return abbr(v);}});
 }
 function abbr(v){ var a=Math.abs(v); if(a>=1000000) return (v/1000000).toFixed(1)+"M"; if(a>=1000) return Math.round(v/1000)+"k"; return Math.round(v).toString(); }
 
@@ -2200,20 +2287,20 @@ function drawGrowthCharts(){
   if(!list.length) return;
   // 累積損益
   var cp=document.getElementById("c_cumpl");
-  if(cp){ var cum=0; var pts=[{x:0,y:0}]; list.forEach(function(t,i){ var pl=toNum(t.realizedPL); if(isNum(pl)) cum+=pl; pts.push({x:i+1,y:cum}); }); drawLineChart(cp,150,pts,cssVar("--gold"),{fmt:function(v){return abbr(v);}}); }
+  if(cp){ var cum=0; var pts=[{x:0,y:0}]; list.forEach(function(t,i){ var pl=toNum(t.realizedPL); if(isNum(pl)) cum+=pl; pts.push({x:i+1,y:cum}); }); drawLineChart(cp,chartH(150),pts,cssVar("--gold"),{fmt:function(v){return abbr(v);}}); }
   // 累積R
   var cr=document.getElementById("c_cumr");
-  if(cr){ var cumR=0; var ptsR=[{x:0,y:0}]; list.forEach(function(t,i){ var c=calcTrade(t); if(isNum(c.realizedR)) cumR+=c.realizedR; ptsR.push({x:i+1,y:cumR}); }); drawLineChart(cr,150,ptsR,cssVar("--blue"),{fmt:function(v){return v.toFixed(1)+"R";}}); }
+  if(cr){ var cumR=0; var ptsR=[{x:0,y:0}]; list.forEach(function(t,i){ var c=calcTrade(t); if(isNum(c.realizedR)) cumR+=c.realizedR; ptsR.push({x:i+1,y:cumR}); }); drawLineChart(cr,chartH(150),ptsR,cssVar("--blue"),{fmt:function(v){return v.toFixed(1)+"R";}}); }
   // 口座残高推移
   var ce=document.getElementById("c_equity");
-  if(ce){ var init=toNum(DB.settings.initialBalance)||0; var eq=init; var ptsE=[{x:0,y:init}]; list.forEach(function(t,i){ var pl=toNum(t.realizedPL); if(isNum(pl)) eq+=pl; ptsE.push({x:i+1,y:eq}); }); drawLineChart(ce,150,ptsE,cssVar("--green"),{baseline0:false,fmt:function(v){return abbr(v);}}); }
+  if(ce){ var init=toNum(DB.settings.initialBalance)||0; var eq=init; var ptsE=[{x:0,y:init}]; list.forEach(function(t,i){ var pl=toNum(t.realizedPL); if(isNum(pl)) eq+=pl; ptsE.push({x:i+1,y:eq}); }); drawLineChart(ce,chartH(150),ptsE,cssVar("--green"),{baseline0:false,fmt:function(v){return abbr(v);}}); }
   // パターン別平均R
   var cpr=document.getElementById("c_patr");
   if(cpr){
     var groups=[["A","パターンA",function(t){return t.pattern==="A";}],["B","パターンB",function(t){return t.pattern==="B";}],["レンジ","レンジ戦略",function(t){return t.pattern==="range";}],["他","その他",function(t){return t.pattern==="other"||!t.pattern;}]];
     var labels=[],vals=[],labtxt=[];
     groups.forEach(function(g){ var sub=list.filter(g[2]); var st=computeStats(sub); if(sub.length){ labels.push(g[0]); vals.push(st.avgR!==null?st.avgR:0); labtxt.push(g[1]+"(n="+sub.length+")"); } });
-    if(vals.length){ drawBarChart(cpr,150,labels,vals,{fmt:function(v){return v.toFixed(1)+"R";}}); document.getElementById("c_patr_lab").textContent=labtxt.join("　"); }
+    if(vals.length){ drawBarChart(cpr,chartH(150),labels,vals,{fmt:function(v){return v.toFixed(1)+"R";}}); document.getElementById("c_patr_lab").textContent=labtxt.join("　"); }
     else { document.getElementById("c_patr_lab").textContent="データなし"; }
   }
   // 4H環境別平均R
@@ -2222,7 +2309,7 @@ function drawGrowthCharts(){
     var g4=[["上昇","上昇",function(t){return t.h4env==="up";}],["下降","下降",function(t){return t.h4env==="down";}],["レンジ","レンジ",function(t){return t.h4env==="range";}]];
     var labels2=[],vals2=[],labtxt2=[];
     g4.forEach(function(g){ var sub=list.filter(g[2]); var st=computeStats(sub); if(sub.length){ labels2.push(g[0]); vals2.push(st.avgR!==null?st.avgR:0); labtxt2.push(g[1]+"(n="+sub.length+")"); } });
-    if(vals2.length){ drawBarChart(ch4,150,labels2,vals2,{fmt:function(v){return v.toFixed(1)+"R";}}); document.getElementById("c_h4r_lab").textContent=labtxt2.join("　"); }
+    if(vals2.length){ drawBarChart(ch4,chartH(150),labels2,vals2,{fmt:function(v){return v.toFixed(1)+"R";}}); document.getElementById("c_h4r_lab").textContent=labtxt2.join("　"); }
     else { document.getElementById("c_h4r_lab").textContent="データなし"; }
   }
 }
