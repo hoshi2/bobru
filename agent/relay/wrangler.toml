@@ -1,0 +1,18 @@
+name = "bobru-relay"
+main = "worker.js"
+compatibility_date = "2026-01-01"
+
+[vars]
+# ぼぶるを置いてある URL。ここに書いた1つだけがブラウザから読める
+ALLOW_ORIGIN = "https://hoshi2.github.io"
+# 市場データ業者。別の業者にするなら worker.js の getOhlc も直す
+MARKET_BASE  = "https://api.twelvedata.com"
+
+[[kv_namespaces]]
+binding = "STORE"
+id = "ここに wrangler kv namespace create STORE で出た id を入れる"
+
+# 秘密は toml に書かない。次の3つは wrangler secret put で入れる
+#   wrangler secret put AGENT_SECRET     エージェントと共有する署名鍵
+#   wrangler secret put READ_TOKEN       ぼぶるが読み出すトークン
+#   wrangler secret put MARKET_API_KEY   市場データ業者のAPIキー
