@@ -480,6 +480,10 @@ function defaultSettings(){
     baseLot:1.00,            // 内部: 基本ロット目安
     lossStreakWarn:4,        // 内部: 連敗注意ライン
     marketProvider:"none",   // 朝分析の取得先（marketDataProvider の登録名）
+    marketRelay:{            // 朝分析の中継（OHLC を返すだけの薄い中継）
+      endpoint:"",
+      token:""
+    },
     mt5:{                    // MT5 取引履歴の同期（事実だけを取り込む）
       provider:"none",       // tradeSyncProvider の登録名
       endpoint:"",           // 中継の取得URL（VPS のエージェントが書き込む先）
@@ -669,11 +673,12 @@ function migrate(p){
 function mergeSettings(def,s){
   if(!s||typeof s!=="object") return def;
   var out=JSON.parse(JSON.stringify(def));
-  for(var k in s){ if(k==="fin"||k==="fx"||k==="mt5") continue; if(s[k]!==undefined&&s[k]!==null) out[k]=s[k]; }
+  for(var k in s){ if(k==="fin"||k==="fx"||k==="mt5"||k==="marketRelay") continue; if(s[k]!==undefined&&s[k]!==null) out[k]=s[k]; }
   if(s.fin&&typeof s.fin==="object"){ for(var f in def.fin){ if(s.fin[f]!==undefined&&s.fin[f]!==null) out.fin[f]=s.fin[f]; } }
   if(s.fx&&typeof s.fx==="object"){ for(var x in def.fx){ if(s.fx[x]!==undefined&&s.fx[x]!==null) out.fx[x]=s.fx[x]; } }
   // 深いマージにしておかないと、版を上げて増やしたキーが古い保存データで欠けたままになる
   if(s.mt5&&typeof s.mt5==="object"){ for(var m in def.mt5){ if(s.mt5[m]!==undefined&&s.mt5[m]!==null) out.mt5[m]=s.mt5[m]; } }
+  if(s.marketRelay&&typeof s.marketRelay==="object"){ for(var r in def.marketRelay){ if(s.marketRelay[r]!==undefined&&s.marketRelay[r]!==null) out.marketRelay[r]=s.marketRelay[r]; } }
   return out;
 }
 function saveData(){
@@ -1410,6 +1415,8 @@ function emptyMarketSnapshot(req){
     price:null,
     trend:{daily:null,h4:null,h1:null,m15:null},          // "up"|"down"|"range"|"na"|null
     ema:{tf:null,e10:null,e75:null,e200:null},
+    atr:{tf:null,value:null},
+    context:{usdjpy:{last:null,chg:null},dxy:{last:null,chg:null},us10y:{last:null,chg:null}},
     levels:{prevHigh:null,prevLow:null,weekHigh:null,weekLow:null,
             recentHigh:null,recentLow:null,supports:null,resistances:null,zone:null},
     sessions:{asia:{high:null,low:null},london:{high:null,low:null},newyork:{high:null,low:null}},
@@ -1494,6 +1501,16 @@ function mergeSnapshot(dst,src){
     if(typeof src.ema.tf==="string"&&src.ema.tf) dst.ema.tf=src.ema.tf;
     ["e10","e75","e200"].forEach(function(k){ dst.ema[k]=toNum(src.ema[k]); });
   }
+  if(src.atr&&typeof src.atr==="object"){
+    if(typeof src.atr.tf==="string"&&src.atr.tf) dst.atr.tf=src.atr.tf;
+    dst.atr.value=toNum(src.atr.value);
+  }
+  if(src.context&&typeof src.context==="object"){
+    ["usdjpy","dxy","us10y"].forEach(function(k){
+      var c=src.context[k]; if(!c||typeof c!=="object") return;
+      dst.context[k].last=toNum(c.last); dst.context[k].chg=toNum(c.chg);
+    });
+  }
   if(src.levels&&typeof src.levels==="object"){
     ["prevHigh","prevLow","weekHigh","weekLow","recentHigh","recentLow"].forEach(function(k){
       dst.levels[k]=toNum(src.levels[k]);
@@ -1520,6 +1537,109 @@ function mergeSnapshot(dst,src){
   return dst;
 }
 
+/* =========================================================================
+   OHLC からの計算（EMA / ATR / 方向 / 高安）
+   -------------------------------------------------------------------------
+   ここは純粋な計算だけを置く。通信も画面もしない。
+   足りない本数で無理に値を出さず、その項目は null（データなし）にする。
+   足 1本 = {t:"ISO", o,h,l,c}（時刻の昇順）
+   ========================================================================= */
+function normalizeBars(list){
+  if(!Array.isArray(list)) return [];
+  var out=[];
+  list.forEach(function(b){
+    if(!b||typeof b!=="object") return;
+    var t=mt5Time(b.t!==undefined?b.t:(b.time!==undefined?b.time:b.datetime));
+    var c=toNum(b.c!==undefined?b.c:b.close);
+    if(!t||!isNum(c)) return;
+    out.push({
+      t:t,
+      o:toNum(b.o!==undefined?b.o:b.open),
+      h:toNum(b.h!==undefined?b.h:b.high),
+      l:toNum(b.l!==undefined?b.l:b.low),
+      c:c
+    });
+  });
+  out.sort(function(a,b){ return a.t<b.t?-1:a.t>b.t?1:0; });
+  return out;
+}
+// 単純な EMA。本数が足りなければ null（推測しない）
+function emaOf(bars,period){
+  if(!bars||bars.length<period||!(period>0)) return null;
+  var k=2/(period+1), e=null;
+  // 最初の period 本の単純平均を種にする（一般的な出し方）
+  var seed=0;
+  for(var i=0;i<period;i++){ if(!isNum(bars[i].c)) return null; seed+=bars[i].c; }
+  e=seed/period;
+  for(var j=period;j<bars.length;j++){
+    if(!isNum(bars[j].c)) return null;
+    e=bars[j].c*k+e*(1-k);
+  }
+  return Math.round(e*100000)/100000;
+}
+// ATR（Wilder）。高安が無い足では出さない
+function atrOf(bars,period){
+  period=period||14;
+  if(!bars||bars.length<period+1) return null;
+  var trs=[];
+  for(var i=1;i<bars.length;i++){
+    var b=bars[i], p=bars[i-1];
+    if(!isNum(b.h)||!isNum(b.l)||!isNum(p.c)) return null;
+    trs.push(Math.max(b.h-b.l, Math.abs(b.h-p.c), Math.abs(b.l-p.c)));
+  }
+  if(trs.length<period) return null;
+  var a=0;
+  for(var j=0;j<period;j++) a+=trs[j];
+  a=a/period;
+  for(var k=period;k<trs.length;k++) a=(a*(period-1)+trs[k])/period;
+  return Math.round(a*100000)/100000;
+}
+// 方向の判定（機械的な規則。相場観ではない）
+//   終値 > EMA75 > EMA200 → 上昇 / 終値 < EMA75 < EMA200 → 下降 / それ以外 → レンジ
+//   EMA200 が出せる本数が無ければ「データなし」（null）
+function trendOfBars(bars){
+  if(!bars||!bars.length) return null;
+  var e75=emaOf(bars,75), e200=emaOf(bars,200);
+  var c=bars[bars.length-1].c;
+  if(!isNum(c)||!isNum(e75)||!isNum(e200)) return null;
+  if(c>e75&&e75>e200) return "up";
+  if(c<e75&&e75<e200) return "down";
+  return "range";
+}
+function barsBetween(bars,startISO,endISO){
+  if(!bars||!startISO||!endISO) return [];
+  return bars.filter(function(b){ return b.t>=startISO && b.t<endISO; });
+}
+function highLowOf(bars){
+  var hi=null, lo=null;
+  (bars||[]).forEach(function(b){
+    if(isNum(b.h)&&(hi===null||b.h>hi)) hi=b.h;
+    if(isNum(b.l)&&(lo===null||b.l<lo)) lo=b.l;
+  });
+  return {high:hi,low:lo};
+}
+// 前日の足（その日より前で最後のもの）。休場日があっても「直前の営業日」になる
+function prevDayBar(dailyBars,dateStr){
+  var pick=null;
+  (dailyBars||[]).forEach(function(b){ if(b.t.slice(0,10)<dateStr) pick=b; });
+  return pick;
+}
+// 週足の高安。ISO週（月曜はじまり）でその日を含む週の日足を集める
+function weekStartOf(dateStr){
+  var d=new Date(dateStr+"T00:00:00Z");
+  if(isNaN(d)) return null;
+  var wd=(d.getUTCDay()+6)%7;                 // 月曜=0
+  d.setUTCDate(d.getUTCDate()-wd);
+  return d.toISOString().slice(0,10);
+}
+function weekHighLow(dailyBars,dateStr){
+  var ws=weekStartOf(dateStr);
+  if(!ws) return {high:null,low:null};
+  return highLowOf((dailyBars||[]).filter(function(b){
+    var d=b.t.slice(0,10); return d>=ws && d<=dateStr;
+  }));
+}
+
 /* ---------- 同梱の取得先（どちらも通信しない） ---------- */
 var DEFAULT_PROVIDER="none";
 
@@ -1539,7 +1659,110 @@ marketDataProvider.register("none",{
   }
 });
 
-// 2) デモ。画面と配線の確認用のダミー値。実データではないので保存時に警告を出す。
+// 2) 中継。VPS / Workers の中継が返した OHLC から、こちら側で指標を計算する。
+//    中継は「素の足」を返すだけにしてある。指標の出し方をアプリ側に置いておけば、
+//    データ業者を替えても中継の数行を直すだけで済む。
+var MARKET_TF=[["1day","daily"],["4h","h4"],["1h","h1"],["15min","m15"]];
+
+// 中継の応答 → snapshot。取れなかった項目は null のまま残す。
+function snapshotFromSeries(req,data){
+  var snap=emptyMarketSnapshot(req);
+  snap.source=(data&&data.source)||"中継";
+  snap.asOf=(data&&(data.asOf||data.generatedAt))||now();
+  var notes=[];
+  if(data&&Array.isArray(data.notes)) notes=data.notes.map(String);
+
+  var sym=req.symbol||"XAUUSD";
+  var all=(data&&data.series)||{};
+  var series=all[sym]||all[sym.toUpperCase()]||{};
+  var bars={};
+  MARKET_TF.forEach(function(pair){
+    bars[pair[0]]=normalizeBars(series[pair[0]]);
+  });
+
+  // 現在価格 — いちばん細かい足の終値
+  var fine=bars["15min"].length?bars["15min"]:(bars["1h"].length?bars["1h"]:bars["1day"]);
+  if(fine.length){ snap.price=fine[fine.length-1].c; snap.asOf=snap.asOf||fine[fine.length-1].t; }
+  else notes.push("価格の足が取得できませんでした。");
+
+  // 各時間足の方向
+  MARKET_TF.forEach(function(pair){
+    var b=bars[pair[0]];
+    var tr=trendOfBars(b);
+    if(tr) snap.trend[pair[1]]=tr;
+    else if(b.length) notes.push(labelTf(pair[1])+"は EMA200 を出せる本数が無いので方向を出していません（"+b.length+"本）。");
+  });
+
+  // EMA と ATR — 1時間足を既定にする（足りなければ日足へ落とす）
+  var etf=bars["1h"].length>=200?"1h":(bars["1day"].length>=200?"1day":(bars["1h"].length?"1h":"1day"));
+  var eb=bars[etf]||[];
+  var etfKey={"1day":"daily","4h":"h4","1h":"h1","15min":"m15"}[etf]||"h1";
+  if(eb.length){
+    snap.ema.tf=etfKey;
+    snap.ema.e10=emaOf(eb,10); snap.ema.e75=emaOf(eb,75); snap.ema.e200=emaOf(eb,200);
+    snap.atr.tf=etfKey; snap.atr.value=atrOf(eb,14);
+  }
+
+  // 前日・週足・直近の高安
+  var daily=bars["1day"];
+  var pd=prevDayBar(daily,req.date);
+  if(pd){ snap.levels.prevHigh=pd.h; snap.levels.prevLow=pd.l; }
+  else if(daily.length) notes.push("前日の日足が見つかりませんでした。");
+  var wk=weekHighLow(daily,req.date);
+  snap.levels.weekHigh=wk.high; snap.levels.weekLow=wk.low;
+  var recent=bars["1h"].slice(-24);           // 直近24本（1時間足＝およそ1日）
+  var rhl=highLowOf(recent);
+  snap.levels.recentHigh=rhl.high; snap.levels.recentLow=rhl.low;
+
+  // セッション別の高安 — アプリが渡した窓で切る（夏時間はアプリ側で解決済み）
+  var sessBars=bars["15min"].length?bars["15min"]:bars["1h"];
+  (req.sessions||[]).forEach(function(w){
+    if(!snap.sessions[w.key]||!w.startISO||!w.endISO) return;
+    var hl=highLowOf(barsBetween(sessBars,w.startISO,w.endISO));
+    snap.sessions[w.key].high=hl.high; snap.sessions[w.key].low=hl.low;
+  });
+  if(!sessBars.length) notes.push("セッション別の高安を出すための細かい足がありません。");
+
+  // 関連市場（ドル円・ドル指数・米10年債利回り）
+  var q=(data&&data.quotes)||{};
+  [["usdjpy",["USDJPY","USD/JPY"]],["dxy",["DXY","DX-Y.NYB"]],["us10y",["US10Y","TNX","US10Y_YIELD"]]]
+    .forEach(function(pair){
+      var v=null;
+      pair[1].forEach(function(name){ if(!v && q[name]) v=q[name]; });
+      if(!v){ notes.push(pair[0].toUpperCase()+" は取得できませんでした。"); return; }
+      snap.context[pair[0]].last=toNum(v.last!==undefined?v.last:v.price);
+      snap.context[pair[0]].chg=toNum(v.chg!==undefined?v.chg:v.change);
+    });
+
+  // シナリオ・今日の見方・要約は相場観なので、ここでは作らない（Phase 4 で AI に渡す）
+  notes.push("シナリオと今日の見方は自動では作りません。取れた事実を見て自分で書いて下さい。");
+  snap.notes=notes;
+  return snap;
+}
+marketDataProvider.register("relay",{
+  label:"中継（OHLC）",
+  note:"中継から素の足を受け取り、EMA・ATR・方向・高安はこの端末で計算します。設定に取得URLとトークンが要ります。",
+  fetch:function(req){
+    var m=(DB&&DB.settings&&DB.settings.marketRelay)||{};
+    var url=String(m.endpoint||"").trim();
+    if(!url) return Promise.reject(new Error("市場データの取得URLが設定されていません"));
+    if(url.indexOf("https://")!==0 && url.indexOf("http://127.0.0.1")!==0 && url.indexOf("http://localhost")!==0)
+      return Promise.reject(new Error("取得URLは https:// にして下さい"));
+    var q=["symbol="+encodeURIComponent(req.symbol||"XAUUSD"),"date="+encodeURIComponent(req.date||"")];
+    (req.sessions||[]).forEach(function(w){
+      if(w.startISO&&w.endISO) q.push("s_"+w.key+"="+encodeURIComponent(w.startISO+".."+w.endISO));
+    });
+    var full=url+(url.indexOf("?")<0?"?":"&")+q.join("&");
+    var head={"Accept":"application/json"};
+    if(m.token) head["Authorization"]="Bearer "+m.token;
+    return fetch(full,{method:"GET",headers:head,cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("中継が "+r.status+" を返しました");
+      return r.json();
+    }).then(function(j){ return snapshotFromSeries(req,j||{}); });
+  }
+});
+
+// 3) デモ。画面と配線の確認用のダミー値。実データではないので保存時に警告を出す。
 marketDataProvider.register("demo",{
   label:"デモ（サンプル値・実データではありません）",
   note:"配線の確認用のダミーです。実際の相場とは無関係なので、記録として残さないで下さい。",
@@ -2193,6 +2416,9 @@ function freshBrief(date){
     trend:{daily:"",h4:"",h1:"",m15:""},
     price:{last:null,asOf:null},
     ema:{tf:"h1",e10:null,e75:null,e200:null},
+    atr:{tf:"h1",value:null},
+    // 関連市場。ドル円・ドル指数・米10年債利回り（取れたものだけ入る）
+    context:{usdjpy:{last:null,chg:null},dxy:{last:null,chg:null},us10y:{last:null,chg:null}},
     levels:{prevHigh:null,prevLow:null,weekHigh:null,weekLow:null,
             recentHigh:null,recentLow:null,supports:[],resistances:[],zone:""},
     sessions:{asia:{high:null,low:null},london:{high:null,low:null},newyork:{high:null,low:null}},
@@ -2219,6 +2445,15 @@ function normalizeBrief(b){
   if(b.ema&&typeof b.ema==="object"){
     f.ema.tf=b.ema.tf||"h1";
     f.ema.e10=toNum(b.ema.e10); f.ema.e75=toNum(b.ema.e75); f.ema.e200=toNum(b.ema.e200);
+  }
+  if(b.atr&&typeof b.atr==="object"){
+    f.atr.tf=b.atr.tf||f.ema.tf; f.atr.value=toNum(b.atr.value);
+  }
+  if(b.context&&typeof b.context==="object"){
+    ["usdjpy","dxy","us10y"].forEach(function(k){
+      var c=b.context[k]; if(!c||typeof c!=="object") return;
+      f.context[k].last=toNum(c.last); f.context[k].chg=toNum(c.chg);
+    });
   }
   if(b.levels&&typeof b.levels==="object"){
     f.levels.prevHigh=toNum(b.levels.prevHigh); f.levels.prevLow=toNum(b.levels.prevLow);
@@ -2380,7 +2615,24 @@ function viewBrief(){
      field("EMA 10","<input type='number' inputmode='decimal' step='any' id='b_e10' value='"+esc(BRIEF.ema.e10)+"' placeholder='0.00'>")+
      field("EMA 75","<input type='number' inputmode='decimal' step='any' id='b_e75' value='"+esc(BRIEF.ema.e75)+"' placeholder='0.00'>")+
      field("EMA 200","<input type='number' inputmode='decimal' step='any' id='b_e200' value='"+esc(BRIEF.ema.e200)+"' placeholder='0.00'>")+"</div>";
+  h+=field("ATR 14（"+esc(labelTf(BRIEF.atr.tf||BRIEF.ema.tf))+"）",
+     "<input type='number' inputmode='decimal' step='any' id='b_atr' value='"+esc(BRIEF.atr.value)+"' placeholder='0.00'>");
   if(BRIEF.price.asOf) h+="<div class='smallnote' style='margin-top:0'>価格の時刻 "+esc(fmtWhen(BRIEF.price.asOf))+"</div>";
+  h+="</div>";
+
+  // 関連市場
+  h+="<div class='card'><h2>関連市場</h2>";
+  h+="<div class='row3'>"+
+     field("USDJPY","<input type='number' inputmode='decimal' step='any' id='b_cx_usdjpy' value='"+esc(BRIEF.context.usdjpy.last)+"' placeholder='0.00'>")+
+     field("DXY","<input type='number' inputmode='decimal' step='any' id='b_cx_dxy' value='"+esc(BRIEF.context.dxy.last)+"' placeholder='0.00'>")+
+     field("米10年債(%)","<input type='number' inputmode='decimal' step='any' id='b_cx_us10y' value='"+esc(BRIEF.context.us10y.last)+"' placeholder='0.00'>")+"</div>";
+  var cxs=[];
+  ["usdjpy","dxy","us10y"].forEach(function(k){
+    var c=BRIEF.context[k];
+    if(isNum(c.chg)) cxs.push(k.toUpperCase()+" "+fmtSigned(c.chg,2));
+  });
+  h+="<div class='smallnote' style='margin-top:0'>"+
+     (cxs.length?"前日比 "+esc(cxs.join("　")):"金は金利とドルで動きます。取れたものだけ入ります。")+"</div>";
   h+="</div>";
 
   // 重要価格
@@ -2488,6 +2740,10 @@ function syncBriefFromDOM(){
   var e10=g("b_e10"); if(e10!==null) BRIEF.ema.e10=toNum(e10);
   var e75=g("b_e75"); if(e75!==null) BRIEF.ema.e75=toNum(e75);
   var e200=g("b_e200"); if(e200!==null) BRIEF.ema.e200=toNum(e200);
+  var atr=g("b_atr"); if(atr!==null) BRIEF.atr.value=toNum(atr);
+  ["usdjpy","dxy","us10y"].forEach(function(k){
+    var v=g("b_cx_"+k); if(v!==null) BRIEF.context[k].last=toNum(v);
+  });
   var rh=g("b_rh"); if(rh!==null) BRIEF.levels.recentHigh=toNum(rh);
   var rl=g("b_rl"); if(rl!==null) BRIEF.levels.recentLow=toNum(rl);
   SESSION_DEFS.forEach(function(d){
@@ -2517,7 +2773,7 @@ function syncBriefFromDOM(){
 // 未保存の差分があるか
 function briefSnapshot(b){
   var n=normalizeBrief(b);
-  return JSON.stringify([n.symbol,n.trend,n.price,n.ema,n.levels,n.sessions,
+  return JSON.stringify([n.symbol,n.trend,n.price,n.ema,n.atr,n.context,n.levels,n.sessions,
                          n.events,n.scenarios,n.bias,n.memo,n.aiSummary,n.analysis]);
 }
 function briefDirty(){
@@ -2646,6 +2902,9 @@ function briefAnalysisCard(){
   });
   h+="</select></div>";
   if(info.note) h+="<div class='smallnote' style='margin:0 0 11px'>"+esc(info.note)+"</div>";
+  if(pname==="relay"&&!((DB.settings.marketRelay||{}).endpoint)){
+    h+="<div class='smallnote' style='margin:0 0 11px;color:var(--gold)'>設定タブの「朝分析の中継」で取得URLとトークンを入れて下さい。</div>";
+  }
   h+="<button class='btn primary' id='b_run' onclick='runMorningAnalysis()'>朝分析を実行</button>";
   h+="<div id='b_anastat' class='anastat'>"+briefAnalysisStatusHtml()+"</div>";
 
@@ -2687,6 +2946,13 @@ function applySnapshotToBrief(b,s){
   if(typeof s.ema.tf==="string"&&s.ema.tf) b.ema.tf=s.ema.tf;   // 足の指定そのものは件数に数えない
   ["e10","e75","e200"].forEach(function(k){ num(s.ema[k],function(v){ b.ema[k]=v; }); });
 
+  if(typeof s.atr.tf==="string"&&s.atr.tf) b.atr.tf=s.atr.tf;
+  num(s.atr.value,function(v){ b.atr.value=v; });
+  ["usdjpy","dxy","us10y"].forEach(function(k){
+    num(s.context[k].last,function(v){ b.context[k].last=v; });
+    if(isNum(s.context[k].chg)) b.context[k].chg=s.context[k].chg;
+  });
+
   ["prevHigh","prevLow","weekHigh","weekLow","recentHigh","recentLow"].forEach(function(k){
     num(s.levels[k],function(v){ b.levels[k]=v; });
   });
@@ -2710,7 +2976,7 @@ function applySnapshotToBrief(b,s){
 // analysis は「どこから取ってきたか」の記録であって中身ではないので数えない
 function briefContentSnapshot(b){
   var n=normalizeBrief(b);
-  return JSON.stringify([n.symbol,n.trend,n.price,n.ema,n.levels,n.sessions,
+  return JSON.stringify([n.symbol,n.trend,n.price,n.ema,n.atr,n.context,n.levels,n.sessions,
                          n.events,n.scenarios,n.bias,n.memo,n.aiSummary]);
 }
 function briefHasContent(b){
@@ -3897,6 +4163,17 @@ function viewSettings(){
   if(fxs.source) h+="<div class='smallnote'>取得元 "+esc(fxs.source)+"。無料の公開レートで、更新は1日1回です。日中の変動は反映されません。</div>";
   h+="</div>";
 
+  h+="<div class='sect-title'>朝分析の中継（市場データ）</div><div class='card'>";
+  var mr=(s.marketRelay||{});
+  h+="<div class='smallnote' style='margin:0 0 11px'>中継は素の足（OHLC）を返すだけで、EMA・ATR・方向・高安はこの端末で計算します。"+
+     "業者のAPIキーは中継に置き、この端末には置きません。</div>";
+  h+=field("取得URL","<input type='url' id='s_mkurl' value='"+esc(mr.endpoint||"")+
+     "' placeholder='https://example.com/api/ohlc' autocomplete='off' spellcheck='false'>");
+  h+=field("読み取りトークン","<input type='password' id='s_mktok' value='"+esc(mr.token||"")+
+     "' placeholder='中継が発行した読み取り専用トークン' autocomplete='off'>");
+  h+="<div class='smallnote'>入れたあと、環境タブの「データ取得先」で「中継（OHLC）」を選んで下さい。</div>";
+  h+="</div>";
+
   h+="<div class='sect-title'>MT5 取引同期</div><div class='card'>";
   var ms=mt5Settings();
   h+="<div class='smallnote' style='margin:0 0 11px'>常時動いている場所（VPS）の MT5 から、取引履歴だけを受け取ります。"+
@@ -3988,6 +4265,8 @@ window.saveSettings=function(){
   var mu=document.getElementById("s_mt5url"); if(mu) s.mt5.endpoint=mu.value.trim();
   var mk=document.getElementById("s_mt5tok"); if(mk) s.mt5.token=mk.value.trim();
   var ma=document.getElementById("s_mt5auto"); if(ma) s.mt5.autoImport=ma.checked;
+  var ku=document.getElementById("s_mkurl"); if(ku) s.marketRelay.endpoint=ku.value.trim();
+  var kt=document.getElementById("s_mktok"); if(kt) s.marketRelay.token=kt.value.trim();
   saveData(); toast("設定を保存しました"); render();
 };
 window.wipeMt5Deals=function(){

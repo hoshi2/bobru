@@ -404,7 +404,7 @@ group("9. 朝分析と marketDataProvider");
   await page.click('#nav button[data-tab="brief"]');
 
   ok("既定の取得先は未接続",
-     (await page.evaluate(() => marketDataProvider.list().map(p => p.name).join(","))) === "none,demo" &&
+     (await page.evaluate(() => marketDataProvider.list().map(p => p.name).join(","))) === "none,relay,demo" &&
      (await page.evaluate(() => currentProviderName())) === "none");
 
   // --- 未接続: 配線は通るが値は入らない。手入力を壊さない ---
@@ -1105,6 +1105,168 @@ group("16. 朝やろ");
   ok("#morning で朝の処理が走る", hashed.steps === 3 && hashed.tab === "brief");
   ok("ハッシュは消えるので再読込で二重に走らない", hashed.hash === "");
   await page2.close();
+  await page.close();
+}
+
+/* =======================================================================
+   17. OHLC からの計算（EMA / ATR / 方向 / 高安）
+   ======================================================================= */
+group("17. OHLC からの計算");
+{
+  const page = await open();
+
+  // 1本ずつ1ずつ上がる素直な足を作る
+  const mk = (n, from = 100, step = 1, day = false) => {
+    const out = [];
+    for (let i = 0; i < n; i++) {
+      const c = from + i * step;
+      const t = day
+        ? new Date(Date.UTC(2026, 0, 1 + i)).toISOString()
+        : new Date(Date.UTC(2026, 8, 1, i)).toISOString();
+      out.push({ t, o: c - step, h: c + 1, l: c - 2, c });
+    }
+    return out;
+  };
+
+  const ema = await page.evaluate((bars) => ({
+    short: emaOf(bars, 10),
+    tooFew: emaOf(bars.slice(0, 5), 10),
+    flat: emaOf(bars.map(b => ({ ...b, c: 50 })), 10),
+  }), mk(60));
+  ok("本数が足りなければ EMA は出さない", ema.tooFew === null);
+  ok("値が一定なら EMA もその値", ema.flat === 50);
+  ok("上昇中の EMA は終値より下", ema.short > 0 && ema.short < 159);
+
+  const atr = await page.evaluate((bars) => ({
+    v: atrOf(bars, 14),
+    tooFew: atrOf(bars.slice(0, 5), 14),
+    noHL: atrOf(bars.map(b => ({ t: b.t, c: b.c })), 14),
+  }), mk(60));
+  // 各足は h=c+1 / l=c-2 / 前の終値との差が 1 → TR は常に 3
+  ok("ATR が真の値幅から出る", Math.abs(atr.v - 3) < 1e-9);
+  ok("本数が足りなければ ATR は出さない", atr.tooFew === null);
+  ok("高安が無ければ ATR は出さない", atr.noHL === null);
+
+  const trend = await page.evaluate((bars) => ({
+    up: trendOfBars(bars),
+    down: trendOfBars(bars.map((b, i) => ({ ...b, c: 1000 - i, h: 1001 - i, l: 998 - i }))),
+    few: trendOfBars(bars.slice(0, 100)),
+    none: trendOfBars([]),
+  }), mk(400));
+  ok("上げ続きは上昇と判定", trend.up === "up");
+  ok("下げ続きは下降と判定", trend.down === "down");
+  ok("EMA200 が出せなければ方向は出さない", trend.few === null && trend.none === null);
+
+  const lv = await page.evaluate((daily) => ({
+    prev: prevDayBar(daily, "2026-01-08"),
+    gap: prevDayBar(daily, "2026-01-20"),      // 休場の先まで飛んでも直前の足を拾う
+    week: weekHighLow(daily, "2026-01-08"),
+    start: weekStartOf("2026-01-08"),
+    between: barsBetween(daily, "2026-01-03T00:00:00.000Z", "2026-01-05T00:00:00.000Z").length,
+  }), mk(10, 100, 1, true));
+  ok("前日の足はその日より前で最後のもの", lv.prev.t.slice(0, 10) === "2026-01-07");
+  ok("休場をまたいでも直前の足を拾う", lv.gap.t.slice(0, 10) === "2026-01-10");
+  ok("週足は月曜はじまり", lv.start === "2026-01-05");
+  ok("週足の高安はその週の日足から", lv.week.high === 108 && lv.week.low === 102);
+  ok("窓で足を切り出せる", lv.between === 2);
+  await page.close();
+}
+
+/* =======================================================================
+   18. 朝分析の中継（OHLC → snapshot）
+   ======================================================================= */
+group("18. 朝分析の中継");
+{
+  const page = await open();
+  await page.click('#nav button[data-tab="brief"]');
+
+  const RESP = await page.evaluate(() => {
+    // 中継が返す形の作り物。1時間足を250本ぶん用意して EMA200 まで出せるようにする
+    const h1 = [];
+    for (let i = 0; i < 250; i++) {
+      const c = 3000 + i;
+      h1.push({ t: new Date(Date.UTC(2026, 8, 1, i)).toISOString(), o: c - 1, h: c + 2, l: c - 3, c });
+    }
+    const d1 = [];
+    for (let i = 0; i < 20; i++) {
+      const c = 3000 + i * 10;
+      d1.push({ t: new Date(Date.UTC(2026, 8, 1 + i)).toISOString(), o: c, h: c + 20, l: c - 20, c });
+    }
+    const m15 = [];
+    for (let i = 0; i < 96; i++) {
+      const c = 3400 + i;
+      m15.push({ t: new Date(Date.UTC(2026, 8, 20, 0, i * 15)).toISOString(), o: c, h: c + 1, l: c - 1, c });
+    }
+    return { source: "テスト中継", series: { XAUUSD: { "1day": d1, "1h": h1, "15min": m15 } },
+             quotes: { USDJPY: { last: 156.2, chg: -0.4 }, DXY: { last: 98.1, chg: 0.2 } } };
+  });
+
+  const snap = await page.evaluate(async (resp) => {
+    const orig = window.fetch;
+    let seen = null;
+    window.fetch = (url, opt) => { seen = { url, opt };
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(resp) }); };
+    DB.settings.marketRelay = { endpoint: "https://example.test/api/ohlc", token: "MK-TOKEN" };
+    const req = { symbol: "XAUUSD", date: "2026-09-20", sessions: sessionWindows("2026-09-20") };
+    const r = await marketDataProvider.fetch("relay", req);
+    window.fetch = orig;
+    return { seen, ok: r.ok, s: r.snapshot };
+  }, RESP);
+
+  ok("取得URLに銘柄と日付を載せる",
+     snap.seen.url.includes("symbol=XAUUSD") && snap.seen.url.includes("date=2026-09-20"));
+  ok("トークンはヘッダで送る（URLには出さない）",
+     snap.seen.opt.headers.Authorization === "Bearer MK-TOKEN" && !snap.seen.url.includes("MK-TOKEN"));
+  ok("現在価格はいちばん細かい足の終値", snap.ok && snap.s.price === 3495);
+  ok("1時間足の方向が出る", snap.s.trend.h1 === "up");
+  ok("本数が足りない日足の方向は出さない（推測しない）", snap.s.trend.daily === null);
+  ok("EMA と ATR が入る",
+     snap.s.ema.tf === "h1" && snap.s.ema.e10 > 0 && snap.s.ema.e200 > 0 &&
+     snap.s.atr.tf === "h1" && Math.abs(snap.s.atr.value - 5) < 1e-9);
+  ok("前日高安が入る", snap.s.levels.prevHigh === 3200 && snap.s.levels.prevLow === 3160);
+  ok("直近高安は1時間足の直近24本", snap.s.levels.recentHigh === 3251 && snap.s.levels.recentLow === 3223);
+  ok("関連市場が入る",
+     snap.s.context.usdjpy.last === 156.2 && snap.s.context.usdjpy.chg === -0.4 &&
+     snap.s.context.dxy.last === 98.1);
+  ok("取れなかった関連市場は空のまま", snap.s.context.us10y.last === null);
+  ok("セッション高安が窓から出る",
+     snap.s.sessions.asia.high !== null && snap.s.sessions.asia.high > snap.s.sessions.asia.low);
+  ok("シナリオと今日の見方は自動で作らない",
+     snap.s.scenarios.bull === null && snap.s.scenarios.bear === null && snap.s.bias === null);
+  ok("取れなかった理由が説明される", snap.s.notes.length > 0);
+
+  // --- 中継が落ちても画面は止まらない ---
+  const down = await page.evaluate(async () => {
+    const orig = window.fetch;
+    window.fetch = () => Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) });
+    const r = await marketDataProvider.fetch("relay",
+      { symbol: "XAUUSD", date: today(), sessions: sessionWindows(today()) });
+    window.fetch = orig;
+    return { ok: r.ok, price: r.snapshot.price, notes: r.snapshot.notes.length };
+  });
+  ok("中継が落ちても値を作らない", down.ok === false && down.price === null && down.notes > 0);
+
+  // --- 取り込んだ値がフォームに入り、保存して残る ---
+  const kept = await page.evaluate(async (resp) => {
+    const orig = window.fetch;
+    window.fetch = () => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(resp) });
+    DB.settings.marketProvider = "relay"; saveData();
+    UI.briefDate = "2026-09-20"; BRIEF = normalizeBrief({ date: "2026-09-20" });
+    const r = await morningAnalysisStep();
+    window.fetch = orig;
+    saveBriefRecord();
+    return { n: r.n, atr: DB.briefs[0].atr.value, usdjpy: DB.briefs[0].context.usdjpy.last };
+  }, RESP);
+  ok("取り込んだ値が環境認識に保存される",
+     kept.n > 10 && Math.abs(kept.atr - 5) < 1e-9 && kept.usdjpy === 156.2);
+
+  await page.reload();
+  await page.waitForSelector("#app .topbar");
+  ok("ATR と関連市場がリロード後も残る",
+     await page.evaluate(() => {
+       const b = DB.briefs.filter(x => x.date === "2026-09-20")[0];
+       return Math.abs(b.atr.value - 5) < 1e-9 && b.context.usdjpy.last === 156.2;
+     }));
   await page.close();
 }
 
