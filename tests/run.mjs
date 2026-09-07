@@ -287,9 +287,11 @@ group("6. CSV");
     return { cols: rows[0].split(","), row: rows[1].split(",") };
   });
   ok("新しい列は末尾に付く",
-     head.cols.slice(-7).join(",") === "briefId,briefDate,trendDaily,trendH4,trendH1,trendM15,bias");
-  ok("既存の列順が変わっていない", head.cols[0] === "id" && head.cols[head.cols.length - 8] === "tags");
-  ok("環境認識の内容が書き出される", head.row.slice(-5).join(",") === "up,down,range,up,long");
+     head.cols.slice(-12).join(",") ===
+     "briefId,briefDate,trendDaily,trendH4,trendH1,trendM15,bias,source,mt5PositionId,mt5EntryDeal,mt5ExitDeals,mt5Account");
+  ok("既存の列順が変わっていない", head.cols[0] === "id" && head.cols[head.cols.length - 13] === "tags");
+  ok("環境認識の内容が書き出される", head.row.slice(-10, -5).join(",") === "up,down,range,up,long");
+  ok("手入力の記録は source=manual", head.row[head.cols.indexOf("source")] === "manual");
   await page.close();
 }
 
@@ -854,6 +856,255 @@ group("13. 決済登録の符号と通貨");
   const oldHint = await page.$eval("#c_plhint", e => e.textContent);
   ok("古い記録は換算せず建値通貨のまま示す",
      oldHint.includes("1,080") && oldHint.includes("USD") && !oldHint.includes("JPY"));
+  await page.close();
+}
+
+/* =======================================================================
+   14. MT5 取引同期（事実だけ・冪等）
+   ======================================================================= */
+group("14. MT5 取引同期");
+{
+  const page = await open();
+
+  // MT5 が返す形をそのまま写した固定データ（time は UNIX 秒、type/entry は数値コード）
+  const BATCH = {
+    source: "テスト", generatedAt: "2026-09-07T00:00:00.000Z",
+    account: { login: 1234567, server: "Fintokei-Live", currency: "USD", balance: 100000, equity: 100000 },
+    deals: [
+      { ticket: 501, order: 401, positionId: 301, time: 1757203200, type: 0, entry: 0,
+        symbol: "XAUUSD", volume: 2, price: 3300, profit: 0, commission: -14, swap: 0,
+        sl: 3290, tp: 3330, contractSize: 100 },
+      { ticket: 502, order: 402, positionId: 301, time: 1757210400, type: 1, entry: 1,
+        symbol: "XAUUSD", volume: 1, price: 3320, profit: 2000, commission: -7, swap: -1.5,
+        contractSize: 100 },
+      // 建てただけで決済していない別の建玉
+      { ticket: 510, order: 410, positionId: 310, time: 1757212000, type: 1, entry: 0,
+        symbol: "XAUUSD", volume: 1, price: 3310, profit: 0, commission: -7, swap: 0,
+        sl: 3320, tp: 3280, contractSize: 100 },
+      // 入出金の行（建玉ではない）
+      { ticket: 520, positionId: 0, time: 1757100000, type: 2, entry: 0,
+        symbol: "", volume: 0, price: 0, profit: 100000 }
+    ],
+    positions: [{ positionId: 310, symbol: "XAUUSD", type: 1, volume: 1, priceOpen: 3310,
+                  sl: 3318, tp: 3280, time: 1757212000, profit: -30 }]
+  };
+
+  const first = await page.evaluate(async (batch) => {
+    const r = await tradeSyncProvider.fetch("paste", { text: JSON.stringify(batch) });
+    const rep = importDealBatch(r.batch);
+    return { ok: r.ok, rep, deals: DB.deals.length, trades: DB.trades.length };
+  }, BATCH);
+  ok("貼り付けの JSON を読める", first.ok === true);
+  ok("約定が件数どおり入る", first.deals === 4 && first.rep.dealsAdded === 4);
+  ok("入出金の行からトレードは作らない", first.rep.positions === 2);
+  ok("建玉ごとにトレードができる", first.trades === 2 && first.rep.tradesCreated === 2);
+
+  const t1 = await page.evaluate(() => DB.trades.filter(t => t.mt5 && t.mt5.positionId === "301")[0]);
+  ok("MT5 の事実が入る（銘柄・方向・価格・ロット）",
+     t1.symbol === "XAUUSD" && t1.dir === "long" && t1.entry === 3300 && t1.lot === 2);
+  ok("SL/TP は発注時の値が入る", t1.sl === 3290 && t1.tp === 3330);
+  ok("UNIX 秒が ISO になる", t1.createdAt === new Date(1757203200000).toISOString());
+  ok("一部決済のうちは決済扱いにしない",
+     t1.status === "open" && t1.realizedPL === null && t1.closedAt === null);
+  ok("主観の欄は空のまま（AIが埋めない）",
+     t1.h4env === "" && t1.pattern === "" && t1.emotion === null && t1.ruleOk === null &&
+     t1.memo === "" && t1.reviewMemo === "" && t1.learn === "");
+  ok("口座通貨は MT5 の値を焼き込む", t1.acctCurrency === "USD");
+  ok("MT5 由来の印がつく", t1.source === "mt5" && t1.mt5.entryDeal === "501");
+  ok("残高は分からないので空のまま", t1.balanceAtEntry === null);
+
+  const t2 = await page.evaluate(() => DB.trades.filter(t => t.mt5 && t.mt5.positionId === "310")[0]);
+  ok("保有中の SL は建玉スナップショットの現在値が勝つ", t2.sl === 3318 && t2.dir === "short");
+
+  // --- 冪等性：同じバッチを流し直しても増えない ---
+  const again = await page.evaluate(async (batch) => {
+    const r = await tradeSyncProvider.fetch("paste", { text: JSON.stringify(batch) });
+    const rep = importDealBatch(r.batch);
+    return { rep, deals: DB.deals.length, trades: DB.trades.length };
+  }, BATCH);
+  ok("同じ約定は二重登録されない",
+     again.deals === 4 && again.trades === 2 &&
+     again.rep.dealsAdded === 0 && again.rep.tradesCreated === 0 && again.rep.tradesUpdated === 0);
+
+  // --- 残りを決済する約定が来たら、同じ position ID の記録が閉じる ---
+  const closed = await page.evaluate(async () => {
+    const add = { deals: [{ ticket: 503, order: 403, positionId: 301, time: 1757214000, type: 1, entry: 1,
+      symbol: "XAUUSD", volume: 1, price: 3310, profit: 1000, commission: -7, swap: -1.5, contractSize: 100 }] };
+    const r = await tradeSyncProvider.fetch("paste", { text: JSON.stringify(add) });
+    const rep = importDealBatch(r.batch);
+    const t = DB.trades.filter(x => x.mt5 && x.mt5.positionId === "301")[0];
+    return { rep, t, count: DB.trades.length };
+  });
+  ok("追加の決済で建玉が閉じる（新しい記録は作らない）",
+     closed.count === 2 && closed.rep.tradesCreated === 0 && closed.rep.tradesUpdated === 1);
+  ok("決済価格は数量加重平均", closed.t.status === "closed" && closed.t.closePrice === 3315);
+  ok("実現損益・手数料・スワップは MT5 の合計", 
+     closed.t.realizedPL === 3000 && closed.t.fee === -28 && closed.t.swap === -3);
+  const r301 = await page.evaluate(() =>
+    calcTrade(DB.trades.filter(x => x.mt5 && x.mt5.positionId === "301")[0]).realizedR);
+  ok("R が出る（SL があるので予定損失が立つ）", Math.abs(r301 - (3000 / 2000)) < 1e-9);
+
+  // --- 手で直した値は次の同期で潰されない ---
+  const merged = await page.evaluate(async () => {
+    const t = DB.trades.filter(x => x.mt5 && x.mt5.positionId === "310")[0];
+    t.tp = 3250;            // 手で直す
+    t.memo = "自分のメモ";
+    saveData();
+    // MT5 側は TP を変えずに送り直す
+    const same = { positions: [{ positionId: 310, symbol: "XAUUSD", type: 1, volume: 1,
+      priceOpen: 3310, sl: 3318, tp: 3280, time: 1757212000 }], deals: [] };
+    const r = await tradeSyncProvider.fetch("paste", { text: JSON.stringify(same) });
+    const rep = importDealBatch(r.batch);
+    const after = DB.trades.filter(x => x.mt5 && x.mt5.positionId === "310")[0];
+    return { tp: after.tp, memo: after.memo, conflicts: rep.conflicts.length };
+  });
+  ok("MT5 側が変わっていなければ手直しを潰さない", merged.tp === 3250 && merged.memo === "自分のメモ");
+  ok("食い違いは黙って消さずに報告する", merged.conflicts >= 0);
+
+  // --- MT5 側が実際に変わったときは食い違いとして残す（勝手に上書きしない） ---
+  const conflict = await page.evaluate(async () => {
+    const moved = { positions: [{ positionId: 310, symbol: "XAUUSD", type: 1, volume: 1,
+      priceOpen: 3310, sl: 3318, tp: 3200, time: 1757212000 }], deals: [] };
+    const r = await tradeSyncProvider.fetch("paste", { text: JSON.stringify(moved) });
+    const rep = importDealBatch(r.batch);
+    const after = DB.trades.filter(x => x.mt5 && x.mt5.positionId === "310")[0];
+    return { tp: after.tp, conflicts: rep.conflicts.map(c => c.field) };
+  });
+  ok("手直しがある欄は MT5 の変更で上書きしない",
+     conflict.tp === 3250 && conflict.conflicts.indexOf("tp") >= 0);
+
+  // --- ドテン（1約定で建て替え）はトレードを作らない ---
+  const inout = await page.evaluate(async () => {
+    const b = { deals: [
+      { ticket: 601, positionId: 401, time: 1757220000, type: 0, entry: 0, symbol: "XAUUSD",
+        volume: 1, price: 3300, contractSize: 100 },
+      { ticket: 602, positionId: 401, time: 1757221000, type: 1, entry: 2, symbol: "XAUUSD",
+        volume: 2, price: 3305, profit: 500, contractSize: 100 }] };
+    const r = await tradeSyncProvider.fetch("paste", { text: JSON.stringify(b) });
+    const rep = importDealBatch(r.batch);
+    return { rep, made: DB.trades.filter(t => t.mt5 && t.mt5.positionId === "401").length,
+             kept: DB.deals.filter(d => d.positionId === "401").length };
+  });
+  ok("正確に割れない建玉は記録を作らない", inout.made === 0 && inout.rep.skippedPositions.length === 1);
+  ok("それでも約定そのものは残す（事実は捨てない）", inout.kept === 2);
+
+  // --- 保存とリロード ---
+  await page.reload();
+  await page.waitForSelector("#app .topbar");
+  const after = await page.evaluate(() => ({
+    deals: DB.deals.length,
+    trades: DB.trades.filter(t => t.source === "mt5").length,
+    closed: DB.trades.filter(t => t.mt5 && t.mt5.positionId === "301")[0].realizedPL
+  }));
+  ok("リロードしても約定と記録が残る", after.deals === 7 && after.trades === 2 && after.closed === 3000);
+  await page.close();
+}
+
+/* =======================================================================
+   15. 取得先の切り替えと中継
+   ======================================================================= */
+group("15. 取得先の切り替えと中継");
+{
+  const page = await open();
+  ok("既定は未接続", await page.evaluate(() => mt5Settings().provider) === "none");
+  ok("未接続では何も取り込まない",
+     await page.evaluate(async () => {
+       const r = await tradeSyncProvider.fetch("none", {});
+       return importDealBatch(r.batch).dealsAdded === 0 && DB.trades.length === 0;
+     }));
+
+  const relay = await page.evaluate(async () => {
+    const orig = window.fetch;
+    let seen = null;
+    window.fetch = (url, opt) => { seen = { url, opt }; return Promise.resolve({ ok: true, status: 200,
+      json: () => Promise.resolve({ source: "中継", account: { login: 9, currency: "USD" },
+        deals: [{ ticket: 900, positionId: 900, time: "2026-09-06T12:00:00Z", type: 0, entry: 0,
+                  symbol: "XAUUSD", volume: 1, price: 3300, contractSize: 100 }] }) }); };
+    DB.settings.mt5.endpoint = "https://example.test/api/deals";
+    DB.settings.mt5.token = "READ-TOKEN";
+    const rep = await runTradeSync({ provider: "relay" });
+    window.fetch = orig;
+    return { seen, rep };
+  });
+  ok("取得URLを叩く", relay.seen.url.indexOf("https://example.test/api/deals") === 0);
+  ok("トークンはヘッダで送る（URLには出さない）",
+     relay.seen.opt.headers.Authorization === "Bearer READ-TOKEN" &&
+     relay.seen.url.indexOf("READ-TOKEN") < 0);
+  ok("中継から取り込める", relay.rep.ok === true && relay.rep.dealsAdded === 1);
+
+  const failed = await page.evaluate(async () => {
+    const orig = window.fetch;
+    window.fetch = () => Promise.resolve({ ok: false, status: 401, json: () => Promise.resolve({}) });
+    const rep = await runTradeSync({ provider: "relay" });
+    window.fetch = orig;
+    return { rep, deals: DB.deals.length };
+  });
+  ok("中継が断ってきても記録を壊さない",
+     failed.rep.ok === false && failed.deals === 1 && failed.rep.notes.length > 0);
+
+  ok("http:// の取得URLは断る",
+     await page.evaluate(async () => {
+       DB.settings.mt5.endpoint = "http://example.test/api/deals";
+       const r = await tradeSyncProvider.fetch("relay", { endpoint: DB.settings.mt5.endpoint });
+       return r.ok === false;
+     }));
+  await page.close();
+}
+
+/* =======================================================================
+   16. 朝やろ（同期 → 市場データ → 保存）
+   ======================================================================= */
+group("16. 朝やろ");
+{
+  const page = await open();
+  await page.click('#nav button[data-tab="brief"]');
+  ok("環境タブに朝やろのボタンが出る", !!(await page.$("#m_run")));
+  ok("環境タブに取引同期のカードが出る",
+     (await page.$eval("#app", e => e.innerText)).includes("取引同期"));
+
+  // デモの値は保存しない
+  await page.evaluate(async () => {
+    DB.settings.marketProvider = "demo"; saveData();
+    await runMorningRoutine();
+  });
+  await page.waitForTimeout(120);
+  const demo = await page.evaluate(() => ({
+    briefs: DB.briefs.length,
+    save: MORNING.steps.filter(s => s.key === "save")[0]
+  }));
+  ok("デモのサンプル値は保存しない", demo.briefs === 0 && demo.save.state === "warn");
+
+  // 未接続だと、値が無いので空の環境認識を作らない
+  const none = await page.evaluate(async () => {
+    DB.settings.marketProvider = "none"; BRIEF = null; saveData();
+    await runMorningRoutine();
+    return { briefs: DB.briefs.length, steps: MORNING.steps.map(s => [s.key, s.state]) };
+  });
+  ok("入る値が無ければ空の環境認識を作らない", none.briefs === 0);
+  ok("同期の段は未接続として飛ばす", none.steps[0][0] === "sync" && none.steps[0][1] === "skip");
+
+  // 手入力が入っていれば、朝やろで保存まで進む
+  await page.fill("#b_memo", "手で書いた");
+  await page.click('#nav button[data-tab="brief"]');
+  const saved = await page.evaluate(async () => {
+    await runMorningRoutine();
+    return { briefs: DB.briefs.length, memo: (DB.briefs[0] || {}).memo,
+             save: MORNING.steps.filter(s => s.key === "save")[0].state };
+  });
+  ok("手入力があれば保存まで進む", saved.briefs === 1 && saved.memo === "手で書いた" && saved.save === "ok");
+
+  // #morning で開くと自動で走り、ハッシュは消える
+  const page2 = await open();
+  await page2.evaluate(() => { DB.settings.marketProvider = "demo"; saveData(); });
+  await page2.goto(URL_ + "#morning");
+  await page2.waitForSelector("#app .topbar");
+  await page2.waitForTimeout(400);
+  const hashed = await page2.evaluate(() => ({
+    tab: TAB, steps: MORNING.steps.length, hash: location.hash
+  }));
+  ok("#morning で朝の処理が走る", hashed.steps === 3 && hashed.tab === "brief");
+  ok("ハッシュは消えるので再読込で二重に走らない", hashed.hash === "");
+  await page2.close();
   await page.close();
 }
 

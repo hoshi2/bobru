@@ -220,6 +220,23 @@ html[data-theme="light"] .btn.primary{color:#fff}
 .sessgrp .sh .sn{font-size:12.5px;font-weight:700;color:var(--txt2)}
 .sessgrp .sh .st{font-size:10.5px;color:var(--txt3);font-variant-numeric:tabular-nums}
 
+/* ---- 朝のルーティン / MT5 同期 ---- */
+.mstep{display:grid;grid-template-columns:20px 1fr;gap:9px;align-items:start;padding:7px 0;
+  border-bottom:1px solid var(--line);font-size:12.5px;line-height:1.5}
+.mstep:last-child{border-bottom:0}
+.mstep .mi{font-weight:700;text-align:center;line-height:1.5}
+.mstep .ml{color:var(--txt2);font-weight:600}
+.mstep .mt{color:var(--txt3);font-size:11.5px;display:block;margin-top:1px}
+.mstep.run .mi{color:var(--gold)}
+.mstep.ok  .mi{color:var(--green)}
+.mstep.warn .mi{color:var(--gold)}
+.mstep.err .mi{color:var(--red)}
+.mstep.skip .mi{color:var(--txt3)}
+.bigrun{font-size:16px;padding:16px 18px}
+.mt5area{width:100%;min-height:88px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
+.mt5tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;
+  border:1px solid var(--line2);color:var(--txt3);margin-left:6px;vertical-align:middle}
+
 /* live calc panel */
 .calc{background:var(--card2);border:1px solid var(--line);border-radius:var(--radius-s);padding:13px;margin-bottom:13px}
 .calc .cline{display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line);font-size:13.5px}
@@ -463,6 +480,14 @@ function defaultSettings(){
     baseLot:1.00,            // 内部: 基本ロット目安
     lossStreakWarn:4,        // 内部: 連敗注意ライン
     marketProvider:"none",   // 朝分析の取得先（marketDataProvider の登録名）
+    mt5:{                    // MT5 取引履歴の同期（事実だけを取り込む）
+      provider:"none",       // tradeSyncProvider の登録名
+      endpoint:"",           // 中継の取得URL（VPS のエージェントが書き込む先）
+      token:"",              // 取得用トークン。MT5 のログイン情報はここには入れない
+      autoImport:true,       // 取り込んだ約定からトレード記録を作る
+      lastSync:null,         // 最後に同期できた時刻
+      lastCount:0            // そのとき新しく入った約定の件数
+    },
     fx:{                     // 口座通貨への換算（USD建ての損益を口座通貨に直す）
       auto:true,             // 自動取得する
       manual:null,           // 手動レート（自動が取れないときの控え）
@@ -563,6 +588,7 @@ function defaultDB(){
     settings:defaultSettings(),
     accounts:[{id:uid(),name:"Fintokei",type:"Fintokei Challenge Swing",initialBalance:100000,created:now()}],
     briefs:[],       // Morning Brief（1日1件・date をキーに扱う）
+    deals:[],        // MT5 から取り込んだ約定（事実のみ・deal ticket が一意キー）
     tradePlans:[],   // 下書き（計画中）
     trades:[],       // status: open / closed / cancelled
     rules:defaultRules(),
@@ -630,6 +656,7 @@ function migrate(p){
   db.settings=mergeSettings(base.settings, p.settings);
   db.accounts=Array.isArray(p.accounts)&&p.accounts.length?p.accounts:base.accounts;
   db.briefs=Array.isArray(p.briefs)?p.briefs:[];
+  db.deals=Array.isArray(p.deals)?p.deals:[];
   db.tradePlans=Array.isArray(p.tradePlans)?p.tradePlans:[];
   db.trades=Array.isArray(p.trades)?p.trades:[];
   db.rules=Array.isArray(p.rules)&&p.rules.length?p.rules:base.rules;
@@ -642,9 +669,11 @@ function migrate(p){
 function mergeSettings(def,s){
   if(!s||typeof s!=="object") return def;
   var out=JSON.parse(JSON.stringify(def));
-  for(var k in s){ if(k==="fin"||k==="fx") continue; if(s[k]!==undefined&&s[k]!==null) out[k]=s[k]; }
+  for(var k in s){ if(k==="fin"||k==="fx"||k==="mt5") continue; if(s[k]!==undefined&&s[k]!==null) out[k]=s[k]; }
   if(s.fin&&typeof s.fin==="object"){ for(var f in def.fin){ if(s.fin[f]!==undefined&&s.fin[f]!==null) out.fin[f]=s.fin[f]; } }
   if(s.fx&&typeof s.fx==="object"){ for(var x in def.fx){ if(s.fx[x]!==undefined&&s.fx[x]!==null) out.fx[x]=s.fx[x]; } }
+  // 深いマージにしておかないと、版を上げて増やしたキーが古い保存データで欠けたままになる
+  if(s.mt5&&typeof s.mt5==="object"){ for(var m in def.mt5){ if(s.mt5[m]!==undefined&&s.mt5[m]!==null) out.mt5[m]=s.mt5[m]; } }
   return out;
 }
 function saveData(){
@@ -709,7 +738,8 @@ function tradesToCSV(){
   var cols=["id","status","createdAt","closedAt","symbol","dir","pattern","h4env","m15purple","trigger",
     "entry","sl","tp","lot","contractSize","balanceAtEntry","plannedLoss","plannedProfit","plannedRR",
     "realizedPL","fee","swap","result","ruleOk","sawLower","emotion","realizedR","reviewMemo","learn","tags",
-    "briefId","briefDate","trendDaily","trendH4","trendH1","trendM15","bias"];
+    "briefId","briefDate","trendDaily","trendH4","trendH1","trendM15","bias",
+    "source","mt5PositionId","mt5EntryDeal","mt5ExitDeals","mt5Account"];
   var esc2=function(v){ if(v===null||v===undefined) v=""; v=String(v); if(/[",\n]/.test(v)) v='"'+v.replace(/"/g,'""')+'"'; return v; };
   var rows=[cols.join(",")];
   DB.trades.forEach(function(t){
@@ -722,6 +752,9 @@ function tradesToCSV(){
     var bt=b?normalizeBrief(b):null;
     line.push(t.briefId||"", bt?bt.date:"", bt?bt.trend.daily:"", bt?bt.trend.h4:"",
               bt?bt.trend.h1:"", bt?bt.trend.m15:"", bt?bt.bias:"");
+    var m=t.mt5||{};
+    line.push(t.source||"manual", m.positionId||"", m.entryDeal||"",
+              (m.exitDeals||[]).join("|"), m.account||"");
     rows.push(line.map(esc2).join(","));
   });
   return rows.join("\n");
@@ -1565,6 +1598,587 @@ function demoRand(seed){
 }
 
 /* =========================================================================
+   tradeSyncProvider — MT5 取引履歴の取り込み層
+   -------------------------------------------------------------------------
+   marketDataProvider / fxRateProvider と同じ作り。取得先を register で足せる。
+
+     tradeSyncProvider.register(name, {
+       label, note, needsText:Boolean,
+       fetch: function(req){ return Promise<batch>; }
+     });
+
+   req   : { since:ISO|null, sinceTicket:String|null, text:String, endpoint, token }
+   batch : emptyDealBatch() の形。
+
+   方針（Issue の要件そのまま）
+     ・MT5 から実際に取れる事実だけを持つ。取れない項目は null のままにする
+     ・エントリー根拠・感情・相場観・パターンの類は**絶対に埋めない**
+     ・一意キーは deal ticket。建玉の一意キーは position ID
+     ・同じ約定を二度入れない（何度実行しても結果が同じ）
+   ========================================================================= */
+function emptyDealBatch(){
+  return {
+    source:"", asOf:null,
+    account:null,          // {login, server, currency, balance, equity}
+    deals:[],              // 約定（事実）
+    positions:[],          // 保有中の建玉スナップショット（SL/TP の現在値が取れる）
+    notes:[]
+  };
+}
+// MT5 の数値コードと、こちらで使う文字列の対応
+var MT5_DEAL_TYPE={0:"buy",1:"sell",2:"balance",3:"credit",4:"charge",5:"correction",
+                   6:"bonus",7:"commission",8:"commission",9:"commission",10:"commission",
+                   11:"commission",12:"interest",13:"buy",14:"sell",15:"dividend",
+                   16:"dividend",17:"tax"};
+var MT5_DEAL_ENTRY={0:"in",1:"out",2:"inout",3:"outby"};
+
+function mt5Str(v){ return (v===null||v===undefined)?"":String(v); }
+// ticket は桁が大きいので文字列で持つ（数値にすると比較や突き合わせで事故る）
+function mt5Ticket(v){
+  var s=mt5Str(v).trim();
+  return /^[0-9]+$/.test(s) ? s.replace(/^0+(?=[0-9])/,"") : (s||"");
+}
+// MT5 の時刻は UNIX 秒（time）か ミリ秒（time_msc）。ISO 文字列で来ることもある
+function mt5Time(v){
+  if(v===null||v===undefined||v==="") return null;
+  if(typeof v==="number"&&isFinite(v)){
+    var ms = v>1e12 ? v : v*1000;              // 1e12 を超えていればミリ秒
+    var d1=new Date(ms); return isNaN(d1)?null:d1.toISOString();
+  }
+  var s=String(v).trim();
+  if(/^[0-9]+$/.test(s)) return mt5Time(Number(s));
+  var d=new Date(s.replace(" ","T"));
+  return isNaN(d)?null:d.toISOString();
+}
+function mt5Type(v){
+  if(typeof v==="number") return MT5_DEAL_TYPE[v]||"other";
+  var s=mt5Str(v).toLowerCase();
+  if(s==="buy"||s==="sell"||s==="balance") return s;
+  if(/^[0-9]+$/.test(s)) return MT5_DEAL_TYPE[Number(s)]||"other";
+  return s||"other";
+}
+function mt5Entry(v){
+  if(typeof v==="number") return MT5_DEAL_ENTRY[v]||"other";
+  var s=mt5Str(v).toLowerCase();
+  if(s==="in"||s==="out"||s==="inout"||s==="outby") return s;
+  if(/^[0-9]+$/.test(s)) return MT5_DEAL_ENTRY[Number(s)]||"other";
+  return s||"other";
+}
+// 約定1件を正規形へ。ticket が無いものは取り込まない（一意キーが立たないため）
+function normalizeDeal(d){
+  if(!d||typeof d!=="object") return null;
+  var ticket=mt5Ticket(d.ticket!==undefined?d.ticket:d.dealTicket);
+  if(!ticket) return null;
+  return {
+    ticket:ticket,
+    order:mt5Ticket(d.order!==undefined?d.order:d.orderTicket)||null,
+    positionId:mt5Ticket(d.positionId!==undefined?d.positionId:d.position_id)||null,
+    time:mt5Time(d.time!==undefined?d.time:d.time_msc),
+    type:mt5Type(d.type),
+    entry:mt5Entry(d.entry),
+    symbol:mt5Str(d.symbol).trim(),
+    volume:toNum(d.volume),
+    price:toNum(d.price),
+    profit:toNum(d.profit),
+    commission:toNum(d.commission),
+    swap:toNum(d.swap),
+    fee:toNum(d.fee),
+    sl:toNum(d.sl),                 // 発注時の値（約定そのものは SL/TP を持たない）
+    tp:toNum(d.tp),
+    contractSize:toNum(d.contractSize),
+    comment:mt5Str(d.comment),
+    magic:toNum(d.magic),
+    reason:mt5Str(d.reason),
+    account:mt5Str(d.account)||null,
+    currency:mt5Str(d.currency).toUpperCase()||""
+  };
+}
+// 保有中の建玉スナップショット（SL/TP の「いまの値」はここからしか取れない）
+function normalizeMt5Position(p){
+  if(!p||typeof p!=="object") return null;
+  var pid=mt5Ticket(p.positionId!==undefined?p.positionId:(p.ticket!==undefined?p.ticket:p.identifier));
+  if(!pid) return null;
+  return {
+    positionId:pid, symbol:mt5Str(p.symbol).trim(),
+    type:mt5Type(p.type), volume:toNum(p.volume),
+    priceOpen:toNum(p.priceOpen!==undefined?p.priceOpen:p.price_open),
+    sl:toNum(p.sl), tp:toNum(p.tp), time:mt5Time(p.time),
+    profit:toNum(p.profit), swap:toNum(p.swap),
+    account:mt5Str(p.account)||null
+  };
+}
+function normalizeMt5Account(a){
+  if(!a||typeof a!=="object") return null;
+  return {
+    login:mt5Str(a.login)||null, server:mt5Str(a.server), name:mt5Str(a.name),
+    currency:mt5Str(a.currency).toUpperCase(), balance:toNum(a.balance),
+    equity:toNum(a.equity), leverage:toNum(a.leverage)
+  };
+}
+// 取得先が返したものを空バッチに重ねる（知らないキーは捨てる）
+function mergeDealBatch(dst,src){
+  if(!src||typeof src!=="object") return dst;
+  if(typeof src.source==="string"&&src.source) dst.source=src.source;
+  if(typeof src.asOf==="string") dst.asOf=src.asOf;
+  var acc=normalizeMt5Account(src.account); if(acc) dst.account=acc;
+  if(Array.isArray(src.deals)){
+    dst.deals=src.deals.map(normalizeDeal).filter(function(x){ return !!x; });
+  }
+  if(Array.isArray(src.positions)){
+    dst.positions=src.positions.map(normalizeMt5Position).filter(function(x){ return !!x; });
+  }
+  if(Array.isArray(src.notes)) dst.notes=src.notes.map(function(x){ return String(x); });
+  // 口座情報が約定側に無ければ、バッチの口座で補う（事実の転記であって推測ではない）
+  if(dst.account){
+    dst.deals.forEach(function(d){
+      if(!d.account) d.account=dst.account.login;
+      if(!d.currency) d.currency=dst.account.currency;
+    });
+    dst.positions.forEach(function(p){ if(!p.account) p.account=dst.account.login; });
+  }
+  return dst;
+}
+var tradeSyncProvider=(function(){
+  var reg={}, order=[];
+  return {
+    register:function(name,impl){
+      if(!name||!impl||typeof impl.fetch!=="function") return false;
+      if(!reg[name]) order.push(name);
+      reg[name]=impl; return true;
+    },
+    has:function(name){ return !!reg[name]; },
+    list:function(){
+      return order.map(function(n){
+        return {name:n,label:reg[n].label||n,note:reg[n].note||"",needsText:!!reg[n].needsText};
+      });
+    },
+    info:function(name){
+      var p=reg[name]; if(!p) return null;
+      return {label:p.label||name,note:p.note||"",needsText:!!p.needsText};
+    },
+    // 常に解決する Promise。取得先が投げても throw を外に出さない
+    fetch:function(name,req){
+      var impl=reg[name];
+      if(!impl){
+        var miss=emptyDealBatch();
+        miss.source="不明な取得先"; miss.notes=["取得先「"+name+"」が見つかりません。"];
+        return Promise.resolve({ok:false,batch:miss});
+      }
+      return new Promise(function(resolve){
+        var done=false;
+        var finish=function(r){ if(!done){ done=true; resolve(r); } };
+        setTimeout(function(){
+          var to=emptyDealBatch();
+          to.source=impl.label||name; to.notes=["取得がタイムアウトしました（60秒）。"];
+          finish({ok:false,batch:to});
+        },60000);
+        var failed=function(err){
+          var e=emptyDealBatch();
+          e.source=impl.label||name;
+          e.notes=["取得に失敗しました："+((err&&err.message)||String(err))];
+          finish({ok:false,batch:e});
+        };
+        try{
+          Promise.resolve(impl.fetch(req||{})).then(function(res){
+            var b=emptyDealBatch();
+            mergeDealBatch(b,res);
+            if(!b.source) b.source=impl.label||name;
+            finish({ok:true,batch:b});
+          },failed);
+        }catch(err2){ failed(err2); }
+      });
+    }
+  };
+})();
+
+/* ---------- 同梱の取得先 ---------- */
+var DEFAULT_TRADE_SYNC="none";
+
+// 1) 未接続。配線だけ通っていて、何も取り込まない既定の取得先。
+tradeSyncProvider.register("none",{
+  label:"未接続",
+  note:"MT5 の取引履歴はまだ繋いでいません。取引は今まで通り手入力できます。",
+  fetch:function(){
+    var b=emptyDealBatch();
+    b.source="未接続"; b.asOf=now();
+    b.notes=["MT5 の取得先が未接続なので、取り込む約定はありません。",
+             "VPS のエージェントを動かすか、貼り付けで取り込んで下さい。"];
+    return Promise.resolve(b);
+  }
+});
+
+// 2) 貼り付け。エージェントの出力 JSON をそのまま貼る。VPS が無くても動く道。
+tradeSyncProvider.register("paste",{
+  label:"貼り付け（エージェントの JSON）",
+  note:"mt5_agent.py --print が出す JSON を貼り付けます。VPS が無くても取り込めますが、手作業になります。",
+  needsText:true,
+  fetch:function(req){
+    var t=String((req&&req.text)||"").trim();
+    if(!t) return Promise.reject(new Error("貼り付け欄が空です"));
+    var obj;
+    try{ obj=JSON.parse(t); }catch(e){ return Promise.reject(new Error("JSON として読み込めませんでした")); }
+    if(Array.isArray(obj)) obj={deals:obj};
+    if(!obj||typeof obj!=="object") return Promise.reject(new Error("データ形式が不正です"));
+    if(!Array.isArray(obj.deals)) return Promise.reject(new Error("deals の配列が見つかりません"));
+    obj.source=obj.source||"貼り付け";
+    obj.asOf=obj.asOf||obj.generatedAt||now();
+    return Promise.resolve(obj);
+  }
+});
+
+// 3) 中継。VPS のエージェントが書き込んだ先から取りに行く。
+//    ★ MT5 のログイン情報はここには出てこない。持つのは読み取り用トークンだけ。
+tradeSyncProvider.register("relay",{
+  label:"中継（VPS のエージェント）",
+  note:"エージェントが書き込んだ中継から取得します。設定に取得URLと読み取りトークンが要ります。",
+  fetch:function(req){
+    var url=String((req&&req.endpoint)||"").trim();
+    if(!url) return Promise.reject(new Error("取得URLが設定されていません"));
+    if(url.indexOf("https://")!==0 && url.indexOf("http://127.0.0.1")!==0 && url.indexOf("http://localhost")!==0)
+      return Promise.reject(new Error("取得URLは https:// にして下さい"));
+    var q=[];
+    if(req.since) q.push("since="+encodeURIComponent(req.since));
+    if(req.sinceTicket) q.push("sinceTicket="+encodeURIComponent(req.sinceTicket));
+    var full=url+(q.length?(url.indexOf("?")<0?"?":"&")+q.join("&"):"");
+    var head={"Accept":"application/json"};
+    if(req.token) head["Authorization"]="Bearer "+req.token;
+    return fetch(full,{method:"GET",headers:head,cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("中継が "+r.status+" を返しました");
+      return r.json();
+    }).then(function(j){
+      j=j||{};
+      j.source=j.source||"中継";
+      j.asOf=j.asOf||j.generatedAt||now();
+      return j;
+    });
+  }
+});
+
+/* =========================================================================
+   取り込み（冪等）
+   deal ticket が一意キー。同じ約定は何度流し込んでも1件のまま。
+   ========================================================================= */
+function mt5Settings(){
+  var s=(DB&&DB.settings&&DB.settings.mt5)||{};
+  return {
+    provider:tradeSyncProvider.has(s.provider)?s.provider:DEFAULT_TRADE_SYNC,
+    endpoint:s.endpoint||"", token:s.token||"",
+    autoImport:s.autoImport!==false,
+    lastSync:s.lastSync||null, lastCount:toNum(s.lastCount)||0
+  };
+}
+function dealIndex(){
+  var ix={};
+  (DB.deals||[]).forEach(function(d){ if(d&&d.ticket) ix[d.ticket]=d; });
+  return ix;
+}
+// 最後に取り込んだ約定の時刻／ticket（次の取得の起点に使う）
+function lastDealCursor(){
+  var t=null, tk=null;
+  (DB.deals||[]).forEach(function(d){
+    if(d.time && (!t || d.time>t)) t=d.time;
+    if(d.ticket && (!tk || Number(d.ticket)>Number(tk))) tk=d.ticket;
+  });
+  return {since:t, sinceTicket:tk};
+}
+// 建玉ごとに約定をまとめる。MT5 から取れる事実だけで組み立てる。
+function positionsFromDeals(deals){
+  var groups={}, orderKeys=[];
+  (deals||[]).forEach(function(d){
+    if(d.type!=="buy"&&d.type!=="sell") return;      // 入出金・手数料の行は建玉ではない
+    var key=d.positionId||("deal:"+d.ticket);
+    if(!groups[key]){ groups[key]={key:key,positionId:d.positionId||null,deals:[]}; orderKeys.push(key); }
+    groups[key].deals.push(d);
+  });
+  return orderKeys.map(function(k){ return buildPosition(groups[k]); }).filter(function(p){ return !!p; });
+}
+function vwap(list){
+  var pv=0, v=0;
+  list.forEach(function(d){
+    var vol=toNum(d.volume), pr=toNum(d.price);
+    if(isNum(vol)&&isNum(pr)&&vol>0){ pv+=pr*vol; v+=vol; }
+  });
+  return v>0 ? Math.round((pv/v)*100000)/100000 : null;
+}
+function buildPosition(g){
+  var ds=g.deals.slice().sort(function(a,b){
+    if(a.time&&b.time&&a.time!==b.time) return a.time<b.time?-1:1;
+    return Number(a.ticket)-Number(b.ticket);
+  });
+  var ins=[], outs=[], hasInout=false;
+  ds.forEach(function(d){
+    if(d.entry==="in") ins.push(d);
+    else if(d.entry==="out"||d.entry==="outby") outs.push(d);
+    else if(d.entry==="inout") hasInout=true;
+  });
+  if(!ins.length) return null;                      // 建てた約定が無ければ組み立てない
+  var first=ins[0];
+  var inVol=0; ins.forEach(function(d){ var v=toNum(d.volume); if(isNum(v)) inVol+=v; });
+  var outVol=0; outs.forEach(function(d){ var v=toNum(d.volume); if(isNum(v)) outVol+=v; });
+  var sum=function(k){
+    var t=null;
+    ds.forEach(function(d){ var v=toNum(d[k]); if(isNum(v)){ t=(t===null?0:t)+v; } });
+    return t===null?null:Math.round(t*100000)/100000;
+  };
+  var closed = outs.length>0 && outVol>=inVol-1e-9;
+  var slTp=null;
+  for(var i=0;i<ins.length;i++){ if(isNum(ins[i].sl)||isNum(ins[i].tp)){ slTp=ins[i]; break; } }
+  var cs=null;
+  for(var j=0;j<ds.length;j++){ if(isNum(ds[j].contractSize)){ cs=ds[j].contractSize; break; } }
+  return {
+    positionId:g.positionId, key:g.key,
+    symbol:first.symbol||"", dir:first.type==="buy"?"long":"short",
+    entryTime:first.time, entryPrice:vwap(ins),
+    exitTime:outs.length?outs[outs.length-1].time:null,
+    exitPrice:outs.length?vwap(outs):null,
+    volume:Math.round(inVol*100000)/100000,
+    closedVolume:Math.round(outVol*100000)/100000,
+    status:closed?"closed":"open",
+    profit:sum("profit"), commission:sum("commission"), fee:sum("fee"), swap:sum("swap"),
+    sl:slTp?slTp.sl:null, tp:slTp?slTp.tp:null,
+    contractSize:cs,
+    account:first.account||null, currency:first.currency||"",
+    dealTickets:ds.map(function(d){ return d.ticket; }),
+    entryDeal:first.ticket,
+    exitDeals:outs.map(function(d){ return d.ticket; }),
+    // 建てと決済が1約定に同居するドテンは、正確に割れないので記録を作らない
+    exact:!hasInout
+  };
+}
+// 保有中の建玉スナップショットを重ねる。
+// 約定は SL/TP を持たないので、発注時の値（order 由来）しか分からない。
+// 「いまの SL/TP」はこのスナップショットからしか取れないので、来た回だけ印を付ける。
+function applyOpenPositionFacts(list,positions){
+  var ix={};
+  (positions||[]).forEach(function(p){ if(p.positionId) ix[p.positionId]=p; });
+  list.forEach(function(pos){
+    var live=pos.positionId?ix[pos.positionId]:null;
+    if(!live) return;
+    pos.liveSeen=true;
+    pos.liveSl=live.sl; pos.liveTp=live.tp;
+    if(pos.status==="open"&&isNum(live.profit)) pos.floatingPL=live.profit;
+  });
+  return list;
+}
+function mt5TradeId(pos){
+  return "mt5:"+(pos.account||"0")+":"+(pos.positionId||pos.key);
+}
+// MT5 由来の事実だけを並べる。ここに無いキーは同期で一切触らない。
+var MT5_FACT_KEYS=["symbol","dir","entry","sl","tp","lot","contractSize",
+                   "createdAt","closedAt","closePrice","realizedPL","fee","swap","status"];
+// prev は前回この記録に書いた MT5 の値。SL/TP は「今回の取得で分かった回」だけ載せる。
+// 載せなければ同期は触らないので、スナップショットが無い回に発注時の値へ巻き戻らない。
+function mt5FactsOf(pos,prev){
+  var closed=pos.status==="closed";
+  var fee=null;
+  if(isNum(pos.commission)||isNum(pos.fee)) fee=(toNum(pos.commission)||0)+(toNum(pos.fee)||0);
+  var f={
+    symbol:pos.symbol||"",
+    dir:pos.dir,
+    entry:pos.entryPrice,
+    lot:pos.volume,
+    contractSize:isNum(pos.contractSize)?pos.contractSize:null,
+    createdAt:pos.entryTime,
+    closedAt:closed?pos.exitTime:null,
+    closePrice:closed?pos.exitPrice:null,
+    // 決済が済むまでは実現損益ではないので入れない（含み益を実績にしない）
+    realizedPL:closed?pos.profit:null,
+    fee:closed?fee:null,
+    swap:closed?pos.swap:null,
+    status:closed?"closed":"open"
+  };
+  var firstTime=!(prev&&("sl" in prev));
+  if(pos.liveSeen===true){          // いまの SL/TP が分かった
+    f.sl=pos.liveSl; f.tp=pos.liveTp;
+  }else if(firstTime){              // 初回だけは発注時の値を入れておく
+    f.sl=pos.sl; f.tp=pos.tp;
+  }
+  return f;
+}
+// 今回載らなかった項目は前回の値を持ち越す（「まだ知らない」と「知って null」を分ける）
+function mergeFacts(prev,facts){
+  var out={};
+  MT5_FACT_KEYS.forEach(function(k){
+    if(k in facts) out[k]=facts[k];
+    else if(k in prev) out[k]=prev[k];
+  });
+  return out;
+}
+function sameFact(a,b){
+  if(a===null||a===undefined) return b===null||b===undefined;
+  if(isNum(a)&&isNum(b)) return Math.abs(a-b)<1e-9;
+  return a===b;
+}
+// 3方向マージ。
+//   MT5 側が前回と同じ         → 触らない（手直しを残す）
+//   MT5 側が変わって手直しなし → MT5 の値で更新
+//   MT5 側が変わって手直しあり → 手直しを残し、食い違いとして報告する
+function applyMt5Facts(t,pos,report){
+  var prev=(t.mt5&&t.mt5.facts)||{};
+  var facts=mt5FactsOf(pos,prev);
+  var changed=0;
+  MT5_FACT_KEYS.forEach(function(k){
+    if(!(k in facts)) return;                 // 今回 MT5 から分からなかった項目は触らない
+    var incoming=facts[k], last=prev[k];
+    if(k in prev && sameFact(last,incoming)) return;
+    if((k in prev) && !sameFact(t[k],last)){
+      report.conflicts.push({id:t.id,field:k,mine:t[k],mt5:incoming});
+      return;
+    }
+    t[k]=incoming; changed++;
+  });
+  t.mt5={
+    positionId:pos.positionId, account:pos.account, currency:pos.currency||"",
+    entryDeal:pos.entryDeal, exitDeals:pos.exitDeals.slice(),
+    dealTickets:pos.dealTickets.slice(),
+    closedVolume:pos.closedVolume, exact:pos.exact!==false,
+    syncedAt:now(), facts:mergeFacts(prev,facts)
+  };
+  return changed;
+}
+// 手入力の記録と MT5 の記録が同じトレードを指していそうなら報告する（自動では混ぜない）
+function looksDuplicate(pos){
+  if(!isNum(pos.entryPrice)||!pos.entryTime) return null;
+  var t0=new Date(pos.entryTime).getTime();
+  var hit=null;
+  DB.trades.forEach(function(t){
+    if(hit||t.source==="mt5") return;
+    if(!sameSymbol(t.symbol,pos.symbol)||t.dir!==pos.dir) return;
+    var e=toNum(t.entry); if(!isNum(e)) return;
+    if(Math.abs(e-pos.entryPrice)/Math.max(Math.abs(pos.entryPrice),1)>0.005) return;
+    var td=t.createdAt?new Date(t.createdAt).getTime():NaN;
+    if(isNaN(td)||Math.abs(td-t0)>2*3600*1000) return;
+    hit=t;
+  });
+  return hit;
+}
+function findMt5Trade(pos){
+  var id=mt5TradeId(pos);
+  for(var i=0;i<DB.trades.length;i++){
+    var t=DB.trades[i];
+    if(t.id===id) return t;
+    if(t.source==="mt5"&&t.mt5&&pos.positionId&&t.mt5.positionId===pos.positionId&&
+       String(t.mt5.account||"")===String(pos.account||"")) return t;
+  }
+  return null;
+}
+// 建玉1件 → トレード記録（作成 or 更新）。主観の欄には一切触れない。
+function upsertMt5Trade(pos,report){
+  if(pos.exact===false){ report.skippedPositions.push(pos.positionId||pos.key); return; }
+  if(!pos.symbol||!pos.entryTime){ report.skippedPositions.push(pos.positionId||pos.key); return; }
+  var t=findMt5Trade(pos);
+  if(t){ if(applyMt5Facts(t,pos,report)){ t.updatedAt=now(); report.tradesUpdated++; } return; }
+
+  var dup=looksDuplicate(pos);
+  if(dup) report.duplicates.push({mine:dup.id,positionId:pos.positionId});
+
+  var symbol=pos.symbol;
+  var brief=briefFor(localDateOf(pos.entryTime),symbol);
+  t={
+    id:mt5TradeId(pos), status:"open",
+    source:"mt5",                       // 手入力の記録と混ざらないよう印を付ける
+    createdAt:pos.entryTime, updatedAt:now(), savedAt:now(),
+    symbol:symbol, dir:pos.dir,
+    // 主観の欄は MT5 から取れない。空のまま置く（推測で埋めない）
+    h4env:"", m15purple:"", trigger:"", pattern:"", sawLower:"",
+    entry:null, sl:null, tp:null, lot:null,
+    balanceAtEntry:null,                // MT5 は「その時の残高」を約定に持たないので不明のまま
+    contractSize:null,
+    fxRate:fxRateFor(symbol),
+    acctCurrency:(pos.currency||acctCurrency()).toUpperCase(),
+    memo:"", tags:[],
+    briefId:(brief&&brief.id)||null,
+    closedAt:null, closePrice:null, realizedPL:null, fee:null, swap:null,
+    result:null, ruleOk:null, closeSawLower:null, emotion:null, reviewMemo:"", learn:""
+  };
+  applyMt5Facts(t,pos,report);
+  DB.trades.unshift(t);
+  report.tradesCreated++;
+}
+function emptySyncReport(){
+  return {source:"",asOf:null,account:null,
+          dealsAdded:0,dealsUpdated:0,dealsSkipped:0,
+          positions:0,tradesCreated:0,tradesUpdated:0,
+          conflicts:[],duplicates:[],skippedPositions:[],notes:[],ok:true};
+}
+// バッチを DB に流し込む。何度実行しても結果が同じになること（冪等）が要件。
+function importDealBatch(batch){
+  var rep=emptySyncReport();
+  rep.source=batch.source||""; rep.asOf=batch.asOf||null; rep.account=batch.account||null;
+  rep.notes=(batch.notes||[]).slice();
+
+  var ix=dealIndex();
+  (batch.deals||[]).forEach(function(d){
+    if(!d||!d.ticket){ rep.dealsSkipped++; return; }
+    var ex=ix[d.ticket];
+    if(!ex){ DB.deals.push(d); ix[d.ticket]=d; rep.dealsAdded++; return; }
+    // 同じ ticket は上書きしない。中身が変わっていたときだけ差し替える
+    if(JSON.stringify(ex)!==JSON.stringify(d)){
+      for(var i=0;i<DB.deals.length;i++){ if(DB.deals[i]===ex){ DB.deals[i]=d; break; } }
+      ix[d.ticket]=d; rep.dealsUpdated++;
+    }
+  });
+  DB.deals.sort(function(a,b){
+    var at=a.time||"", bt=b.time||"";
+    if(at!==bt) return at<bt?-1:1;
+    return Number(a.ticket)-Number(b.ticket);
+  });
+
+  var poss=applyOpenPositionFacts(positionsFromDeals(DB.deals),batch.positions);
+  rep.positions=poss.length;
+  if(mt5Settings().autoImport) poss.forEach(function(p){ upsertMt5Trade(p,rep); });
+
+  var s=DB.settings.mt5;
+  s.lastSync=now(); s.lastCount=rep.dealsAdded;
+  if(batch.account&&batch.account.currency&&batch.account.currency!==acctCurrency()){
+    rep.notes.push("MT5 の口座通貨は "+batch.account.currency+" ですが、ぼぶるの設定は "+
+                   acctCurrency()+" です。設定の口座通貨を合わせて下さい。");
+  }
+  saveData();
+  return rep;
+}
+// 取り込み結果を1行にする（トーストと結果カードで使う）
+function syncReportLine(rep){
+  if(!rep) return "";
+  var parts=[];
+  parts.push("約定 +"+rep.dealsAdded+(rep.dealsUpdated?" / 更新"+rep.dealsUpdated:""));
+  parts.push("トレード +"+rep.tradesCreated+(rep.tradesUpdated?" / 更新"+rep.tradesUpdated:""));
+  return parts.join(" ・ ");
+}
+
+/* ---------- 同期の実行（画面から呼ぶ薄い層） ---------- */
+var _mt5Syncing=false;
+var MT5_LAST=null;     // 直近の取り込み結果（画面表示用・保存はしない）
+
+function runTradeSync(opt){
+  opt=opt||{};
+  if(_mt5Syncing) return Promise.resolve(null);
+  var s=mt5Settings();
+  var pname=opt.provider||s.provider;
+  var cur=lastDealCursor();
+  var req={since:cur.since,sinceTicket:cur.sinceTicket,
+           text:opt.text||"",endpoint:s.endpoint,token:s.token};
+  _mt5Syncing=true;
+  return tradeSyncProvider.fetch(pname,req).then(function(res){
+    _mt5Syncing=false;
+    var rep;
+    if(!res.ok){
+      rep=emptySyncReport();
+      rep.ok=false; rep.source=res.batch.source||pname;
+      rep.notes=(res.batch.notes||[]).slice();
+    }else{
+      rep=importDealBatch(res.batch);
+    }
+    MT5_LAST=rep;
+    return rep;
+  },function(){
+    _mt5Syncing=false;
+    var rep=emptySyncReport(); rep.ok=false; rep.notes=["取り込みに失敗しました。"];
+    MT5_LAST=rep; return rep;
+  });
+}
+
+/* =========================================================================
    Morning Brief（環境認識）
    1日1件。date をキーに upsert する。外部APIは使わず手入力のみ。
    ========================================================================= */
@@ -1742,7 +2356,9 @@ function viewBrief(){
   if(!isToday) h+="<button class='btn ghost sm' onclick='gotoBriefToday()'>今日に戻る</button>";
   h+="</div>";
 
+  if(isToday) h+=morningCard();
   h+=briefAnalysisCard();
+  h+=tradeSyncCard();
 
   // 上位足
   h+="<div class='card'><h2>各時間足の方向</h2>";
@@ -1965,12 +2581,10 @@ window.gotoBriefToday=function(){
   if(TAB==="brief"){ switchBriefDate(today()); return; }
   UI.briefDate=today(); BRIEF=null; TAB="brief"; render();
 };
-window.saveBrief=function(){
-  if(_briefSaving) return; _briefSaving=true; setTimeout(function(){_briefSaving=false;},400);
-  syncBriefFromDOM();
-  if(!BRIEF.date){ toast("日付を入力して下さい"); return; }
-  if(BRIEF.analysis.demo &&
-     !confirm("この環境認識にはデモのサンプル値が入っています。\n実際の相場とは関係のない数字ですが、このまま保存しますか？")) return;
+// 作業コピーを DB へ upsert する本体。確認や画面更新は呼び出し側が持つ。
+// 「朝やろ」からも押しボタンからも同じ道を通す（保存の仕方が2つに分かれないように）
+function saveBriefRecord(){
+  if(!BRIEF||!BRIEF.date) return false;
   var rec=normalizeBrief(BRIEF);
   rec.date=BRIEF.date;
   var ex=briefOn(rec.date);
@@ -1982,7 +2596,16 @@ window.saveBrief=function(){
     DB.briefs.unshift(rec);
   }
   BRIEF=normalizeBrief(rec);
-  if(saveData()) toast(ex?"環境認識を更新しました":"環境認識を保存しました");
+  return saveData();
+}
+window.saveBrief=function(){
+  if(_briefSaving) return; _briefSaving=true; setTimeout(function(){_briefSaving=false;},400);
+  syncBriefFromDOM();
+  if(!BRIEF.date){ toast("日付を入力して下さい"); return; }
+  if(BRIEF.analysis.demo &&
+     !confirm("この環境認識にはデモのサンプル値が入っています。\n実際の相場とは関係のない数字ですが、このまま保存しますか？")) return;
+  var existed=!!briefOn(BRIEF.date);
+  if(saveBriefRecord()) toast(existed?"環境認識を更新しました":"環境認識を保存しました");
   render();
 };
 window.deleteBrief=function(){
@@ -2083,10 +2706,16 @@ function applySnapshotToBrief(b,s){
   txt(s.summary,function(v){ b.aiSummary=v; });
   return n;
 }
-// 何か入力されているか（空の新規フォームとの差で見る）
+// 何か入力されているか（空の新規フォームとの差で見る）。
+// analysis は「どこから取ってきたか」の記録であって中身ではないので数えない
+function briefContentSnapshot(b){
+  var n=normalizeBrief(b);
+  return JSON.stringify([n.symbol,n.trend,n.price,n.ema,n.levels,n.sessions,
+                         n.events,n.scenarios,n.bias,n.memo,n.aiSummary]);
+}
 function briefHasContent(b){
   if(!b) return false;
-  return briefSnapshot(b)!==briefSnapshot({date:b.date});
+  return briefContentSnapshot(b)!==briefContentSnapshot({date:b.date});
 }
 window.setBriefProvider=function(){
   var el=document.getElementById("b_provider"); if(!el) return;
@@ -2102,38 +2731,238 @@ window.briefBiasPick=function(val){
   BRIEF.bias=(BRIEF.bias===val?"":val);
   rerenderBrief();
 };
-window.runMorningAnalysis=function(){
-  if(_analysisRunning||!BRIEF) return;
-  syncBriefFromDOM();
-  if(briefHasContent(BRIEF) &&
-     !confirm("朝分析の結果で、取得できた項目を上書きします。よろしいですか？\n（取得できなかった項目はいまの入力のまま残ります）")) return;
-
+// 市場データを取りに行って作業コピーへ反映するところだけを切り出す。
+// 「朝分析」ボタンと「朝やろ」の両方から使う。
+function morningAnalysisStep(){
   var pname=currentProviderName();
-  var date=UI.briefDate, symbol=BRIEF.symbol||"XAUUSD";
-  _analysisRunning=true;
-  var btn=document.getElementById("b_run");
-  if(btn){ btn.disabled=true; btn.textContent="取得中…"; }
-  var st=document.getElementById("b_anastat");
-  if(st){ st.className="anastat busy"; st.textContent="取得中…"; }
-
-  marketDataProvider.fetch(pname,{symbol:symbol,date:date,sessions:sessionWindows(date)})
+  var date=UI.briefDate, symbol=(BRIEF&&BRIEF.symbol)||"XAUUSD";
+  return marketDataProvider.fetch(pname,{symbol:symbol,date:date,sessions:sessionWindows(date)})
     .then(function(res){
-      _analysisRunning=false;
       var snap=res.snapshot;
       // 待っている間に日付や画面が変わっていたら、古い結果は書き込まない
-      if(TAB!=="brief"||!BRIEF||UI.briefDate!==date){
-        toast("朝分析の結果は破棄しました（画面が変わったため）");
-        return;
-      }
+      if(!BRIEF||UI.briefDate!==date) return {stale:true,n:0,snap:snap};
       var n=applySnapshotToBrief(BRIEF,snap);
       BRIEF.analysis={
         source:snap.source||pname, at:now(), demo:!!snap.demo,
         notes:(snap.notes||[]).slice()
       };
       if(n===0) BRIEF.analysis.notes.unshift("フォームに入れられる値はありませんでした（すべてデータなし）。");
-      rerenderBrief();
-      toast(n?("朝分析："+n+"項目を反映しました（未保存）"):"朝分析：データなし");
+      return {stale:false,n:n,snap:snap};
     });
+}
+window.runMorningAnalysis=function(){
+  if(_analysisRunning||!BRIEF) return;
+  syncBriefFromDOM();
+  if(briefHasContent(BRIEF) &&
+     !confirm("朝分析の結果で、取得できた項目を上書きします。よろしいですか？\n（取得できなかった項目はいまの入力のまま残ります）")) return;
+
+  _analysisRunning=true;
+  var btn=document.getElementById("b_run");
+  if(btn){ btn.disabled=true; btn.textContent="取得中…"; }
+  var st=document.getElementById("b_anastat");
+  if(st){ st.className="anastat busy"; st.textContent="取得中…"; }
+
+  morningAnalysisStep().then(function(r){
+    _analysisRunning=false;
+    if(TAB!=="brief"||r.stale){
+      toast("朝分析の結果は破棄しました（画面が変わったため）");
+      return;
+    }
+    rerenderBrief();
+    toast(r.n?("朝分析："+r.n+"項目を反映しました（未保存）"):"朝分析：データなし");
+  });
+};
+
+/* =========================================================================
+   朝やろ — 前日の取引同期 → 市場データ取得 → 環境認識の保存 までを1操作で
+   -------------------------------------------------------------------------
+   iPhone から  https://<公開先>/index.html#morning  を開くと自動で走る。
+   ショートカット（「ボブ、朝やろ」）は、このURLを開くだけでよい。
+   ========================================================================= */
+var MORNING={running:false, at:null, steps:[]};
+
+function mstep(key,label){
+  var st={key:key,label:label,state:"run",text:""};
+  MORNING.steps.push(st);
+  return st;
+}
+function morningPaint(){
+  if(TAB==="brief"||TAB==="home") render();
+}
+function morningStepsHtml(){
+  if(!MORNING.steps.length) return "";
+  var icon={run:"…",ok:"✓",warn:"!",err:"×",skip:"−"};
+  var h="";
+  MORNING.steps.forEach(function(s){
+    h+="<div class='mstep "+s.state+"'><div class='mi'>"+esc(icon[s.state]||"・")+"</div>"+
+       "<div><span class='ml'>"+esc(s.label)+"</span>"+
+       (s.text?"<span class='mt'>"+esc(s.text)+"</span>":"")+"</div></div>";
+  });
+  return h;
+}
+function morningCard(){
+  var h="<div class='card'><h2>朝やろ</h2>";
+  h+="<div class='smallnote' style='margin:0 0 11px'>前日の取引を取り込み、今日の市場データを取得して、環境認識まで保存します。"+
+     "取れなかった項目は空のまま残るので、あとから直せます。</div>";
+  h+="<button class='btn primary bigrun' id='m_run'"+(MORNING.running?" disabled":"")+
+     " onclick='runMorningRoutine()'>"+(MORNING.running?"実行中…":"朝やろ")+"</button>";
+  if(MORNING.steps.length){
+    h+="<div style='margin-top:13px'>"+morningStepsHtml()+"</div>";
+    if(MORNING.at) h+="<div class='smallnote'>最終実行 "+esc(fmtWhen(MORNING.at))+"</div>";
+  }
+  h+="</div>";
+  return h;
+}
+window.runMorningRoutine=function(){
+  if(MORNING.running) return Promise.resolve();
+  // 環境タブの今日の日付で走らせる（どの画面から押されても同じ結果になるように）
+  if(TAB!=="brief"||UI.briefDate!==today()){
+    if(TAB==="brief"&&briefDirty()&&
+       !confirm("保存していない変更があります。破棄して今日の朝の処理を始めますか？")) return Promise.resolve();
+    UI.briefDate=today(); BRIEF=null; TAB="brief";
+  }
+  if(!BRIEF) BRIEF=normalizeBrief(briefOn(UI.briefDate)||{date:UI.briefDate});
+  else syncBriefFromDOM();
+
+  MORNING.running=true; MORNING.at=now(); MORNING.steps=[];
+  var sSync=mstep("sync","前日の取引を同期");
+  var sData=mstep("data","市場データを取得");
+  var sSave=mstep("save","環境認識を保存");
+  render();
+
+  var ms=mt5Settings();
+  var syncStep;
+  if(ms.provider===DEFAULT_TRADE_SYNC){
+    sSync.state="skip"; sSync.text="取得先が未接続です。設定から中継を繋ぐと自動になります";
+    syncStep=Promise.resolve(null);
+  }else if(tradeSyncProvider.info(ms.provider)&&tradeSyncProvider.info(ms.provider).needsText){
+    sSync.state="skip"; sSync.text="貼り付け方式なので、この下の「取引同期」から手で取り込んで下さい";
+    syncStep=Promise.resolve(null);
+  }else{
+    syncStep=runTradeSync({}).then(function(rep){
+      if(!rep){ sSync.state="skip"; sSync.text="すでに実行中でした"; return null; }
+      if(!rep.ok){ sSync.state="err"; sSync.text=(rep.notes[0]||"取り込めませんでした"); return rep; }
+      sSync.state=(rep.dealsAdded||rep.tradesCreated||rep.tradesUpdated)?"ok":"ok";
+      sSync.text=syncReportLine(rep)+(rep.conflicts.length?" ・食い違い "+rep.conflicts.length+" 件":"");
+      return rep;
+    });
+  }
+
+  return syncStep.then(function(){
+    morningPaint();
+    return morningAnalysisStep();
+  }).then(function(r){
+    if(r.stale){ sData.state="err"; sData.text="日付が変わったため破棄しました"; return null; }
+    if(r.n===0){
+      sData.state="warn";
+      sData.text=(BRIEF.analysis.source||"")+"：取得できた項目がありません";
+    }else{
+      sData.state="ok";
+      sData.text=(BRIEF.analysis.source||"")+"："+r.n+"項目";
+    }
+    return r;
+  }).then(function(r){
+    if(!r||r.stale){ sSave.state="skip"; sSave.text="保存しませんでした"; return; }
+    if(BRIEF.analysis.demo){
+      // デモの作り物を黙って記録に残さない
+      sSave.state="warn";
+      sSave.text="デモのサンプル値なので保存していません。取得先を実データに変えて下さい";
+      return;
+    }
+    if(r.n===0 && !briefOn(UI.briefDate) && !briefHasContent(BRIEF)){
+      // 中身が何も無い環境認識を日付だけで作らない
+      sSave.state="skip";
+      sSave.text="入る値が無かったので保存していません。下のフォームに手で書けば保存できます";
+      return;
+    }
+    var ok=saveBriefRecord();
+    sSave.state=ok?"ok":"err";
+    sSave.text=ok?(UI.briefDate+" の環境認識を保存しました"):"保存に失敗しました（容量制限の可能性）";
+  })["catch"](function(e){
+    sData.state=sData.state==="run"?"err":sData.state;
+    sSave.state=sSave.state==="run"?"err":sSave.state;
+    sSave.text="途中で失敗しました："+((e&&e.message)||String(e));
+  }).then(function(){
+    MORNING.running=false;
+    render();
+    var bad=MORNING.steps.filter(function(s){ return s.state==="err"; }).length;
+    toast(bad?"朝の処理は一部できませんでした":"朝の処理が終わりました");
+  });
+};
+
+/* ---------- 取引同期のカード（環境タブ） ---------- */
+function syncReportHtml(rep){
+  if(!rep) return "まだ実行していません。";
+  var h="取得先 "+esc(rep.source||"—")+(rep.asOf?"　"+esc(fmtWhen(rep.asOf)):"");
+  if(rep.ok) h+="<br>"+esc(syncReportLine(rep))+"　（建玉 "+rep.positions+" 件）";
+  var li=[];
+  (rep.notes||[]).forEach(function(n){ li.push(n); });
+  if(rep.account) li.push("口座 "+(rep.account.login||"—")+"（"+(rep.account.server||"—")+" / "+
+                          (rep.account.currency||"—")+"）");
+  if(rep.dealsSkipped) li.push("deal ticket の無い行 "+rep.dealsSkipped+" 件は取り込みませんでした。");
+  if(rep.skippedPositions.length)
+    li.push("ドテンなど1約定で建て替えている建玉 "+rep.skippedPositions.length+
+            " 件は、正確に割れないのでトレード記録を作っていません（約定そのものは保存済みです）。");
+  (rep.conflicts||[]).forEach(function(c){
+    li.push("手で直した値と MT5 の値が食い違っています（"+c.field+"）。手入力を残しました。");
+  });
+  (rep.duplicates||[]).forEach(function(){
+    li.push("同じトレードを手入力でも記録している可能性があります。自動では混ぜていないので、重複していたら片方を削除して下さい。");
+  });
+  if(li.length){
+    h+="<ul class='anotes'>";
+    li.forEach(function(n){ h+="<li>"+esc(n)+"</li>"; });
+    h+="</ul>";
+  }
+  return h;
+}
+function tradeSyncCard(){
+  var ms=mt5Settings();
+  var info=tradeSyncProvider.info(ms.provider)||{label:ms.provider,note:"",needsText:false};
+  var h="<div class='card'><h2>取引同期（MT5）</h2>";
+  h+="<div class='smallnote' style='margin:0 0 11px'>MT5 から取れる事実だけを取り込みます。"+
+     "エントリー根拠・感情・相場観は取り込まないので、そこは自分で書き足して下さい。</div>";
+  h+="<div class='field'><label>取得先</label><select id='m_provider' onchange='setTradeSyncProvider()'>";
+  tradeSyncProvider.list().forEach(function(o){
+    h+="<option value='"+esc(o.name)+"'"+(o.name===ms.provider?" selected":"")+">"+esc(o.label)+"</option>";
+  });
+  h+="</select></div>";
+  if(info.note) h+="<div class='smallnote' style='margin:0 0 11px'>"+esc(info.note)+"</div>";
+  if(info.needsText){
+    h+=field("エージェントの JSON",
+       "<textarea id='m_paste' class='mt5area' placeholder='{ \"deals\": [ … ] }' autocomplete='off' spellcheck='false'></textarea>");
+  }
+  if(ms.provider==="relay"&&!ms.endpoint){
+    h+="<div class='smallnote' style='margin:0 0 11px;color:var(--gold)'>設定タブの「MT5 取引同期」で取得URLとトークンを入れて下さい。</div>";
+  }
+  h+="<button class='btn' id='m_run' onclick='runTradeSyncFromUI()'>取引を取り込む</button>";
+  h+="<div id='m_stat' class='anastat'>"+syncReportHtml(MT5_LAST)+"</div>";
+  var n=(DB.deals||[]).length;
+  h+="<div class='smallnote'>保存済みの約定 "+n+" 件"+
+     (ms.lastSync?"　最終同期 "+esc(fmtWhen(ms.lastSync)):"")+"</div>";
+  h+="</div>";
+  return h;
+}
+window.setTradeSyncProvider=function(){
+  var el=document.getElementById("m_provider"); if(!el) return;
+  if(!tradeSyncProvider.has(el.value)){ el.value=mt5Settings().provider; return; }
+  if(TAB==="brief") syncBriefFromDOM();
+  DB.settings.mt5.provider=el.value;
+  saveData(); render();
+};
+window.runTradeSyncFromUI=function(){
+  if(_mt5Syncing) return;
+  if(TAB==="brief") syncBriefFromDOM();
+  var ta=document.getElementById("m_paste");
+  var btn=document.getElementById("m_run");
+  var st=document.getElementById("m_stat");
+  if(btn){ btn.disabled=true; btn.textContent="取り込み中…"; }
+  if(st){ st.className="anastat busy"; st.textContent="取り込み中…"; }
+  runTradeSync({text:ta?ta.value:""}).then(function(rep){
+    render();
+    if(!rep) return;
+    toast(rep.ok?("取引同期："+syncReportLine(rep)):"取引同期に失敗しました");
+  });
 };
 
 /* ---------- ホーム用の要約カード ---------- */
@@ -2143,7 +2972,10 @@ function homeBriefCard(){
     var h0="<div class='card'>";
     h0+="<div class='bhead'><div class='bk'>今日の環境認識</div><div class='bdate'>"+esc(today())+"</div></div>";
     h0+="<div class='smallnote' style='margin:0 0 11px'>まだ作成されていません。先に相場を整理しておくと、あとで「どんな環境なら勝てているか」を振り返れます。</div>";
-    h0+="<button class='btn ghost sm' onclick='gotoBriefToday()'>環境認識をつくる</button>";
+    h0+="<button class='btn primary' id='h_run'"+(MORNING.running?" disabled":"")+
+        " onclick='runMorningRoutine()'>"+(MORNING.running?"実行中…":"朝やろ")+"</button>";
+    h0+="<button class='btn ghost sm' style='margin-top:9px' onclick='gotoBriefToday()'>手で作る</button>";
+    if(MORNING.steps.length) h0+="<div style='margin-top:12px'>"+morningStepsHtml()+"</div>";
     h0+="</div>";
     return h0;
   }
@@ -2165,6 +2997,7 @@ function homeBriefCard(){
     h+="<div class='scen nt' style='margin-top:12px'><div class='sl'>NO TRADE</div><div class='sv'>"+esc(b.scenarios.noTrade)+"</div></div>";
   }
   h+="<button class='btn ghost sm' style='margin-top:12px' onclick='gotoBriefToday()'>環境認識をひらく</button>";
+  if(MORNING.steps.length) h+="<div style='margin-top:12px'>"+morningStepsHtml()+"</div>";
   h+="</div>";
   return h;
 }
@@ -2477,6 +3310,7 @@ function tradeCard(t,tab){
   var h="<div class='tcard'>";
   h+="<div class='th'><div class='sym'>"+esc(t.symbol)+" "+dirTag(t.dir)+
      (isNum(c.rr)?"<span class='tag-rr'>RR 1:"+c.rr.toFixed(2)+"</span>":"")+
+     (t.source==="mt5"?"<span class='mt5tag'>MT5</span>":"")+
      "</div><div class='when'>"+fmtWhen(t.createdAt)+"</div></div>";
   h+="<div class='tgrid'>";
   h+=ti("エントリー", isNum(t.entry)?t.entry:"—");
@@ -3063,6 +3897,27 @@ function viewSettings(){
   if(fxs.source) h+="<div class='smallnote'>取得元 "+esc(fxs.source)+"。無料の公開レートで、更新は1日1回です。日中の変動は反映されません。</div>";
   h+="</div>";
 
+  h+="<div class='sect-title'>MT5 取引同期</div><div class='card'>";
+  var ms=mt5Settings();
+  h+="<div class='smallnote' style='margin:0 0 11px'>常時動いている場所（VPS）の MT5 から、取引履歴だけを受け取ります。"+
+     "<b>MT5 のログイン情報はこの端末には入れません。</b>入れるのは、中継から読み出すためのURLとトークンだけです。</div>";
+  h+="<div class='field'><label>取得先</label><select id='s_mt5prov'>";
+  tradeSyncProvider.list().forEach(function(o){
+    h+="<option value='"+esc(o.name)+"'"+(o.name===ms.provider?" selected":"")+">"+esc(o.label)+"</option>";
+  });
+  h+="</select></div>";
+  h+=field("取得URL（中継）","<input type='url' id='s_mt5url' value='"+esc(ms.endpoint)+
+     "' placeholder='https://example.com/api/deals' autocomplete='off' spellcheck='false'>");
+  h+=field("読み取りトークン","<input type='password' id='s_mt5tok' value='"+esc(ms.token)+
+     "' placeholder='中継が発行した読み取り専用トークン' autocomplete='off'>");
+  h+="<div class='field'><label>取り込み方</label><label class='chk'><input type='checkbox' id='s_mt5auto'"+
+     (ms.autoImport?" checked":"")+"><span>取り込んだ約定からトレード記録を作る</span></label></div>";
+  h+="<div class='smallnote'>保存済みの約定 "+((DB.deals||[]).length)+" 件"+
+     (ms.lastSync?"　最終同期 "+esc(fmtWhen(ms.lastSync)):"")+"</div>";
+  h+="<button class='btn ghost sm' style='margin-top:9px' onclick='wipeMt5Deals()'>取り込んだ約定を削除</button>";
+  h+="<div class='smallnote'>約定だけを消します。そこから作られたトレード記録は残るので、消したいときはトレード側で削除して下さい。</div>";
+  h+="</div>";
+
   h+="<div class='sect-title'>内部ルール（自主設定）</div><div class='card'>";
   h+="<div class='row2'>"+field("1トレード内部リスク率(%)","<input type='number' inputmode='decimal' step='any' id='s_irisk' value='"+esc(s.internalRiskPct)+"'>")+
      field("基本ロット","<input type='number' inputmode='decimal' step='any' id='s_blot' value='"+esc(s.baseLot)+"'>")+"</div>";
@@ -3127,7 +3982,20 @@ window.saveSettings=function(){
   s.fin.dailyLossPct=toNum(g("s_dl")); s.fin.maxLossPct=toNum(g("s_ml")); s.fin.openRiskPct=toNum(g("s_or"));
   s.fin.minTradingDays=toNum(g("s_mtd")); s.fin.step1TargetPct=toNum(g("s_s1")); s.fin.step2TargetPct=toNum(g("s_s2"));
   var th=g("s_theme"); s.theme=th; applyTheme();
+  // MT5 同期（要素が無い画面から呼ばれても壊さないよう1つずつ確認する）
+  var mp=document.getElementById("s_mt5prov");
+  if(mp&&tradeSyncProvider.has(mp.value)) s.mt5.provider=mp.value;
+  var mu=document.getElementById("s_mt5url"); if(mu) s.mt5.endpoint=mu.value.trim();
+  var mk=document.getElementById("s_mt5tok"); if(mk) s.mt5.token=mk.value.trim();
+  var ma=document.getElementById("s_mt5auto"); if(ma) s.mt5.autoImport=ma.checked;
   saveData(); toast("設定を保存しました"); render();
+};
+window.wipeMt5Deals=function(){
+  var n=(DB.deals||[]).length;
+  if(!n){ toast("取り込んだ約定はありません"); return; }
+  if(!confirm("取り込んだ約定 "+n+" 件を削除しますか？\n\n次の同期でまた取り込まれます（トレード記録は消えません）。")) return;
+  DB.deals=[]; DB.settings.mt5.lastSync=null; DB.settings.mt5.lastCount=0;
+  MT5_LAST=null; saveData(); toast("約定を削除しました"); render();
 };
 window.copySyncCode=function(){
   var code=syncData("export");
@@ -3390,6 +4258,18 @@ function boot(){
     try{ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",function(){ if(DB.settings.theme==="system") applyTheme(); }); }catch(e){}
   }
   render();
+  // iPhone のショートカット（「ボブ、朝やろ」）はこのURLを開くだけでよい
+  window.addEventListener("hashchange",function(){ handleMorningHash(); });
+  handleMorningHash();
+}
+// #morning で開かれたら朝の処理を回す。ハッシュはすぐ消して、
+// 再読込のたびに勝手に走らないようにする
+function handleMorningHash(){
+  if(!/^#morning/.test(String(location.hash||""))) return;
+  try{ history.replaceState(null,"",location.pathname+location.search); }
+  catch(e){ location.hash=""; }
+  if(MORNING.running) return;
+  setTimeout(function(){ runMorningRoutine(); },0);
 }
 window.addEventListener("resize",function(){ if(TAB==="growth") drawGrowthCharts(); if(TAB==="home") drawEquitySpark(); });
 document.addEventListener("DOMContentLoaded",boot);
