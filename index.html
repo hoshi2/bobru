@@ -2318,9 +2318,10 @@ function upsertMt5Trade(pos,report){
   DB.trades.unshift(t);
   report.tradesCreated++;
 }
+var MAX_KEPT_DEALS=3000;      // 端末に残す約定の上限（古いものから落とす）
 function emptySyncReport(){
   return {source:"",asOf:null,account:null,
-          dealsAdded:0,dealsUpdated:0,dealsSkipped:0,
+          dealsAdded:0,dealsUpdated:0,dealsSkipped:0,dealsDropped:0,
           positions:0,tradesCreated:0,tradesUpdated:0,
           conflicts:[],duplicates:[],skippedPositions:[],notes:[],ok:true};
 }
@@ -2346,6 +2347,12 @@ function importDealBatch(batch){
     if(at!==bt) return at<bt?-1:1;
     return Number(a.ticket)-Number(b.ticket);
   });
+  // 貯めすぎない。同期コードもバックアップも丸ごと1本なので、際限なく伸ばさない。
+  // 落とすのは古い約定だけで、そこから作ったトレード記録は残る
+  if(DB.deals.length>MAX_KEPT_DEALS){
+    rep.dealsDropped=DB.deals.length-MAX_KEPT_DEALS;
+    DB.deals=DB.deals.slice(-MAX_KEPT_DEALS);
+  }
 
   var poss=applyOpenPositionFacts(positionsFromDeals(DB.deals),batch.positions);
   rep.positions=poss.length;
@@ -3166,6 +3173,8 @@ function syncReportHtml(rep){
   if(rep.account) li.push("口座 "+(rep.account.login||"—")+"（"+(rep.account.server||"—")+" / "+
                           (rep.account.currency||"—")+"）");
   if(rep.dealsSkipped) li.push("deal ticket の無い行 "+rep.dealsSkipped+" 件は取り込みませんでした。");
+  if(rep.dealsDropped) li.push("上限（"+MAX_KEPT_DEALS+"件）を超えたので、古い約定 "+rep.dealsDropped+
+                               " 件を落としました。そこから作ったトレード記録は残っています。");
   if(rep.skippedPositions.length)
     li.push("ドテンなど1約定で建て替えている建玉 "+rep.skippedPositions.length+
             " 件は、正確に割れないのでトレード記録を作っていません（約定そのものは保存済みです）。");
@@ -3966,8 +3975,46 @@ function viewGrowth(){
     ["遵守",function(t){return t.ruleOk==="yes";}],
     ["逸脱",function(t){return t.ruleOk==="no"||t.ruleOk==="partial";}]
   ]);
+  // その日の環境認識との突き合わせ（朝の見方と、実際に取った方向）
+  h+=classTable("朝の見方との関係", list, [
+    ["朝と同じ方向",function(t){ return briefAgree(t)==="with"; }],
+    ["朝と逆の方向",function(t){ return briefAgree(t)==="against"; }],
+    ["様子見の日に取った",function(t){ return briefAgree(t)==="wait"; }],
+    ["環境認識なし",function(t){ return briefAgree(t)===null; }]
+  ]);
+  h+=classTable("朝の4時間足との関係", list, [
+    ["4Hトレンドに沿った",function(t){ return briefTfAgree(t,"h4")==="with"; }],
+    ["4Hトレンドに逆らった",function(t){ return briefTfAgree(t,"h4")==="against"; }],
+    ["4Hレンジの日",function(t){ return briefTfAgree(t,"h4")==="range"; }]
+  ]);
+  h+=classTable("記録の出どころ", list, [
+    ["MT5 から同期",function(t){ return t.source==="mt5"; }],
+    ["手入力",function(t){ return t.source!=="mt5"; }]
+  ]);
   h+="</div>";
   return h;
+}
+/* ---------- 環境認識とトレードの突き合わせ ----------
+   朝どう見ていたかと、実際にどちらへ取ったか。
+   将来の分析（朝と同方向/逆方向の成績、4Hに沿った/逆らった勝率）の土台になる。
+   紐付けは briefOfTrade（briefId 優先・無ければ日付＋銘柄）に任せる。 */
+function briefAgree(t){
+  var b=briefOfTrade(t); if(!b) return null;
+  var bias=normalizeBrief(b).bias;
+  if(!bias) return null;
+  if(bias==="wait") return "wait";
+  if(bias==="long")  return t.dir==="long"?"with":"against";
+  if(bias==="short") return t.dir==="short"?"with":"against";
+  return null;
+}
+function briefTfAgree(t,tf){
+  var b=briefOfTrade(t); if(!b) return null;
+  var tr=normalizeBrief(b).trend[tf];
+  if(!tr||tr==="na") return null;
+  if(tr==="range") return "range";
+  if(tr==="up")   return t.dir==="long"?"with":"against";
+  if(tr==="down") return t.dir==="short"?"with":"against";
+  return null;
 }
 window.setGrowthPeriod=function(p){ UI.growthPeriod=p; render(); };
 window.setGrowthCustom=function(){

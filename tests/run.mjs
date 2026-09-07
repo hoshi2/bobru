@@ -1270,6 +1270,47 @@ group("18. 朝分析の中継");
   await page.close();
 }
 
+/* =======================================================================
+   19. 環境認識とトレードの突き合わせ（将来の分析の土台）
+   ======================================================================= */
+group("19. 環境認識との突き合わせ");
+{
+  const page = await open();
+  const r = await page.evaluate(() => {
+    const d = today();
+    DB.briefs = [{ id: "bx", date: d, symbol: "XAUUSD", bias: "long",
+      trend: { daily: "up", h4: "up", h1: "range", m15: "" },
+      levels: {}, events: [], scenarios: {}, memo: "" }];
+    const mk = (id, dir, pl, briefId) => ({
+      id, status: "closed", symbol: "XAUUSD", dir, entry: 3300, sl: 3290, tp: 3320, lot: 1,
+      contractSize: 100, balanceAtEntry: 100000, realizedPL: pl, result: pl > 0 ? "win" : "lose",
+      briefId, createdAt: new Date().toISOString(), closedAt: new Date().toISOString(), tags: [] });
+    DB.trades = [
+      mk("a", "long", 1000, "bx"),        // 朝の見方と同じ
+      mk("b", "short", -500, "bx"),       // 朝の見方と逆
+      mk("c", "long", 300, null),         // briefId 無し → 日付＋銘柄で解決
+      { ...mk("d", "long", 200, "missing"), symbol: "XAUUSD" },  // 消えた brief を指す
+    ];
+    saveData();
+    return {
+      agree: DB.trades.map(t => briefAgree(t)),
+      h4: DB.trades.map(t => briefTfAgree(t, "h4")),
+    };
+  });
+  ok("朝の見方と同方向・逆方向を分けられる", r.agree[0] === "with" && r.agree[1] === "against");
+  ok("briefId が無い記録は日付＋銘柄で解決する", r.agree[2] === "with");
+  ok("消えた環境認識を指す記録は「なし」扱い", r.agree[3] === null);
+  ok("4Hトレンドに沿った／逆らったを分けられる", r.h4[0] === "with" && r.h4[1] === "against");
+
+  await page.click('#nav button[data-tab="growth"]');
+  await page.waitForTimeout(80);
+  const text = await page.$eval("#app", e => e.innerText);
+  ok("成長タブに朝の見方との関係が出る", text.includes("朝の見方との関係") && text.includes("朝と逆の方向"));
+  ok("成長タブに4時間足との関係が出る", text.includes("4Hトレンドに逆らった"));
+  ok("記録の出どころが分かる", text.includes("MT5 から同期"));
+  await page.close();
+}
+
 /* ---------- 後始末 ---------- */
 await browser.close();
 server.close();
