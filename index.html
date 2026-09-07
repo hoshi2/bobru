@@ -165,8 +165,8 @@ html[data-theme="light"] .btn.primary{color:#fff}
 .bhead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:11px}
 .bhead .bk{font-size:13px;color:var(--txt2);font-weight:600;letter-spacing:.03em}
 .bhead .bdate{font-size:12px;color:var(--txt3);font-weight:600;font-variant-numeric:tabular-nums}
-.trendrow{display:grid;grid-template-columns:1fr 1fr 1fr;gap:9px}
-.trendcell{background:var(--card2);border:1px solid var(--line);border-radius:var(--radius-s);padding:9px 4px;text-align:center}
+.trendrow{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
+.trendcell{background:var(--card2);border:1px solid var(--line);border-radius:var(--radius-s);padding:9px 2px;text-align:center}
 .trendcell .tf{font-size:11px;color:var(--txt3);font-weight:600;margin-bottom:2px}
 .trendcell .tv{font-size:18px;font-weight:700;line-height:1.2}
 .trendcell .tl{font-size:10.5px;color:var(--txt3);font-weight:600}
@@ -194,6 +194,32 @@ html[data-theme="light"] .btn.primary{color:#fff}
 .blist .bl .bld{font-weight:700;font-size:13.5px;font-variant-numeric:tabular-nums}
 .blist .bl .blt{font-size:14px;color:var(--txt2);font-variant-numeric:tabular-nums;letter-spacing:.08em}
 
+/* ---- 朝分析（marketDataProvider 由来の表示） ---- */
+.anabar{display:flex;align-items:center;gap:9px;margin-bottom:10px}
+.anabar .btn{flex:1;margin:0}
+.anastat{font-size:11.5px;color:var(--txt3);line-height:1.55;margin-top:8px}
+.anastat.busy{color:var(--gold)}
+.anastat.err{color:var(--red)}
+.anotes{list-style:none;margin:7px 0 0;padding:0}
+.anotes li{font-size:11.5px;color:var(--txt3);line-height:1.55;padding-left:11px;position:relative}
+.anotes li:before{content:"・";position:absolute;left:0}
+.demowarn{border:1px solid color-mix(in srgb,var(--red) 45%,var(--line2));border-radius:var(--radius-s);
+  padding:9px 11px;margin-bottom:11px;font-size:12px;line-height:1.55;color:var(--red)}
+.sesslist{margin-top:2px}
+.sessrow{display:grid;grid-template-columns:1fr auto;gap:8px;align-items:baseline;
+  padding:7px 0;border-bottom:1px solid var(--line);font-size:12.5px}
+.sessrow:last-child{border-bottom:0}
+.sessrow .sn{color:var(--txt2);font-weight:600}
+.sessrow .sz{display:block;font-size:10.5px;color:var(--txt3);font-weight:400;margin-top:1px}
+.sessrow .st{font-variant-numeric:tabular-nums;color:var(--txt3);text-align:right;white-space:nowrap}
+.sessrow .st .dst{display:inline-block;font-size:10px;margin-left:5px;padding:1px 6px;border-radius:20px;
+  border:1px solid var(--line2);color:var(--gold)}
+.sessgrp{margin-bottom:13px}
+.sessgrp:last-child{margin-bottom:0}
+.sessgrp .sh{display:flex;justify-content:space-between;align-items:baseline;gap:8px;margin-bottom:7px}
+.sessgrp .sh .sn{font-size:12.5px;font-weight:700;color:var(--txt2)}
+.sessgrp .sh .st{font-size:10.5px;color:var(--txt3);font-variant-numeric:tabular-nums}
+
 /* live calc panel */
 .calc{background:var(--card2);border:1px solid var(--line);border-radius:var(--radius-s);padding:13px;margin-bottom:13px}
 .calc .cline{display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line);font-size:13.5px}
@@ -219,6 +245,14 @@ html[data-theme="light"] .btn.primary{color:#fff}
 .tag-ls{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px}
 .tag-ls.long{background:color-mix(in srgb,var(--green) 22%,transparent);color:var(--green)}
 .tag-ls.short{background:color-mix(in srgb,var(--red) 22%,transparent);color:var(--red)}
+.fxline:empty{display:none}
+.fxline b{font-weight:700}
+.fxwarn{color:var(--gold)}
+.chk{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--txt2);font-weight:400}
+.chk input{width:18px;height:18px;flex:0 0 auto;accent-color:var(--accent)}
+.tag-rr{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;
+  background:color-mix(in srgb,var(--gold) 16%,transparent);color:var(--gold);
+  font-variant-numeric:tabular-nums;letter-spacing:.02em}
 .tcard .when{font-size:11px;color:var(--txt3)}
 .tgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 10px;margin:10px 0}
 .tgrid .ti .k{font-size:10.5px;color:var(--txt3);margin-bottom:2px}
@@ -294,6 +328,12 @@ html[data-theme="light"] .btn.primary{color:#fff}
 .moredetails[open]>summary::after{content:"− 閉じる"}
 .moredetails .moreinner{padding:0 13px 13px}
 .plhint{margin:-2px 0 12px;font-size:13px;background:var(--card2);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-variant-numeric:tabular-nums}
+.seg.pl{margin-bottom:9px}
+.seg.pl button.on[data-v="neg"]{background:color-mix(in srgb,var(--red) 26%,var(--card));color:var(--txt)}
+.seg.pl button.on[data-v="pos"]{background:color-mix(in srgb,var(--green) 26%,var(--card));color:var(--txt)}
+.plsum{font-size:12.5px;color:var(--txt3);margin-top:7px;font-variant-numeric:tabular-nums}
+.plsum:empty{display:none}
+.plsum span{font-weight:700;font-size:14px}
 .miniapply{background:var(--blue);color:#fff;border:0;border-radius:7px;padding:4px 9px;font-size:11.5px;font-weight:700;margin-left:6px;cursor:pointer}
 .kv{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px;align-items:center}
 .kv:last-child{border-bottom:0}
@@ -422,6 +462,16 @@ function defaultSettings(){
     internalRiskPct:1,       // 内部: 1トレード許容損失率
     baseLot:1.00,            // 内部: 基本ロット目安
     lossStreakWarn:4,        // 内部: 連敗注意ライン
+    marketProvider:"none",   // 朝分析の取得先（marketDataProvider の登録名）
+    fx:{                     // 口座通貨への換算（USD建ての損益を口座通貨に直す）
+      auto:true,             // 自動取得する
+      manual:null,           // 手動レート（自動が取れないときの控え）
+      quote:"",              // 取得値がどの通貨向けか
+      rate:null,             // 直近で取得できた USD→口座通貨 のレート
+      at:null,               // こちらが取得した時刻（キャッシュ期限はこれで見る）
+      rateAt:null,           // 提供元がそのレートを出した時刻（日次更新なので古い）
+      source:""
+    },
     fin:{                    // Fintokei 公式ルール
       dailyLossPct:5,
       maxLossPct:10,
@@ -592,8 +642,9 @@ function migrate(p){
 function mergeSettings(def,s){
   if(!s||typeof s!=="object") return def;
   var out=JSON.parse(JSON.stringify(def));
-  for(var k in s){ if(k==="fin") continue; if(s[k]!==undefined&&s[k]!==null) out[k]=s[k]; }
+  for(var k in s){ if(k==="fin"||k==="fx") continue; if(s[k]!==undefined&&s[k]!==null) out[k]=s[k]; }
   if(s.fin&&typeof s.fin==="object"){ for(var f in def.fin){ if(s.fin[f]!==undefined&&s.fin[f]!==null) out.fin[f]=s.fin[f]; } }
+  if(s.fx&&typeof s.fx==="object"){ for(var x in def.fx){ if(s.fx[x]!==undefined&&s.fx[x]!==null) out.fx[x]=s.fx[x]; } }
   return out;
 }
 function saveData(){
@@ -658,7 +709,7 @@ function tradesToCSV(){
   var cols=["id","status","createdAt","closedAt","symbol","dir","pattern","h4env","m15purple","trigger",
     "entry","sl","tp","lot","contractSize","balanceAtEntry","plannedLoss","plannedProfit","plannedRR",
     "realizedPL","fee","swap","result","ruleOk","sawLower","emotion","realizedR","reviewMemo","learn","tags",
-    "briefId","briefDate","trendDaily","trendH4","trendH1"];
+    "briefId","briefDate","trendDaily","trendH4","trendH1","trendM15","bias"];
   var esc2=function(v){ if(v===null||v===undefined) v=""; v=String(v); if(/[",\n]/.test(v)) v='"'+v.replace(/"/g,'""')+'"'; return v; };
   var rows=[cols.join(",")];
   DB.trades.forEach(function(t){
@@ -669,7 +720,8 @@ function tradesToCSV(){
       isNum(c.realizedR)?c.realizedR.toFixed(3):"",t.reviewMemo||"",t.learn||"",(t.tags||[]).join("|")];
     var b=briefOfTrade(t);
     var bt=b?normalizeBrief(b):null;
-    line.push(t.briefId||"", bt?bt.date:"", bt?bt.trend.daily:"", bt?bt.trend.h4:"", bt?bt.trend.h1:"");
+    line.push(t.briefId||"", bt?bt.date:"", bt?bt.trend.daily:"", bt?bt.trend.h4:"",
+              bt?bt.trend.h1:"", bt?bt.trend.m15:"", bt?bt.bias:"");
     rows.push(line.map(esc2).join(","));
   });
   return rows.join("\n");
@@ -687,9 +739,11 @@ function currentBalance(){
 }
 // 計画/トレード共通の損益計算（入力オブジェクトから）
 function calcFromInputs(o){
-  // o: {dir, entry, sl, tp, lot, contractSize, balance}
+  // o: {dir, entry, sl, tp, lot, contractSize, balance, fxRate}
+  // fxRate は損益（建値通貨）→ 口座通貨 の掛け率。未指定・不正なら 1（＝従来どおり）
   var dir=o.dir, entry=toNum(o.entry), sl=toNum(o.sl), tp=toNum(o.tp),
       lot=toNum(o.lot), cs=toNum(o.contractSize), bal=toNum(o.balance);
+  var fx=toNum(o.fxRate); if(!isNum(fx)||fx<=0) fx=1;
   var out={
     slDist:null, tpDist:null, plannedLoss:null, plannedProfit:null,
     riskPct:null, rr:null, recLot:null, lotDiff:null,
@@ -706,21 +760,26 @@ function calcFromInputs(o){
     if(dir==="short" && tp>=entry) out.errTP="ショートのTPはエントリーより下です";
     out.tpDist=Math.abs(tp-entry);
   }
-  if(isNum(out.slDist)&&isNum(lot)&&lot>0){ out.plannedLoss=out.slDist*lot*cs; }
-  if(isNum(out.tpDist)&&isNum(lot)&&lot>0){ out.plannedProfit=out.tpDist*lot*cs; }
+  out.fxRate=fx;
+  if(isNum(out.slDist)&&isNum(lot)&&lot>0){ out.plannedLoss=out.slDist*lot*cs*fx; }
+  if(isNum(out.tpDist)&&isNum(lot)&&lot>0){ out.plannedProfit=out.tpDist*lot*cs*fx; }
   if(isNum(out.plannedLoss)&&isNum(bal)&&bal>0){ out.riskPct=out.plannedLoss/bal*100; }
   if(isNum(out.plannedProfit)&&isNum(out.plannedLoss)&&out.plannedLoss>0){ out.rr=out.plannedProfit/out.plannedLoss; }
   // 推奨ロット（内部リスク%に収める）
   var riskAmt = (isNum(bal)&&bal>0) ? bal*(toNum(DB.settings.internalRiskPct)||1)/100 : null;
   if(isNum(riskAmt)&&isNum(out.slDist)&&out.slDist>0){
-    out.recLot=riskAmt/(out.slDist*cs);
+    out.recLot=riskAmt/(out.slDist*cs*fx);
     if(isNum(lot)) out.lotDiff=lot-out.recLot;
   }
   return out;
 }
 // 保存済みトレードの計算
 function calcTrade(t){
-  var c=calcFromInputs({dir:t.dir,entry:t.entry,sl:t.sl,tp:t.tp,lot:t.lot,contractSize:t.contractSize,balance:t.balanceAtEntry});
+  // レートはエントリー時の値を記録に焼いてある（残高と同じ考え方）。
+  // 持っていない過去の記録は 1＝換算なしのまま動かさない。
+  var c=calcFromInputs({dir:t.dir,entry:t.entry,sl:t.sl,tp:t.tp,lot:t.lot,
+                        contractSize:t.contractSize,balance:t.balanceAtEntry,
+                        fxRate:isNum(toNum(t.fxRate))?toNum(t.fxRate):1});
   // 実現R = 実現損益 / 予定損失（予定損失0/未定義なら計算しない）
   c.realizedR=null;
   var pl=toNum(t.realizedPL);
@@ -823,8 +882,17 @@ function todayPL(){
 /* =========================================================================
    レンダリング
    ========================================================================= */
+var _renderedTab=null;   // 直前に描画したタブ。同じタブの描き直しではスクロール位置を保つ
 function render(){
   var app=document.getElementById("app");
+  var sameTab=(_renderedTab===TAB);
+  // 同じタブの描き直し（チップを押した等）は今の位置のまま。
+  // タブが変わるときだけ先頭に戻す。
+  var keepY=sameTab ? (window.pageYOffset||document.documentElement.scrollTop||0) : 0;
+  // ★ 中身を入れ替える前に先頭へ。iOS は中身が縮んだあとに
+  //   スクロール位置を勝手に詰めるので、入れ替えたあとに戻すだけでは
+  //   画面がずれたまま残る（トレード・成長など中身が短いタブで出る）
+  if(!sameTab) window.scrollTo(0,0);
   var html="";
   if(TAB==="home") html=viewHome();
   else if(TAB==="brief") html=viewBrief();
@@ -839,12 +907,20 @@ function render(){
   Array.prototype.forEach.call(document.querySelectorAll("#nav button"),function(b){
     b.classList.toggle("on", b.getAttribute("data-tab")===TAB);
   });
-  window.scrollTo(0,0);
+  _renderedTab=TAB;
+  window.scrollTo(0,keepY);
   // 画面別の初期化
   if(TAB==="plan") initPlan();
   if(TAB==="brief") updateBriefDirtyMark();
   if(TAB==="growth") drawGrowthCharts();
   if(TAB==="home") drawEquitySpark();
+  updateFxLine();
+  ensureFxRate();          // 期限切れのときだけ動く
+  // 初期化で高さが変わるので、タブを移ったときはもう一度そろえる
+  if(!sameTab && window.requestAnimationFrame){
+    var t=TAB;
+    window.requestAnimationFrame(function(){ if(TAB===t) window.scrollTo(0,0); });
+  }
 }
 
 function topbar(sub){
@@ -945,6 +1021,550 @@ function meter(lab,right,pct,color){
 }
 
 /* =========================================================================
+   fxRateProvider — 為替レート取得の抽象化層
+   -------------------------------------------------------------------------
+   marketDataProvider と同じ作りにしてある（register で取得先を足す／
+   失敗とタイムアウトは層の中で握って必ず解決する／取れない値は null）。
+   将来この2つを1つの取得層にまとめられるよう、形とエラーの扱いを揃えた。
+
+     fxRateProvider.register(name, {
+       label, note,
+       fetch: function(req){ return Promise<{base, rates:{JPY:156.1,…}, at}>; }
+     });
+
+   req      : { base:"USD" }
+   snapshot : { base, rates:{通貨コード:数値}, at:ISO文字列, source, notes[] }
+              取得できなければ rates は null。推測値は入れない。
+   ========================================================================= */
+var FX_SOURCES=["erapi","currencyapi"];   // 上から順に試す
+var FX_TIMEOUT_MS=12000;
+var FX_TTL_MS=10*60*1000;      // 10分は取り直さない（日次更新のレートなので十分）
+
+function emptyRateSnapshot(req){
+  return { base:(req&&req.base)||"USD", rates:null, at:null, source:"", notes:[] };
+}
+// fetch を Promise でくるむ。タイムアウトと失敗はここで吸収する
+function fxFetchJson(url){
+  return new Promise(function(resolve,reject){
+    if(typeof fetch!=="function"){ reject(new Error("fetch が使えません")); return; }
+    var done=false;
+    var timer=setTimeout(function(){ if(!done){ done=true; reject(new Error("タイムアウト")); } },FX_TIMEOUT_MS);
+    fetch(url,{cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      return r.json();
+    }).then(function(j){
+      if(done) return; done=true; clearTimeout(timer); resolve(j);
+    })["catch"](function(e){
+      if(done) return; done=true; clearTimeout(timer); reject(e);
+    });
+  });
+}
+var fxRateProvider=(function(){
+  var reg={}, order=[];
+  return {
+    register:function(name,impl){
+      if(!name||!impl||typeof impl.fetch!=="function") return false;
+      if(!reg[name]) order.push(name);
+      reg[name]=impl; return true;
+    },
+    has:function(name){ return !!reg[name]; },
+    list:function(){ return order.map(function(n){ return {name:n,label:reg[n].label||n,note:reg[n].note||""}; }); },
+    fetch:function(name,req){
+      var impl=reg[name];
+      if(!impl){
+        var miss=emptyRateSnapshot(req);
+        miss.notes=["取得先「"+name+"」が見つかりません。"];
+        return Promise.resolve({ok:false,snapshot:miss});
+      }
+      return new Promise(function(resolve){
+        try{
+          Promise.resolve(impl.fetch(req)).then(function(res){
+            var snap=emptyRateSnapshot(req);
+            if(res&&typeof res==="object"){
+              if(typeof res.base==="string"&&res.base) snap.base=res.base;
+              if(typeof res.at==="string") snap.at=res.at;
+              if(res.rates&&typeof res.rates==="object"){
+                var out={}, any=false;
+                for(var k in res.rates){
+                  var v=toNum(res.rates[k]);
+                  if(isNum(v)&&v>0){ out[String(k).toUpperCase()]=v; any=true; }
+                }
+                if(any) snap.rates=out;
+              }
+            }
+            snap.source=impl.label||name;
+            if(!snap.rates) snap.notes=["レートを読み取れませんでした。"];
+            resolve({ok:!!snap.rates,snapshot:snap});
+          },function(err){
+            var e=emptyRateSnapshot(req);
+            e.source=impl.label||name;
+            e.notes=["取得に失敗しました："+((err&&err.message)||String(err))];
+            resolve({ok:false,snapshot:e});
+          });
+        }catch(err2){
+          var e2=emptyRateSnapshot(req);
+          e2.source=impl.label||name;
+          e2.notes=["取得に失敗しました："+((err2&&err2.message)||String(err2))];
+          resolve({ok:false,snapshot:e2});
+        }
+      });
+    },
+    // 登録順に試して、最初に取れたものを返す
+    fetchFirst:function(names,req){
+      var self=this, list=(names&&names.length?names:order).slice(), notes=[];
+      return new Promise(function(resolve){
+        (function step(){
+          if(!list.length){
+            var none=emptyRateSnapshot(req); none.notes=notes;
+            resolve({ok:false,snapshot:none}); return;
+          }
+          var n=list.shift();
+          self.fetch(n,req).then(function(r){
+            if(r.ok){ resolve(r); return; }
+            notes=notes.concat(r.snapshot.notes||[]);
+            step();
+          });
+        })();
+      });
+    }
+  };
+})();
+
+/* ---------- 同梱の取得先（どちらも無料・キー不要・CORS 許可） ---------- */
+// どちらも1日1回の更新。日中は動かないが、リスク計算の精度としては十分。
+fxRateProvider.register("erapi",{
+  label:"exchangerate-api（open.er-api.com）",
+  note:"無料・キー不要。1日1回更新。",
+  fetch:function(req){
+    return fxFetchJson("https://open.er-api.com/v6/latest/"+encodeURIComponent(req.base||"USD"))
+      .then(function(j){
+        if(!j||j.result!=="success") throw new Error("応答が success ではありません");
+        return {base:j.base_code||req.base, rates:j.rates,
+                at:j.time_last_update_utc?new Date(j.time_last_update_utc).toISOString():null};
+      });
+  }
+});
+fxRateProvider.register("currencyapi",{
+  label:"currency-api（jsDelivr）",
+  note:"無料・キー不要。1日1回更新。erapi が落ちたときの控え。",
+  fetch:function(req){
+    var base=String(req.base||"USD").toLowerCase();
+    return fxFetchJson("https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/"+base+".min.json")
+      .then(function(j){
+        var m=j&&j[base];
+        if(!m||typeof m!=="object") throw new Error("応答の形が違います");
+        return {base:req.base, rates:m, at:j.date?new Date(j.date+"T00:00:00Z").toISOString():null};
+      });
+  }
+});
+
+/* =========================================================================
+   口座通貨への換算
+   XAUUSD の損益は USD で出るが、口座が JPY なら JPY に直さないと
+   リスク率が意味を持たない。ここはその1点だけを担う。
+   ========================================================================= */
+var FX={ fetching:false, lastError:"" };
+
+function acctCurrency(){ return String((DB&&DB.settings&&DB.settings.currency)||"USD").toUpperCase(); }
+// 銘柄の建値通貨。XAUUSD / EURUSD のように末尾3文字が通貨コードならそれ
+function quoteCurrencyOf(symbol){
+  var s=String(symbol||"").toUpperCase().replace(/[^A-Z]/g,"");
+  var m=/([A-Z]{3})$/.exec(s);
+  return m?m[1]:"USD";
+}
+function fxSettings(){
+  if(!DB.settings.fx||typeof DB.settings.fx!=="object") DB.settings.fx=defaultSettings().fx;
+  return DB.settings.fx;
+}
+// いま使える USD → 口座通貨 のレート（取得値 → 手動 の順）。無ければ null
+function usdToAcctRate(){
+  var a=acctCurrency(), f=fxSettings();
+  if(a==="USD") return 1;
+  if(f.quote===a && isNum(f.rate) && f.rate>0) return f.rate;
+  if(isNum(f.manual) && f.manual>0) return f.manual;
+  return null;
+}
+// 損益（建値通貨）→ 口座通貨 の掛け率。換算できないときは null
+function fxRateFor(symbol){
+  var q=quoteCurrencyOf(symbol), a=acctCurrency();
+  if(q===a) return 1;
+  if(q!=="USD") return null;          // USD建て以外の換算は未対応
+  return usdToAcctRate();
+}
+// 計算に実際に使う値。換算できないときは 1 のまま（画面側で断りを出す）
+function fxRateOrOne(symbol){ var r=fxRateFor(symbol); return isNum(r)&&r>0?r:1; }
+// 換算が要る場面かどうか（＝レート行を出すか）
+function fxNeeded(symbol){ return quoteCurrencyOf(symbol)!==acctCurrency(); }
+
+function fxCacheAgeMs(){
+  var f=fxSettings(); if(!f.at) return Infinity;
+  var t=new Date(f.at).getTime(); if(isNaN(t)) return Infinity;
+  return Date.now()-t;
+}
+// 取り直しが要るか。要らなければ何もしない（描画のたびに呼ばれる）
+function fxStale(){
+  var f=fxSettings();
+  if(f.quote!==acctCurrency()) return true;
+  if(!isNum(f.rate)||f.rate<=0) return true;
+  return fxCacheAgeMs()>FX_TTL_MS;
+}
+function ensureFxRate(force){
+  var f=fxSettings();
+  if(!f.auto && !force) return;
+  if(acctCurrency()==="USD") return;         // 換算が要らない
+  if(FX.fetching) return;
+  if(!force && !fxStale()) return;
+  var want=acctCurrency();
+  FX.fetching=true; updateFxLine();
+  fxRateProvider.fetchFirst(FX_SOURCES,{base:"USD"}).then(function(res){
+    FX.fetching=false;
+    var r=res.ok&&res.snapshot.rates?toNum(res.snapshot.rates[want]):null;
+    if(isNum(r)&&r>0){
+      // 取得中に口座通貨が変わっていたら書き込まない
+      if(acctCurrency()===want){
+        // ★ 期限は「こちらが取りに行った時刻」で見る。提供元の更新時刻を使うと、
+        //   1日1回しか動かないレートが常に期限切れ扱いになり、描画のたびに取りに行く。
+        f.rate=r; f.quote=want; f.at=now(); f.rateAt=res.snapshot.at||null;
+        f.source=res.snapshot.source||"";
+        FX.lastError="";
+        saveData();
+      }
+    }else{
+      // 直近成功値はそのまま残す（消さない）
+      FX.lastError=(res.snapshot.notes&&res.snapshot.notes[0])||"レートを取得できませんでした";
+    }
+    updateFxLine();
+    if(TAB==="plan") renderPlanCalc();      // 入力を壊さないよう計算欄だけ描き直す
+  });
+}
+// 「USDJPY 156.18 ・最終取得 13:52」の1行
+function fxLineHtml(symbol){
+  var a=acctCurrency(), q=quoteCurrencyOf(symbol||"XAUUSD");
+  if(q===a) return "";
+  if(q!=="USD") return "<span class='fxwarn'>"+esc(q+"建ての"+a+"換算には未対応です。1 で計算しています")+"</span>";
+  var f=fxSettings(), r=usdToAcctRate();
+  if(FX.fetching && !isNum(r)) return "レートを取得中…";
+  if(!isNum(r)) return "<span class='fxwarn'>"+esc("USD"+a+" を取得できていないため 1 で計算しています")+"</span>";
+  var used=(f.quote===a&&isNum(f.rate)&&f.rate>0)?"auto":"manual";
+  var h="USD"+esc(a)+" <b class='tabular'>"+fmtMoney(r,2)+"</b>";
+  if(used==="auto"){
+    h+=" ・最終取得 "+esc(fmtWhen(f.at));
+    if(f.rateAt) h+=" ・提供元の更新 "+esc(fmtWhen(f.rateAt));
+    if(fxCacheAgeMs()>24*60*60*1000) h+=" <span class='fxwarn'>（1日以上取得できていません）</span>";
+  }else{
+    h+=" ・手動設定";
+  }
+  if(FX.fetching) h+=" ・更新中…";
+  else if(FX.lastError) h+=" <span class='fxwarn'>・更新できず直近値を使用</span>";
+  return h;
+}
+function updateFxLine(){
+  var els=document.querySelectorAll(".fxline");
+  Array.prototype.forEach.call(els,function(el){
+    var sym=el.getAttribute("data-sym")||"XAUUSD";
+    // 計画画面は入力中の銘柄に追従させる（打ち替えても再描画されないため）
+    if(sym==="@plan") sym=(typeof PLAN==="object"&&PLAN&&PLAN.symbol)||"XAUUSD";
+    el.innerHTML=fxLineHtml(sym);
+  });
+}
+window.refreshFxRate=function(){ FX.lastError=""; ensureFxRate(true); toast("レートを取得しています"); };
+
+/* =========================================================================
+   セッション時間（サマータイム対応）
+   固定UTCではなく IANA タイムゾーンで持ち、実オフセットを Intl から引く。
+   夏時間の切り替わりはブラウザのtzデータが面倒を見るので、こちらは何もしない。
+   ========================================================================= */
+// 各市場の「その市場の壁時計」での取引時間。end<=start なら翌日にまたぐ扱い。
+var SESSION_DEFS=[
+  {key:"asia",    label:"アジア",       tz:"Asia/Tokyo",       start:[9,0], end:[15,0]},
+  {key:"london",  label:"ロンドン",     tz:"Europe/London",    start:[8,0], end:[16,30]},
+  {key:"newyork", label:"ニューヨーク", tz:"America/New_York", start:[8,0], end:[17,0]}
+];
+
+// その瞬間における tz のオフセット（分・東が正）。tz を知らない環境では null
+function tzOffsetMinutes(tz,date){
+  try{
+    var dtf=new Intl.DateTimeFormat("en-US",{timeZone:tz,hourCycle:"h23",
+      year:"numeric",month:"2-digit",day:"2-digit",hour:"2-digit",minute:"2-digit",second:"2-digit"});
+    var p={}; dtf.formatToParts(date).forEach(function(x){ p[x.type]=x.value; });
+    var hh=Number(p.hour); if(hh===24) hh=0;              // 24時を返す実装よけ
+    var asUTC=Date.UTC(Number(p.year),Number(p.month)-1,Number(p.day),hh,Number(p.minute),Number(p.second));
+    return Math.round((asUTC-Math.floor(date.getTime()/1000)*1000)/60000);
+  }catch(e){ return null; }
+}
+// tz のカレンダー上の壁時計時刻 → 実際の瞬間（Date）
+// 日や月の桁あふれは Date.UTC がそのまま正規化するので、d+1 を渡してよい。
+function zonedWallToUtc(tz,y,mo,d,hh,mi){
+  var wall=Date.UTC(y,mo-1,d,hh,mi,0);
+  var o1=tzOffsetMinutes(tz,new Date(wall)); if(o1===null) return null;
+  var t=wall-o1*60000;
+  var o2=tzOffsetMinutes(tz,new Date(t));            // DST 境界をまたいだら引き直す
+  if(o2!==null && o2!==o1) t=wall-o2*60000;
+  return new Date(t);
+}
+// その tz がその瞬間に夏時間かどうか。1月と7月の小さい方を標準時とみなす（南半球も可）
+function isDstAt(tz,date){
+  var y=date.getUTCFullYear();
+  var a=tzOffsetMinutes(tz,new Date(Date.UTC(y,0,1)));
+  var b=tzOffsetMinutes(tz,new Date(Date.UTC(y,6,1)));
+  var c=tzOffsetMinutes(tz,date);
+  if(a===null||b===null||c===null||a===b) return false;
+  return c>Math.min(a,b);
+}
+// "YYYY-MM-DD" × セッション定義 → その日のセッション窓
+function sessionWindow(dateStr,def){
+  var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(dateStr||"")); if(!m) return null;
+  var y=Number(m[1]),mo=Number(m[2]),d=Number(m[3]);
+  var s=zonedWallToUtc(def.tz,y,mo,d,def.start[0],def.start[1]);
+  if(!s) return null;
+  var e=zonedWallToUtc(def.tz,y,mo,d,def.end[0],def.end[1]);
+  if(e && e.getTime()<=s.getTime()) e=zonedWallToUtc(def.tz,y,mo,d+1,def.end[0],def.end[1]);
+  if(!e) return null;
+  return {
+    key:def.key, label:def.label, tz:def.tz,
+    startISO:s.toISOString(), endISO:e.toISOString(),
+    offsetMin:tzOffsetMinutes(def.tz,s),
+    dst:isDstAt(def.tz,s)
+  };
+}
+function sessionWindows(dateStr){
+  var out=[];
+  SESSION_DEFS.forEach(function(def){ var w=sessionWindow(dateStr,def); if(w) out.push(w); });
+  return out;
+}
+function fmtLocalHM(iso){
+  var d=new Date(iso); if(isNaN(d)) return "--:--";
+  return ("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2);
+}
+// セッション窓を「利用者の端末の時刻」で表す。日がずれる分は（翌）（前）で示す
+function sessionLocalRange(w,baseDate){
+  var mark=function(iso){
+    var od=localDateOf(iso); if(!od||!baseDate||od===baseDate) return "";
+    return od>baseDate?"(翌)":"(前)";
+  };
+  return fmtLocalHM(w.startISO)+mark(w.startISO)+"〜"+fmtLocalHM(w.endISO)+mark(w.endISO);
+}
+function fmtTzOffset(min){
+  if(!isNum(min)) return "";
+  var s=min<0?"-":"+", a=Math.abs(min);
+  return "UTC"+s+("0"+Math.floor(a/60)).slice(-2)+":"+("0"+(a%60)).slice(-2);
+}
+
+/* =========================================================================
+   marketDataProvider — 市場データ取得の抽象化層
+   -------------------------------------------------------------------------
+   ここは「取得先の差し替え口」だけを決める場所で、通信はまだ行わない。
+   Bookmap / OHLC / Claude を後から足すときは、この形の fetch を1つ書いて
+   register() するだけでよく、画面側 (runMorningAnalysis) は触らずに済む。
+
+     marketDataProvider.register(name, {
+       label, note, demo:Boolean,
+       fetch: function(req){ return Promise<snapshot>; }
+     });
+
+   req      : { symbol, date:"YYYY-MM-DD", sessions:[sessionWindow] }
+              セッション窓はアプリ側がタイムゾーンから算出して渡す。
+              取得側は startISO〜endISO の高安を集計すればよい（DSTは考えなくてよい）。
+   snapshot : emptyMarketSnapshot() の形。
+              ★ 取得できなかった項目は必ず null のまま返すこと。
+                null は「データなし」として扱われ、手入力を上書きしない。
+                推測値で埋めてはいけない（Issue #2 の方針）。
+   ========================================================================= */
+function emptyMarketSnapshot(req){
+  return {
+    symbol:(req&&req.symbol)||"", date:(req&&req.date)||"",
+    source:"", asOf:null, demo:false,
+    price:null,
+    trend:{daily:null,h4:null,h1:null,m15:null},          // "up"|"down"|"range"|"na"|null
+    ema:{tf:null,e10:null,e75:null,e200:null},
+    levels:{prevHigh:null,prevLow:null,weekHigh:null,weekLow:null,
+            recentHigh:null,recentLow:null,supports:null,resistances:null,zone:null},
+    sessions:{asia:{high:null,low:null},london:{high:null,low:null},newyork:{high:null,low:null}},
+    scenarios:{bull:null,bear:null,noTrade:null},
+    bias:null,                                            // "long"|"short"|"wait"|null
+    summary:null,
+    notes:[]                                              // 取得できなかった理由などの説明
+  };
+}
+var marketDataProvider=(function(){
+  var reg={}, order=[];
+  function pick(name){ return reg[name]||null; }
+  return {
+    register:function(name,impl){
+      if(!name||!impl||typeof impl.fetch!=="function") return false;
+      if(!reg[name]) order.push(name);
+      reg[name]=impl; return true;
+    },
+    has:function(name){ return !!reg[name]; },
+    list:function(){
+      return order.map(function(n){
+        return {name:n, label:reg[n].label||n, note:reg[n].note||"", demo:!!reg[n].demo};
+      });
+    },
+    info:function(name){
+      var p=pick(name); if(!p) return null;
+      return {label:p.label||name, note:p.note||"", demo:!!p.demo};
+    },
+    // 常に解決する Promise。取得側が投げても throw を外に出さない
+    fetch:function(name,req){
+      var impl=pick(name);
+      if(!impl){
+        var miss=emptyMarketSnapshot(req);
+        miss.source="不明な取得先"; miss.notes=["取得先「"+name+"」が見つかりません。"];
+        return Promise.resolve({ok:false,snapshot:miss});
+      }
+      return new Promise(function(resolve){
+        var done=false;
+        var finish=function(r){ if(!done){ done=true; resolve(r); } };
+        setTimeout(function(){                       // 取得先が返さないまま止まる事故よけ
+          var to=emptyMarketSnapshot(req);
+          to.source=impl.label||name;
+          to.notes=["取得がタイムアウトしました（60秒）。"];
+          finish({ok:false,snapshot:to});
+        },60000);
+        try{
+          Promise.resolve(impl.fetch(req)).then(function(res){
+            var snap=emptyMarketSnapshot(req);
+            mergeSnapshot(snap,res);
+            if(!snap.source) snap.source=impl.label||name;
+            if(impl.demo) snap.demo=true;
+            finish({ok:true,snapshot:snap});
+          },function(err){
+            var e=emptyMarketSnapshot(req);
+            e.source=impl.label||name;
+            e.notes=["取得に失敗しました："+((err&&err.message)||String(err))];
+            finish({ok:false,snapshot:e});
+          });
+        }catch(err2){
+          var e2=emptyMarketSnapshot(req);
+          e2.source=impl.label||name;
+          e2.notes=["取得に失敗しました："+((err2&&err2.message)||String(err2))];
+          finish({ok:false,snapshot:e2});
+        }
+      });
+    }
+  };
+})();
+// 取得先が返した値を空スナップショットに重ねる（知らないキーは捨てる）
+function mergeSnapshot(dst,src){
+  if(!src||typeof src!=="object") return dst;
+  ["symbol","date","source"].forEach(function(k){ if(typeof src[k]==="string"&&src[k]) dst[k]=src[k]; });
+  if(typeof src.asOf==="string") dst.asOf=src.asOf;
+  if(src.demo===true) dst.demo=true;
+  dst.price=toNum(src.price);
+  if(src.trend&&typeof src.trend==="object"){
+    ["daily","h4","h1","m15"].forEach(function(k){
+      if(typeof src.trend[k]==="string"&&src.trend[k]) dst.trend[k]=src.trend[k];
+    });
+  }
+  if(src.ema&&typeof src.ema==="object"){
+    if(typeof src.ema.tf==="string"&&src.ema.tf) dst.ema.tf=src.ema.tf;
+    ["e10","e75","e200"].forEach(function(k){ dst.ema[k]=toNum(src.ema[k]); });
+  }
+  if(src.levels&&typeof src.levels==="object"){
+    ["prevHigh","prevLow","weekHigh","weekLow","recentHigh","recentLow"].forEach(function(k){
+      dst.levels[k]=toNum(src.levels[k]);
+    });
+    ["supports","resistances"].forEach(function(k){
+      if(Array.isArray(src.levels[k])) dst.levels[k]=src.levels[k].map(toNum).filter(isNum);
+    });
+    if(typeof src.levels.zone==="string") dst.levels.zone=src.levels.zone;
+  }
+  if(src.sessions&&typeof src.sessions==="object"){
+    ["asia","london","newyork"].forEach(function(k){
+      var s=src.sessions[k]; if(!s||typeof s!=="object") return;
+      dst.sessions[k].high=toNum(s.high); dst.sessions[k].low=toNum(s.low);
+    });
+  }
+  if(src.scenarios&&typeof src.scenarios==="object"){
+    ["bull","bear","noTrade"].forEach(function(k){
+      if(typeof src.scenarios[k]==="string") dst.scenarios[k]=src.scenarios[k];
+    });
+  }
+  if(typeof src.bias==="string"&&src.bias) dst.bias=src.bias;
+  if(typeof src.summary==="string") dst.summary=src.summary;
+  if(Array.isArray(src.notes)) dst.notes=src.notes.map(function(x){ return String(x); });
+  return dst;
+}
+
+/* ---------- 同梱の取得先（どちらも通信しない） ---------- */
+var DEFAULT_PROVIDER="none";
+
+// 1) 未接続。配線だけ通っていて、値はすべて「データなし」で返る既定の取得先。
+marketDataProvider.register("none",{
+  label:"未接続（手入力）",
+  note:"市場データの取得先はまだ繋いでいません。セッション時間の計算だけが動きます。",
+  fetch:function(req){
+    var snap=emptyMarketSnapshot(req);
+    snap.source="未接続";
+    snap.asOf=now();
+    snap.notes=[
+      "市場データの取得先が未接続のため、価格・高安・EMA はすべて「データなし」です。推測値では埋めていません。",
+      "下のセッション時間は各市場のタイムゾーンから計算しているので、その窓の高安を見て手入力して下さい。"
+    ];
+    return Promise.resolve(snap);
+  }
+});
+
+// 2) デモ。画面と配線の確認用のダミー値。実データではないので保存時に警告を出す。
+marketDataProvider.register("demo",{
+  label:"デモ（サンプル値・実データではありません）",
+  note:"配線の確認用のダミーです。実際の相場とは無関係なので、記録として残さないで下さい。",
+  demo:true,
+  fetch:function(req){
+    var snap=emptyMarketSnapshot(req);
+    snap.source="デモ（サンプル値）";
+    snap.demo=true;
+    snap.asOf=now();
+    var rnd=demoRand(demoSeed(String(req&&req.date||"")+"|"+String(req&&req.symbol||"")));
+    var r2=function(v){ return Math.round(v*100)/100; };
+    var base=r2(3200+rnd()*200);
+    snap.price=base;
+    snap.ema.tf="h1";
+    snap.ema.e10=r2(base-2+rnd()*4);
+    snap.ema.e75=r2(base-9+rnd()*18);
+    snap.ema.e200=r2(base-26+rnd()*52);
+    snap.levels.recentHigh=r2(base+4+rnd()*9);
+    snap.levels.recentLow =r2(base-4-rnd()*9);
+    snap.levels.prevHigh  =r2(snap.levels.recentHigh+3+rnd()*12);
+    snap.levels.prevLow   =r2(snap.levels.recentLow -3-rnd()*12);
+    snap.levels.weekHigh  =r2(snap.levels.prevHigh+6+rnd()*26);
+    snap.levels.weekLow   =r2(snap.levels.prevLow -6-rnd()*26);
+    snap.levels.supports   =[r2(snap.levels.prevLow), r2(snap.levels.weekLow)];
+    snap.levels.resistances=[r2(snap.levels.prevHigh), r2(snap.levels.weekHigh)];
+    (req&&req.sessions||[]).forEach(function(w){
+      if(!snap.sessions[w.key]) return;
+      var hi=r2(base+1+rnd()*8), lo=r2(base-1-rnd()*8);
+      snap.sessions[w.key].high=hi; snap.sessions[w.key].low=lo;
+    });
+    // 方向は EMA の並びから機械的に決める（内容を一貫させるため）
+    var up=snap.price>snap.ema.e75 && snap.ema.e75>snap.ema.e200;
+    var dn=snap.price<snap.ema.e75 && snap.ema.e75<snap.ema.e200;
+    var dir=up?"up":dn?"down":"range";
+    snap.trend.daily=dir; snap.trend.h4=dir; snap.trend.h1=dir;
+    snap.trend.m15=snap.price>snap.ema.e10?"up":snap.price<snap.ema.e10?"down":"range";
+    snap.bias=up?"long":dn?"short":"wait";
+    snap.scenarios.bull="（サンプル）"+snap.levels.prevHigh+" を上抜けて維持したら、押し目を探す。";
+    snap.scenarios.bear="（サンプル）"+snap.levels.prevLow+" を下抜けて維持したら、戻りを探す。";
+    snap.scenarios.noTrade="（サンプル）"+snap.levels.recentLow+"〜"+snap.levels.recentHigh+" に収まっている間は見送る。";
+    snap.summary="（サンプル）これはデモ用のダミー値です。実際の相場とは関係ありません。";
+    snap.notes=["デモの取得先なので、値はすべて作り物です。実際の記録には使わないで下さい。",
+                "セッション窓 "+((req&&req.sessions||[]).length)+" 本を受け取りました。"];
+    return Promise.resolve(snap);
+  }
+});
+// 日付ごとに同じ値が出るようにした簡易乱数（デモ専用）
+function demoSeed(str){
+  var h=2166136261;
+  for(var i=0;i<str.length;i++){ h^=str.charCodeAt(i); h=(h*16777619)>>>0; }
+  return h>>>0;
+}
+function demoRand(seed){
+  var s=seed>>>0;
+  return function(){ s=(Math.imul(s,1664525)+1013904223)>>>0; return s/4294967296; };
+}
+
+/* =========================================================================
    Morning Brief（環境認識）
    1日1件。date をキーに upsert する。外部APIは使わず手入力のみ。
    ========================================================================= */
@@ -956,11 +1576,17 @@ function freshBrief(date){
   return {
     id:null, date:date||today(), symbol:"XAUUSD",
     createdAt:null, updatedAt:null,
-    trend:{daily:"",h4:"",h1:""},
-    levels:{prevHigh:null,prevLow:null,weekHigh:null,weekLow:null,supports:[],resistances:[],zone:""},
+    trend:{daily:"",h4:"",h1:"",m15:""},
+    price:{last:null,asOf:null},
+    ema:{tf:"h1",e10:null,e75:null,e200:null},
+    levels:{prevHigh:null,prevLow:null,weekHigh:null,weekLow:null,
+            recentHigh:null,recentLow:null,supports:[],resistances:[],zone:""},
+    sessions:{asia:{high:null,low:null},london:{high:null,low:null},newyork:{high:null,low:null}},
     events:[],
     scenarios:{bull:"",bear:"",noTrade:""},
-    memo:"", aiSummary:""
+    bias:"",                       // "long"|"short"|"wait"|""
+    memo:"", aiSummary:"",
+    analysis:{source:"",at:null,demo:false,notes:[]}   // 朝分析の出所（手入力だけなら空のまま）
   };
 }
 // 保存済み／未知の形でも安全に扱えるよう欠損キーを既定で埋める
@@ -970,14 +1596,29 @@ function normalizeBrief(b){
   f.id=b.id||null; f.symbol=b.symbol||"XAUUSD";
   f.createdAt=b.createdAt||null; f.updatedAt=b.updatedAt||null;
   if(b.trend&&typeof b.trend==="object"){
-    f.trend.daily=b.trend.daily||""; f.trend.h4=b.trend.h4||""; f.trend.h1=b.trend.h1||"";
+    f.trend.daily=b.trend.daily||""; f.trend.h4=b.trend.h4||"";
+    f.trend.h1=b.trend.h1||""; f.trend.m15=b.trend.m15||"";
+  }
+  if(b.price&&typeof b.price==="object"){
+    f.price.last=toNum(b.price.last); f.price.asOf=b.price.asOf||null;
+  }
+  if(b.ema&&typeof b.ema==="object"){
+    f.ema.tf=b.ema.tf||"h1";
+    f.ema.e10=toNum(b.ema.e10); f.ema.e75=toNum(b.ema.e75); f.ema.e200=toNum(b.ema.e200);
   }
   if(b.levels&&typeof b.levels==="object"){
     f.levels.prevHigh=toNum(b.levels.prevHigh); f.levels.prevLow=toNum(b.levels.prevLow);
     f.levels.weekHigh=toNum(b.levels.weekHigh); f.levels.weekLow=toNum(b.levels.weekLow);
+    f.levels.recentHigh=toNum(b.levels.recentHigh); f.levels.recentLow=toNum(b.levels.recentLow);
     f.levels.supports=Array.isArray(b.levels.supports)?b.levels.supports.slice():[];
     f.levels.resistances=Array.isArray(b.levels.resistances)?b.levels.resistances.slice():[];
     f.levels.zone=b.levels.zone||"";
+  }
+  if(b.sessions&&typeof b.sessions==="object"){
+    ["asia","london","newyork"].forEach(function(k){
+      var s=b.sessions[k]; if(!s||typeof s!=="object") return;
+      f.sessions[k].high=toNum(s.high); f.sessions[k].low=toNum(s.low);
+    });
   }
   f.events=Array.isArray(b.events)?b.events.map(function(e){
     return {time:(e&&e.time)||"", name:(e&&e.name)||"", importance:(e&&e.importance)||"mid"};
@@ -985,7 +1626,14 @@ function normalizeBrief(b){
   if(b.scenarios&&typeof b.scenarios==="object"){
     f.scenarios.bull=b.scenarios.bull||""; f.scenarios.bear=b.scenarios.bear||""; f.scenarios.noTrade=b.scenarios.noTrade||"";
   }
+  f.bias=b.bias||"";
   f.memo=b.memo||""; f.aiSummary=b.aiSummary||"";
+  if(b.analysis&&typeof b.analysis==="object"){
+    f.analysis.source=b.analysis.source||"";
+    f.analysis.at=b.analysis.at||null;
+    f.analysis.demo=b.analysis.demo===true;
+    f.analysis.notes=Array.isArray(b.analysis.notes)?b.analysis.notes.map(String):[];
+  }
   return f;
 }
 function briefOn(date){ for(var i=0;i<DB.briefs.length;i++){ if(DB.briefs[i].date===date) return DB.briefs[i]; } return null; }
@@ -1011,6 +1659,19 @@ function briefOfTrade(t){
   var d=localDateOf(t.createdAt); if(!d) return null;
   return briefFor(d,t.symbol);
 }
+var BIAS_OPTS=[["long","ロング優勢"],["short","ショート優勢"],["wait","様子見"]];
+function labelBias(v){ return {long:"ロング優勢",short:"ショート優勢",wait:"様子見"}[v]||"未記入"; }
+function clsBias(v){ return v==="long"?"pos":v==="short"?"neg":"muted"; }
+function labelTf(v){ return {daily:"日足",h4:"4時間足",h1:"1時間足",m15:"15分足"}[v]||v||""; }
+// その記録の金額がどの通貨建てか。
+// レートを持たない古い記録は換算していないので、建値通貨のまま。
+function tradeCurrency(t){
+  if(t && t.acctCurrency) return String(t.acctCurrency).toUpperCase();
+  if(t && isNum(toNum(t.fxRate))) return acctCurrency();
+  return quoteCurrencyOf(t&&t.symbol);
+}
+function fmtMoneyCur(v,t,dec){ return fmtMoney(v,dec)+" "+tradeCurrency(t); }
+function fmtSignedCur(v,t,dec){ return fmtSigned(v,dec)+" "+tradeCurrency(t); }
 function labelTrend(v){ return {up:"上昇",down:"下降",range:"レンジ",na:"判断不能"}[v]||"未記入"; }
 function arrowTrend(v){ return {up:"↑",down:"↓",range:"→",na:"?"}[v]||"—"; }
 function clsTrend(v){ return v==="up"?"pos":v==="down"?"neg":"muted"; }
@@ -1049,7 +1710,8 @@ function briefTrendRow(raw){
     return "<div class='trendcell'><div class='tf'>"+esc(lab)+"</div><div class='tv "+clsTrend(v)+"'>"+arrowTrend(v)+
            "</div><div class='tl'>"+esc(labelTrend(v))+"</div></div>";
   };
-  return "<div class='trendrow'>"+c("日足",b.trend.daily)+c("4時間足",b.trend.h4)+c("1時間足",b.trend.h1)+"</div>";
+  return "<div class='trendrow'>"+c("日足",b.trend.daily)+c("4H",b.trend.h4)+
+         c("1H",b.trend.h1)+c("15M",b.trend.m15)+"</div>";
 }
 function eventLine(e){
   return "<div class='evline'><span class='evt'>"+esc(e.time||"--:--")+"</span><span class='evn'>"+esc(e.name||"")+
@@ -1058,7 +1720,8 @@ function eventLine(e){
 // 1行サマリ（日足↑ / 4H↑ / 1H→）
 function briefTrendText(raw){
   var b=normalizeBrief(raw);
-  return "日足"+arrowTrend(b.trend.daily)+" / 4H"+arrowTrend(b.trend.h4)+" / 1H"+arrowTrend(b.trend.h1);
+  return "日足"+arrowTrend(b.trend.daily)+" / 4H"+arrowTrend(b.trend.h4)+
+         " / 1H"+arrowTrend(b.trend.h1)+" / 15M"+arrowTrend(b.trend.m15);
 }
 
 /* ---------- Brief 画面 ---------- */
@@ -1079,11 +1742,29 @@ function viewBrief(){
   if(!isToday) h+="<button class='btn ghost sm' onclick='gotoBriefToday()'>今日に戻る</button>";
   h+="</div>";
 
+  h+=briefAnalysisCard();
+
   // 上位足
-  h+="<div class='card'><h2>上位足の方向</h2>";
+  h+="<div class='card'><h2>各時間足の方向</h2>";
   h+=briefChipField("日足","daily",BRIEF.trend.daily);
   h+=briefChipField("4時間足","h4",BRIEF.trend.h4);
   h+=briefChipField("1時間足","h1",BRIEF.trend.h1);
+  h+=briefChipField("15分足","m15",BRIEF.trend.m15);
+  h+="</div>";
+
+  // 現在価格と EMA
+  h+="<div class='card'><h2>現在価格と EMA</h2>";
+  h+="<div class='row2'>"+
+     field("現在価格","<input type='number' inputmode='decimal' step='any' id='b_price' value='"+esc(BRIEF.price.last)+"' placeholder='0.00'>")+
+     field("EMA の時間足","<select id='b_ematf'>"+
+       [["daily","日足"],["h4","4時間足"],["h1","1時間足"],["m15","15分足"]].map(function(o){
+         return "<option value='"+o[0]+"'"+(BRIEF.ema.tf===o[0]?" selected":"")+">"+o[1]+"</option>";
+       }).join("")+"</select>")+"</div>";
+  h+="<div class='row3'>"+
+     field("EMA 10","<input type='number' inputmode='decimal' step='any' id='b_e10' value='"+esc(BRIEF.ema.e10)+"' placeholder='0.00'>")+
+     field("EMA 75","<input type='number' inputmode='decimal' step='any' id='b_e75' value='"+esc(BRIEF.ema.e75)+"' placeholder='0.00'>")+
+     field("EMA 200","<input type='number' inputmode='decimal' step='any' id='b_e200' value='"+esc(BRIEF.ema.e200)+"' placeholder='0.00'>")+"</div>";
+  if(BRIEF.price.asOf) h+="<div class='smallnote' style='margin-top:0'>価格の時刻 "+esc(fmtWhen(BRIEF.price.asOf))+"</div>";
   h+="</div>";
 
   // 重要価格
@@ -1094,9 +1775,27 @@ function viewBrief(){
   h+="<div class='row2'>"+
      field("週足高値","<input type='number' inputmode='decimal' step='any' id='b_wh' value='"+esc(BRIEF.levels.weekHigh)+"' placeholder='0.00'>")+
      field("週足安値","<input type='number' inputmode='decimal' step='any' id='b_wl' value='"+esc(BRIEF.levels.weekLow)+"' placeholder='0.00'>")+"</div>";
+  h+="<div class='row2'>"+
+     field("直近高値","<input type='number' inputmode='decimal' step='any' id='b_rh' value='"+esc(BRIEF.levels.recentHigh)+"' placeholder='0.00'>")+
+     field("直近安値","<input type='number' inputmode='decimal' step='any' id='b_rl' value='"+esc(BRIEF.levels.recentLow)+"' placeholder='0.00'>")+"</div>";
   h+=field("主要サポート（カンマ区切り）","<input type='text' inputmode='decimal' id='b_sup' value='"+esc(numListToStr(BRIEF.levels.supports))+"' placeholder='例）3280, 3265'>");
   h+=field("主要レジスタンス（カンマ区切り）","<input type='text' inputmode='decimal' id='b_res' value='"+esc(numListToStr(BRIEF.levels.resistances))+"' placeholder='例）3320, 3335'>");
   h+=field("注目ゾーン（任意）","<input type='text' id='b_zone' value='"+esc(BRIEF.levels.zone)+"' placeholder='例）3300〜3310で反応を見る'>");
+  h+="</div>";
+
+  // セッション別の高安
+  h+="<div class='card'><h2>セッション別 高値・安値</h2>";
+  briefSessionWindows().forEach(function(w){
+    var sv=BRIEF.sessions[w.key]; if(!sv) return;
+    h+="<div class='sessgrp'>";
+    h+="<div class='sh'><span class='sn'>"+esc(w.label)+"</span><span class='st'>"+
+       (w.startISO?esc(sessionLocalRange(w,UI.briefDate))+(w.dst?" ・夏時間":""):"時刻を計算できません")+"</span></div>";
+    h+="<div class='row2'>"+
+       field("高値","<input type='number' inputmode='decimal' step='any' id='b_sh_"+w.key+"' value='"+esc(sv.high)+"' placeholder='0.00'>")+
+       field("安値","<input type='number' inputmode='decimal' step='any' id='b_sl_"+w.key+"' value='"+esc(sv.low)+"' placeholder='0.00'>")+"</div>";
+    h+="</div>";
+  });
+  h+="<div class='smallnote' style='margin-top:0'>時刻は端末の時計に直して表示しています。各市場のタイムゾーンで計算しているので、夏時間は自動で切り替わります。</div>";
   h+="</div>";
 
   // 経済指標
@@ -1120,6 +1819,11 @@ function viewBrief(){
 
   // シナリオ
   h+="<div class='card'><h2>今日のシナリオ</h2>";
+  h+="<div class='field'><label>今日の見方</label><div class='chips'>";
+  BIAS_OPTS.forEach(function(o){
+    h+="<button type='button' class='chip"+(BRIEF.bias===o[0]?" on":"")+"' onclick=\"briefBiasPick('"+o[0]+"')\">"+esc(o[1])+"</button>";
+  });
+  h+="</div></div>";
   h+=field("Bull シナリオ","<textarea id='b_bull' placeholder='条件と、そうなったら何を探すか'>"+esc(BRIEF.scenarios.bull)+"</textarea>");
   h+=field("Bear シナリオ","<textarea id='b_bear' placeholder='条件と、そうなったら何を探すか'>"+esc(BRIEF.scenarios.bear)+"</textarea>");
   h+=field("No Trade 条件","<textarea id='b_nt' placeholder='この状況なら見送る'>"+esc(BRIEF.scenarios.noTrade)+"</textarea>");
@@ -1127,6 +1831,7 @@ function viewBrief(){
   h+="</div>";
 
   h+="<div class='card'>";
+  h+=field("環境認識の要約","<textarea id='b_sum' placeholder='今日の相場を一言で。朝分析を実行すると、取得先が要約を返せばここに入ります'>"+esc(BRIEF.aiSummary)+"</textarea>");
   h+=field("メモ（市場材料など）","<textarea id='b_memo' placeholder='ドル・金利・株価指数・地政学など'>"+esc(BRIEF.memo)+"</textarea>");
   h+="</div>";
 
@@ -1162,6 +1867,18 @@ function syncBriefFromDOM(){
   if(!BRIEF) return;
   var g=function(id){ var e=document.getElementById(id); return e?e.value:null; };
   var sym=g("b_sym"); if(sym!==null) BRIEF.symbol=sym.trim()||"XAUUSD";
+  var pr=g("b_price"); if(pr!==null) BRIEF.price.last=toNum(pr);
+  var etf=g("b_ematf"); if(etf!==null) BRIEF.ema.tf=etf;
+  var e10=g("b_e10"); if(e10!==null) BRIEF.ema.e10=toNum(e10);
+  var e75=g("b_e75"); if(e75!==null) BRIEF.ema.e75=toNum(e75);
+  var e200=g("b_e200"); if(e200!==null) BRIEF.ema.e200=toNum(e200);
+  var rh=g("b_rh"); if(rh!==null) BRIEF.levels.recentHigh=toNum(rh);
+  var rl=g("b_rl"); if(rl!==null) BRIEF.levels.recentLow=toNum(rl);
+  SESSION_DEFS.forEach(function(d){
+    var sv=BRIEF.sessions[d.key]; if(!sv) return;
+    var hi=g("b_sh_"+d.key); if(hi!==null) sv.high=toNum(hi);
+    var lo=g("b_sl_"+d.key); if(lo!==null) sv.low=toNum(lo);
+  });
   var ph=g("b_ph"); if(ph!==null) BRIEF.levels.prevHigh=toNum(ph);
   var pl=g("b_pl"); if(pl!==null) BRIEF.levels.prevLow=toNum(pl);
   var wh=g("b_wh"); if(wh!==null) BRIEF.levels.weekHigh=toNum(wh);
@@ -1172,6 +1889,7 @@ function syncBriefFromDOM(){
   var bull=g("b_bull"); if(bull!==null) BRIEF.scenarios.bull=bull;
   var bear=g("b_bear"); if(bear!==null) BRIEF.scenarios.bear=bear;
   var nt=g("b_nt"); if(nt!==null) BRIEF.scenarios.noTrade=nt;
+  var sum=g("b_sum"); if(sum!==null) BRIEF.aiSummary=sum;
   var memo=g("b_memo"); if(memo!==null) BRIEF.memo=memo;
   BRIEF.events.forEach(function(e,i){
     var t=g("b_evt_"+i), n=g("b_evn_"+i), im=g("b_evi_"+i);
@@ -1183,7 +1901,8 @@ function syncBriefFromDOM(){
 // 未保存の差分があるか
 function briefSnapshot(b){
   var n=normalizeBrief(b);
-  return JSON.stringify([n.symbol,n.trend,n.levels,n.events,n.scenarios,n.memo]);
+  return JSON.stringify([n.symbol,n.trend,n.price,n.ema,n.levels,n.sessions,
+                         n.events,n.scenarios,n.bias,n.memo,n.aiSummary,n.analysis]);
 }
 function briefDirty(){
   if(!BRIEF) return false;
@@ -1209,8 +1928,8 @@ function updateBriefDirtyMark(){
   el.className = dirty ? "smallnote gold" : "smallnote";
 }
 
-// chip や行追加での再描画でスクロール位置を保つ（フォームが長いため）
-function rerenderBrief(){ var y=window.pageYOffset||document.documentElement.scrollTop||0; render(); window.scrollTo(0,y); }
+// スクロール位置の維持は render() が面倒を見る（同じタブの描き直しは動かない）
+function rerenderBrief(){ render(); }
 
 window.briefChipPick=function(key,val){
   if(!BRIEF) return;
@@ -1250,6 +1969,8 @@ window.saveBrief=function(){
   if(_briefSaving) return; _briefSaving=true; setTimeout(function(){_briefSaving=false;},400);
   syncBriefFromDOM();
   if(!BRIEF.date){ toast("日付を入力して下さい"); return; }
+  if(BRIEF.analysis.demo &&
+     !confirm("この環境認識にはデモのサンプル値が入っています。\n実際の相場とは関係のない数字ですが、このまま保存しますか？")) return;
   var rec=normalizeBrief(BRIEF);
   rec.date=BRIEF.date;
   var ex=briefOn(rec.date);
@@ -1274,6 +1995,147 @@ window.deleteBrief=function(){
   BRIEF=null; saveData(); toast("削除しました"); render();
 };
 
+/* ---------- 朝分析（marketDataProvider を呼ぶだけの薄い層） ---------- */
+var _analysisRunning=false;
+
+function currentProviderName(){
+  var n=(DB&&DB.settings&&DB.settings.marketProvider)||DEFAULT_PROVIDER;
+  return marketDataProvider.has(n)?n:DEFAULT_PROVIDER;
+}
+// セッション窓。tz を扱えない環境では時刻なしの器だけ返して入力欄は残す
+function briefSessionWindows(){
+  var ws=sessionWindows(UI.briefDate);
+  if(ws.length) return ws;
+  return SESSION_DEFS.map(function(d){
+    return {key:d.key,label:d.label,tz:d.tz,startISO:null,endISO:null,offsetMin:null,dst:false};
+  });
+}
+function briefAnalysisCard(){
+  var pname=currentProviderName();
+  var info=marketDataProvider.info(pname)||{label:pname,note:"",demo:false};
+  var h="<div class='card'><h2>朝分析</h2>";
+  if(BRIEF.analysis.demo){
+    h+="<div class='demowarn'>いまフォームに入っているのはデモのサンプル値です。実際の相場とは関係がないので、記録として保存しないで下さい。</div>";
+  }
+  h+="<div class='field'><label>データ取得先</label><select id='b_provider' onchange='setBriefProvider()'>";
+  marketDataProvider.list().forEach(function(o){
+    h+="<option value='"+esc(o.name)+"'"+(o.name===pname?" selected":"")+">"+esc(o.label)+"</option>";
+  });
+  h+="</select></div>";
+  if(info.note) h+="<div class='smallnote' style='margin:0 0 11px'>"+esc(info.note)+"</div>";
+  h+="<button class='btn primary' id='b_run' onclick='runMorningAnalysis()'>朝分析を実行</button>";
+  h+="<div id='b_anastat' class='anastat'>"+briefAnalysisStatusHtml()+"</div>";
+
+  h+="<div class='sect-title' style='margin:17px 2px 5px'>セッション時間</div>";
+  h+="<div class='sesslist'>";
+  briefSessionWindows().forEach(function(w){
+    h+="<div class='sessrow'>";
+    h+="<div class='sn'>"+esc(w.label)+"<span class='sz'>"+esc(w.tz)+
+       (isNum(w.offsetMin)?" ・"+esc(fmtTzOffset(w.offsetMin)):"")+"</span></div>";
+    h+="<div class='st'>"+(w.startISO?esc(sessionLocalRange(w,UI.briefDate)):"—")+
+       (w.dst?"<span class='dst'>夏時間</span>":"")+"</div>";
+    h+="</div>";
+  });
+  h+="</div>";
+  h+="</div>";
+  return h;
+}
+function briefAnalysisStatusHtml(){
+  var a=BRIEF&&BRIEF.analysis;
+  if(!a||!a.source) return "まだ実行していません。取得先を選んで実行すると、取得できた項目だけがフォームに入ります。";
+  var h="取得先 "+esc(a.source)+(a.at?"　"+esc(fmtWhen(a.at)):"");
+  if(a.notes&&a.notes.length){
+    h+="<ul class='anotes'>";
+    a.notes.forEach(function(n){ h+="<li>"+esc(n)+"</li>"; });
+    h+="</ul>";
+  }
+  return h;
+}
+// 取得できた項目だけを作業コピーへ入れる。
+// null は「データなし」なので手入力を壊さない（推測で埋めない方針の実装）。
+function applySnapshotToBrief(b,s){
+  var n=0;
+  function num(v,set){ if(isNum(v)){ set(v); n++; } }
+  function txt(v,set){ if(typeof v==="string"&&v!==""){ set(v); n++; } }
+
+  num(s.price,function(v){ b.price.last=v; b.price.asOf=s.asOf||now(); });
+  ["daily","h4","h1","m15"].forEach(function(k){ txt(s.trend[k],function(v){ b.trend[k]=v; }); });
+
+  if(typeof s.ema.tf==="string"&&s.ema.tf) b.ema.tf=s.ema.tf;   // 足の指定そのものは件数に数えない
+  ["e10","e75","e200"].forEach(function(k){ num(s.ema[k],function(v){ b.ema[k]=v; }); });
+
+  ["prevHigh","prevLow","weekHigh","weekLow","recentHigh","recentLow"].forEach(function(k){
+    num(s.levels[k],function(v){ b.levels[k]=v; });
+  });
+  ["supports","resistances"].forEach(function(k){
+    if(Array.isArray(s.levels[k])){ b.levels[k]=s.levels[k].slice(); n++; }
+  });
+  txt(s.levels.zone,function(v){ b.levels.zone=v; });
+
+  ["asia","london","newyork"].forEach(function(k){
+    if(!b.sessions[k]||!s.sessions[k]) return;
+    num(s.sessions[k].high,function(v){ b.sessions[k].high=v; });
+    num(s.sessions[k].low, function(v){ b.sessions[k].low=v; });
+  });
+
+  ["bull","bear","noTrade"].forEach(function(k){ txt(s.scenarios[k],function(v){ b.scenarios[k]=v; }); });
+  txt(s.bias,function(v){ b.bias=v; });
+  txt(s.summary,function(v){ b.aiSummary=v; });
+  return n;
+}
+// 何か入力されているか（空の新規フォームとの差で見る）
+function briefHasContent(b){
+  if(!b) return false;
+  return briefSnapshot(b)!==briefSnapshot({date:b.date});
+}
+window.setBriefProvider=function(){
+  var el=document.getElementById("b_provider"); if(!el) return;
+  if(!marketDataProvider.has(el.value)){ el.value=currentProviderName(); return; }
+  syncBriefFromDOM();
+  DB.settings.marketProvider=el.value;
+  saveData();
+  rerenderBrief();
+};
+window.briefBiasPick=function(val){
+  if(!BRIEF) return;
+  syncBriefFromDOM();
+  BRIEF.bias=(BRIEF.bias===val?"":val);
+  rerenderBrief();
+};
+window.runMorningAnalysis=function(){
+  if(_analysisRunning||!BRIEF) return;
+  syncBriefFromDOM();
+  if(briefHasContent(BRIEF) &&
+     !confirm("朝分析の結果で、取得できた項目を上書きします。よろしいですか？\n（取得できなかった項目はいまの入力のまま残ります）")) return;
+
+  var pname=currentProviderName();
+  var date=UI.briefDate, symbol=BRIEF.symbol||"XAUUSD";
+  _analysisRunning=true;
+  var btn=document.getElementById("b_run");
+  if(btn){ btn.disabled=true; btn.textContent="取得中…"; }
+  var st=document.getElementById("b_anastat");
+  if(st){ st.className="anastat busy"; st.textContent="取得中…"; }
+
+  marketDataProvider.fetch(pname,{symbol:symbol,date:date,sessions:sessionWindows(date)})
+    .then(function(res){
+      _analysisRunning=false;
+      var snap=res.snapshot;
+      // 待っている間に日付や画面が変わっていたら、古い結果は書き込まない
+      if(TAB!=="brief"||!BRIEF||UI.briefDate!==date){
+        toast("朝分析の結果は破棄しました（画面が変わったため）");
+        return;
+      }
+      var n=applySnapshotToBrief(BRIEF,snap);
+      BRIEF.analysis={
+        source:snap.source||pname, at:now(), demo:!!snap.demo,
+        notes:(snap.notes||[]).slice()
+      };
+      if(n===0) BRIEF.analysis.notes.unshift("フォームに入れられる値はありませんでした（すべてデータなし）。");
+      rerenderBrief();
+      toast(n?("朝分析："+n+"項目を反映しました（未保存）"):"朝分析：データなし");
+    });
+};
+
 /* ---------- ホーム用の要約カード ---------- */
 function homeBriefCard(){
   var raw=todayBrief();
@@ -1287,7 +2149,10 @@ function homeBriefCard(){
   }
   var b=normalizeBrief(raw);
   var h="<div class='card'>";
-  h+="<div class='bhead'><div class='bk'>今日の環境認識</div><div class='bdate'>"+esc(b.symbol)+"</div></div>";
+  h+="<div class='bhead'><div class='bk'>今日の環境認識</div><div class='bdate'>"+esc(b.symbol)+
+     (isNum(b.price.last)?" ・"+esc(fmtMoney(b.price.last,2)):"")+"</div></div>";
+  if(b.bias) h+="<div class='smallnote' style='margin:0 0 9px'>今日の見方 <span class='"+clsBias(b.bias)+
+     "' style='font-weight:700'>"+esc(labelBias(b.bias))+"</span></div>";
   h+=briefTrendRow(b);
   var ev=eventsSorted(b.events);
   if(ev.length){
@@ -1338,7 +2203,9 @@ function viewPlan(){
   h+=field("TP価格","<input type='number' inputmode='decimal' step='any' id='p_tp' value='"+esc(PLAN.tp)+"' placeholder='0.00'>","p_tp_err");
   h+="</div>";
   h+=field("ロット","<input type='number' inputmode='decimal' step='any' id='p_lot' value='"+esc(PLAN.lot)+"'>");
-  h+="<div class='smallnote'>残高 "+fmtMoney(toNum(PLAN.balance)||0,0)+"・契約サイズ "+esc(PLAN.contractSize)+" で計算（設定で変更）</div>";
+  h+="<div class='smallnote'>残高 "+fmtMoney(toNum(PLAN.balance)||0,0)+" "+esc(acctCurrency())+
+     "・契約サイズ "+esc(PLAN.contractSize)+" で計算（設定で変更）</div>";
+  h+="<div class='smallnote fxline' data-sym='@plan'></div>";
   h+="</div>";
 
   // ライブ計算
@@ -1422,8 +2289,10 @@ function renderPlanBriefHint(){
 }
 function renderPlanCalc(){
   renderPlanBriefHint();
+  updateFxLine();
   var box=document.getElementById("p_calc"); if(!box) return;
-  var c=calcFromInputs({dir:PLAN.dir,entry:PLAN.entry,sl:PLAN.sl,tp:PLAN.tp,lot:PLAN.lot,contractSize:PLAN.contractSize,balance:PLAN.balance});
+  var c=calcFromInputs({dir:PLAN.dir,entry:PLAN.entry,sl:PLAN.sl,tp:PLAN.tp,lot:PLAN.lot,
+    contractSize:PLAN.contractSize,balance:PLAN.balance,fxRate:fxRateOrOne(PLAN.symbol)});
   // インラインエラー表示
   setErr("p_sl_err","p_sl",c.errSL); setErr("p_tp_err","p_tp",c.errTP);
   var s=DB.settings;
@@ -1499,7 +2368,8 @@ window.clearPlan=function(){ if(confirm("入力内容をクリアしますか？
 
 function validatePlanForEntry(){
   syncPlanFromDOM();
-  var c=calcFromInputs({dir:PLAN.dir,entry:PLAN.entry,sl:PLAN.sl,tp:PLAN.tp,lot:PLAN.lot,contractSize:PLAN.contractSize,balance:PLAN.balance});
+  var c=calcFromInputs({dir:PLAN.dir,entry:PLAN.entry,sl:PLAN.sl,tp:PLAN.tp,lot:PLAN.lot,
+    contractSize:PLAN.contractSize,balance:PLAN.balance,fxRate:fxRateOrOne(PLAN.symbol)});
   if(toNum(PLAN.entry)===null){ toast("エントリー価格を入力して下さい"); return null; }
   if(toNum(PLAN.sl)===null){ toast("SL価格を入力して下さい"); return null; }
   if(c.errSL){ toast(c.errSL); return null; }
@@ -1520,6 +2390,9 @@ function planToRecord(status){
     h4env:PLAN.h4env, m15purple:PLAN.m15purple, trigger:PLAN.trigger, pattern:PLAN.pattern,
     entry:toNum(PLAN.entry), sl:toNum(PLAN.sl), tp:toNum(PLAN.tp),
     lot:toNum(PLAN.lot), balanceAtEntry:toNum(PLAN.balance), contractSize:toNum(PLAN.contractSize),
+    // 残高と同じで、あとでレートが動いても当時のリスク率・R が揺れないよう焼き込む
+    fxRate:fxRateFor(symbol),
+    acctCurrency:acctCurrency(),
     sawLower:PLAN.sawLower, memo:PLAN.memo, tags:PLAN.tags||[],
     briefId:(brief&&brief.id)||null,
     // 決済系（未設定）
@@ -1602,7 +2475,9 @@ function fmtWhen(iso){ if(!iso) return ""; var d=new Date(iso); if(isNaN(d)) ret
 function tradeCard(t,tab){
   var c=calcTrade(t);
   var h="<div class='tcard'>";
-  h+="<div class='th'><div class='sym'>"+esc(t.symbol)+" "+dirTag(t.dir)+"</div><div class='when'>"+fmtWhen(t.createdAt)+"</div></div>";
+  h+="<div class='th'><div class='sym'>"+esc(t.symbol)+" "+dirTag(t.dir)+
+     (isNum(c.rr)?"<span class='tag-rr'>RR 1:"+c.rr.toFixed(2)+"</span>":"")+
+     "</div><div class='when'>"+fmtWhen(t.createdAt)+"</div></div>";
   h+="<div class='tgrid'>";
   h+=ti("エントリー", isNum(t.entry)?t.entry:"—");
   h+=ti("SL", isNum(t.sl)?t.sl:"—");
@@ -1623,7 +2498,8 @@ function tradeCard(t,tab){
 
   // メタ pill
   var pills=[];
-  if(isNum(c.rr)) pills.push("RR 1:"+c.rr.toFixed(2));
+  // 換算レートを持たない古い記録は建値通貨のまま。取り違えないよう印をつける
+  if(tradeCurrency(t)!==acctCurrency()) pills.push(tradeCurrency(t)+"建て");
   if(t.pattern) pills.push(labelPat(t.pattern));
   if(t.h4env) pills.push(labelH4(t.h4env));
   if(t.m15purple&&t.m15purple!=="na") pills.push(labelM15(t.m15purple));
@@ -1677,7 +2553,8 @@ window.promoteDraft=function(id){ var t=findDraft(id); if(!t) return; t.status="
 /* ---------- 編集モーダル（保有中/下書き 内容編集） ---------- */
 var EDIT={};
 function editForm(t,isDraft){
-  EDIT={id:t.id,isDraft:isDraft,dir:t.dir,h4env:t.h4env,m15purple:t.m15purple,trigger:t.trigger,pattern:t.pattern,sawLower:t.sawLower};
+  EDIT={id:t.id,isDraft:isDraft,dir:t.dir,h4env:t.h4env,m15purple:t.m15purple,trigger:t.trigger,pattern:t.pattern,sawLower:t.sawLower,
+        fxRate:isNum(toNum(t.fxRate))?toNum(t.fxRate):1};
   var dtLocal = t.createdAt ? toLocalInput(t.createdAt) : nowLocalInput();
   var h="<h3>"+(isDraft?"下書きを編集":"トレードを編集")+"</h3>";
   h+=field("日時","<input type='datetime-local' id='e_dt' value='"+esc(dtLocal)+"'>");
@@ -1728,7 +2605,9 @@ window.saveEdit=function(){
   if(!t) return;
   var entry=toNum(g("e_entry")),sl=toNum(g("e_sl")),tp=toNum(g("e_tp"));
   // 方向チェック
-  var c=calcFromInputs({dir:EDIT.dir,entry:entry,sl:sl,tp:tp,lot:toNum(g("e_lot")),contractSize:toNum(g("e_cs")),balance:toNum(g("e_bal"))});
+  var c=calcFromInputs({dir:EDIT.dir,entry:entry,sl:sl,tp:tp,lot:toNum(g("e_lot")),
+    contractSize:toNum(g("e_cs")),balance:toNum(g("e_bal")),
+    fxRate:isNum(toNum(EDIT.fxRate))?toNum(EDIT.fxRate):1});
   if(c.errSL){ setErr("e_sl_err","e_sl",c.errSL); return; } else setErr("e_sl_err","e_sl",null);
   if(c.errTP){ setErr("e_tp_err","e_tp",c.errTP); return; } else setErr("e_tp_err","e_tp",null);
   t.dir=EDIT.dir; t.symbol=g("e_sym")||t.symbol;
@@ -1747,14 +2626,28 @@ var CLOSE={};
 window.openCloseModal=function(id){
   var t=findTrade(id); if(!t) return;
   var editing = t.status==="closed";
-  CLOSE={id:id,result:t.result||"",ruleOk:t.ruleOk||"",sawLower:t.closeSawLower||t.sawLower||"",emotion:t.emotion||""};
+  var pl0=toNum(t.realizedPL);
+  CLOSE={id:id,result:t.result||"",ruleOk:t.ruleOk||"",sawLower:t.closeSawLower||t.sawLower||"",emotion:t.emotion||"",
+         // 実現損益の符号。iOS の数字キーパッドにマイナスが無いので、入力欄は絶対値にして符号はここで持つ
+         plSign:(isNum(pl0)&&pl0>0)?"pos":"neg",
+         plSignTouched:isNum(pl0)};
   window._closeShotTarget=id; window._closeShotDataUrl=IMG[id+"_exit"]||null;
   var c=calcTrade(t);
   var h="<h3>決済登録</h3>";
-  h+="<div class='smallnote' style='margin-bottom:12px'>"+esc(t.symbol)+" "+(t.dir==="long"?"ロング":"ショート")+"｜エントリー "+ (isNum(t.entry)?t.entry:"—") +"｜予定損失 "+(isNum(c.plannedLoss)?fmtMoney(c.plannedLoss):"—")+"</div>";
+  h+="<div class='smallnote' style='margin-bottom:12px'>"+esc(t.symbol)+" "+(t.dir==="long"?"ロング":"ショート")+
+     "｜エントリー "+ (isNum(t.entry)?t.entry:"—") +
+     "｜予定損失 "+(isNum(c.plannedLoss)?esc(fmtMoneyCur(c.plannedLoss,t)):"—")+"</div>";
   h+=field("決済日時","<input type='datetime-local' id='c_dt' value='"+esc(t.closedAt?toLocalInput(t.closedAt):nowLocalInput())+"'>");
   h+=field("決済価格（任意）","<input type='number' inputmode='decimal' step='any' id='c_price' value='"+esc(t.closePrice)+"' placeholder='0.00'>");
-  h+=field("実現損益額（これを正とします）","<input type='number' inputmode='decimal' step='any' id='c_pl' value='"+esc(t.realizedPL)+"' placeholder='例）-1000 / +1660'>");
+  h+="<div class='field'><label>実現損益額（これを正とします）</label>";
+  h+="<div class='seg pl' id='c_plsign'>"+
+     "<button type='button' data-v='neg' class='"+(CLOSE.plSign==="neg"?"on":"")+"' onclick=\"closeSignPick('neg')\">− 損失</button>"+
+     "<button type='button' data-v='pos' class='"+(CLOSE.plSign==="pos"?"on":"")+"' onclick=\"closeSignPick('pos')\">＋ 利益</button>"+
+     "</div>";
+  h+="<input type='number' inputmode='decimal' step='any' min='0' id='c_pl' value='"+
+     esc(isNum(pl0)?Math.abs(pl0):null)+"' placeholder='例）1080（金額だけ・符号は上で選ぶ）'>";
+  h+="<div id='c_plsum' class='plsum'></div>";
+  h+="</div>";
   h+="<div id='c_plhint'></div>";
   // ── ここまでが必須級。以下は任意でたたんでおく ──
   h+="<details class='moredetails'><summary>詳細を記録（任意）</summary><div class='moreinner'>";
@@ -1772,7 +2665,8 @@ window.openCloseModal=function(id){
   openModal(h);
   renderCloseShotPreview();
   // 決済価格→実現損益の候補を出す
-  window._closeCtx={entry:toNum(t.entry),lot:toNum(t.lot),cs:toNum(t.contractSize),dir:t.dir};
+  window._closeCtx={entry:toNum(t.entry),lot:toNum(t.lot),cs:toNum(t.contractSize),dir:t.dir,
+                    fx:(isNum(toNum(t.fxRate))?toNum(t.fxRate):1), cur:tradeCurrency(t)};
   var pe=document.getElementById("c_price"), plq=document.getElementById("c_pl");
   if(pe){ pe.addEventListener("input",renderClosePLHint); }
   if(plq){ plq.addEventListener("input",renderClosePLHint); }
@@ -1809,21 +2703,61 @@ function calcExitPL(){
   var exit=toNum(g("c_price"));
   if(exit===null||ctx.entry===null||ctx.lot===null||ctx.cs===null) return null;
   var diff = ctx.dir==="short" ? (ctx.entry-exit) : (exit-ctx.entry);
-  return diff*ctx.lot*ctx.cs;
+  // 口座通貨に直す（レートはエントリー時の値を記録から持ってくる）
+  return diff*ctx.lot*ctx.cs*(isNum(ctx.fx)&&ctx.fx>0?ctx.fx:1);
 }
+// 入力欄（絶対値）と符号の選択から、実際に保存される値
+function closePLValue(){
+  var el=document.getElementById("c_pl"); if(!el) return null;
+  var v=toNum(el.value); if(!isNum(v)) return null;
+  return (CLOSE.plSign==="pos"?1:-1)*Math.abs(v);
+}
+window.closeSignPick=function(v){
+  CLOSE.plSign=v; CLOSE.plSignTouched=true;
+  var box=document.getElementById("c_plsign"); if(box){
+    Array.prototype.forEach.call(box.querySelectorAll("button"),function(b){
+      b.classList.toggle("on", b.getAttribute("data-v")===v);
+    });
+  }
+  renderClosePLHint();
+};
 function renderClosePLHint(){
-  var box=document.getElementById("c_plhint"); if(!box) return;
+  var ctx=window._closeCtx||{}, unit=ctx.cur?(" "+ctx.cur):"";
   var sug=calcExitPL();
+  // 符号をまだ自分で選んでいなければ、決済価格から出た符号に合わせる
+  if(sug!==null && !CLOSE.plSignTouched){
+    var want=sug>=0?"pos":"neg";
+    if(CLOSE.plSign!==want){
+      CLOSE.plSign=want;
+      var sb=document.getElementById("c_plsign");
+      if(sb) Array.prototype.forEach.call(sb.querySelectorAll("button"),function(b){
+        b.classList.toggle("on", b.getAttribute("data-v")===want);
+      });
+    }
+  }
+  // 実際に保存される値を、保存ボタンの手前に出す（符号の取り違えよけ）
+  var sum=document.getElementById("c_plsum");
+  if(sum){
+    var v=closePLValue();
+    sum.innerHTML = (v===null) ? "" :
+      "登録される実現損益 <span class='"+clsSign(v)+"'>"+esc(fmtSigned(round2(v))+unit)+"</span>";
+  }
+  var box=document.getElementById("c_plhint"); if(!box) return;
   if(sug===null){ box.innerHTML=""; return; }
-  var cur=toNum((document.getElementById("c_pl")||{}).value);
+  var cur=closePLValue();
   var same = cur!==null && Math.abs(cur-sug)<0.5;
-  box.innerHTML="<div class='plhint'>決済価格から計算：<span class='"+clsSign(sug)+"'>"+fmtSigned(round2(sug))+"</span>"+
+  box.innerHTML="<div class='plhint'>決済価格から計算：<span class='"+clsSign(sug)+"'>"+esc(fmtSigned(round2(sug))+unit)+"</span>"+
     (same?" <span class='muted'>（反映済み）</span>":" <button type='button' class='miniapply' onclick='applyExitPL()'>実現損益に反映</button>")+
     "<div class='smallnote'>手数料・スワップは含みません。実際の約定額と違えば上書きしてOK</div></div>";
 }
 window.applyExitPL=function(){
   var sug=calcExitPL(); if(sug===null) return;
-  var el=document.getElementById("c_pl"); if(el){ el.value=String(round2(sug)); }
+  CLOSE.plSign = sug>=0?"pos":"neg";
+  var sb=document.getElementById("c_plsign");
+  if(sb) Array.prototype.forEach.call(sb.querySelectorAll("button"),function(b){
+    b.classList.toggle("on", b.getAttribute("data-v")===CLOSE.plSign);
+  });
+  var el=document.getElementById("c_pl"); if(el){ el.value=String(Math.abs(round2(sug))); }
   renderClosePLHint();
 };
 window.saveClose=function(id){
@@ -1833,7 +2767,7 @@ window.saveClose=function(id){
   var dt=g("c_dt");
   t.closedAt = dt ? new Date(dt).toISOString() : now();
   t.closePrice=toNum(g("c_price"));
-  t.realizedPL=toNum(g("c_pl"));
+  t.realizedPL=closePLValue();
   t.fee=toNum(g("c_fee")); t.swap=toNum(g("c_swap"));
   t.result=CLOSE.result||null; t.ruleOk=CLOSE.ruleOk||null;
   t.closeSawLower=CLOSE.sawLower||null; t.emotion=CLOSE.emotion||null;
@@ -2098,13 +3032,35 @@ function viewSettings(){
 
   h+="<div class='sect-title'>基本</div><div class='card'>";
   h+=field("アプリ名","<input type='text' id='s_appName' value='"+esc(s.appName)+"'>");
-  h+="<div class='row2'>"+field("表示通貨","<input type='text' id='s_currency' value='"+esc(s.currency)+"'>")+
+  var curOpts=["JPY","USD","EUR","GBP","AUD","CHF"];
+  if(curOpts.indexOf(acctCurrency())<0) curOpts.unshift(acctCurrency());
+  h+="<div class='row2'>"+
+     field("口座通貨","<select id='s_currency'>"+curOpts.map(function(o){
+       return "<option value='"+esc(o)+"'"+(acctCurrency()===o?" selected":"")+">"+esc(o)+"</option>";
+     }).join("")+"</select>")+
      field("口座名","<input type='text' id='s_accName' value='"+esc(s.accountName)+"'>")+"</div>";
   h+=field("口座タイプ","<input type='text' id='s_accType' value='"+esc(s.accountType)+"'>");
   h+="<div class='row2'>"+field("初期残高","<input type='number' inputmode='decimal' step='any' id='s_init' value='"+esc(s.initialBalance)+"'>")+
      field("契約サイズ","<input type='number' inputmode='decimal' step='any' id='s_cs' value='"+esc(s.contractSize)+"'>")+"</div>";
   h+=field("現在残高の計算方法","<select id='s_balmode'><option value='auto' "+(s.balanceMode==="auto"?"selected":"")+">自動（初期残高＋決済損益）</option><option value='manual' "+(s.balanceMode==="manual"?"selected":"")+">手入力</option></select>");
   h+=field("手入力残高（手入力時のみ）","<input type='number' inputmode='decimal' step='any' id='s_manual' value='"+esc(s.manualBalance)+"' placeholder='"+Math.round(currentBalance())+"'>");
+  h+="</div>";
+
+  h+="<div class='sect-title'>為替レート</div><div class='card'>";
+  if(acctCurrency()==="USD"){
+    h+="<div class='smallnote' style='margin:0 0 11px'>口座通貨が USD なので、USD建ての銘柄では換算しません（レート 1）。</div>";
+  }else{
+    h+="<div class='smallnote' style='margin:0 0 11px'>XAUUSD のような USD建ての銘柄は損益が USD で出ます。"+
+       "口座通貨（"+esc(acctCurrency())+"）に直さないと、予定損失・リスク率・推奨ロットが合いません。</div>";
+  }
+  var fxs=fxSettings();
+  h+="<div class='field'><label>自動取得</label><label class='chk'><input type='checkbox' id='s_fxauto'"+
+     (fxs.auto?" checked":"")+"><span>起動時と画面に戻ったときに取得する（10分はキャッシュ）</span></label></div>";
+  h+=field("手動レート（自動が取れないときの控え・任意）",
+     "<input type='number' inputmode='decimal' step='any' id='s_fxmanual' value='"+esc(fxs.manual)+"' placeholder='例）156.20'>");
+  h+="<div class='smallnote fxline' data-sym='XAUUSD' style='margin:0 0 11px'></div>";
+  if(acctCurrency()!=="USD") h+="<button class='btn ghost sm' onclick='refreshFxRate()'>いま取得する</button>";
+  if(fxs.source) h+="<div class='smallnote'>取得元 "+esc(fxs.source)+"。無料の公開レートで、更新は1日1回です。日中の変動は反映されません。</div>";
   h+="</div>";
 
   h+="<div class='sect-title'>内部ルール（自主設定）</div><div class='card'>";
@@ -2156,7 +3112,14 @@ function viewSettings(){
 window.saveSettings=function(){
   var g=function(x){var e=document.getElementById(x);return e?e.value:"";};
   var s=DB.settings;
-  s.appName=g("s_appName")||"ぼぶる"; s.currency=g("s_currency")||"USD";
+  s.appName=g("s_appName")||"ぼぶる";
+  var prevCur=s.currency;
+  s.currency=(g("s_currency")||"USD").toUpperCase();
+  var fxa=document.getElementById("s_fxauto"); if(fxa) s.fx.auto=fxa.checked;
+  s.fx.manual=g("s_fxmanual")===""?null:toNum(g("s_fxmanual"));
+  if(prevCur!==s.currency){
+    s.fx.rate=null; s.fx.at=null; s.fx.rateAt=null; s.fx.quote=""; s.fx.source=""; FX.lastError="";
+  }
   s.accountName=g("s_accName"); s.accountType=g("s_accType");
   s.initialBalance=toNum(g("s_init")); s.contractSize=toNum(g("s_cs"))||100;
   s.balanceMode=g("s_balmode"); s.manualBalance=g("s_manual")===""?null:toNum(g("s_manual"));
@@ -2414,6 +3377,10 @@ function boot(){
     b.addEventListener("click",function(){ TAB=b.getAttribute("data-tab"); if(TAB!=="plan"){} render(); });
   });
   bindBriefLiveSync();
+  // 画面に戻ってきたら、期限が切れていればレートを取り直す
+  document.addEventListener("visibilitychange",function(){
+    if(!document.hidden) ensureFxRate();
+  });
   window.addEventListener("beforeunload",function(e){
     // 保存していない環境認識があるまま閉じる／再読込するのを止める
     if(!briefDirty()) return;

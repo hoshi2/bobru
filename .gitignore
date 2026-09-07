@@ -1,1 +1,4 @@
 node_modules/
+# 回帰テスト用に playwright を入れたときに出るもの（アプリ本体は依存ライブラリなし）
+package.json
+package-lock.json

@@ -41,8 +41,9 @@ const group = n => console.log("\n" + n);
 
 const browser = await chromium.launch();
 const pageErrors = [];
-async function open(width = 375, height = 812) {
-  const ctx = await browser.newContext({ viewport: { width, height }, locale: "ja-JP" });
+async function open(width = 375, height = 812, timezoneId) {
+  const ctx = await browser.newContext({ viewport: { width, height }, locale: "ja-JP",
+    ...(timezoneId ? { timezoneId } : {}) });
   const page = await ctx.newPage();
   page.on("pageerror", e => pageErrors.push(`${width}px: ${e.message}`));
   page.on("console", m => { if (m.type() === "error") pageErrors.push(`${width}px console: ${m.text()}`); });
@@ -277,16 +278,18 @@ group("6. CSV");
 {
   const page = await open();
   const head = await page.evaluate(() => {
-    DB.briefs = [{ id:"b", date:today(), symbol:"XAUUSD", trend:{daily:"up",h4:"down",h1:"range"}, levels:{}, events:[], scenarios:{}, memo:"" }];
+    DB.briefs = [{ id:"b", date:today(), symbol:"XAUUSD", trend:{daily:"up",h4:"down",h1:"range",m15:"up"},
+      bias:"long", levels:{}, events:[], scenarios:{}, memo:"" }];
     DB.trades = [{ id:"t", status:"closed", symbol:"XAUUSD", dir:"long", entry:3300, sl:3290, tp:3320, lot:1,
       contractSize:100, balanceAtEntry:100000, realizedPL:1660, result:"win", briefId:"b",
       createdAt:new Date().toISOString(), closedAt:new Date().toISOString(), tags:[] }];
     const rows = tradesToCSV().split("\n");
     return { cols: rows[0].split(","), row: rows[1].split(",") };
   });
-  ok("新しい列は末尾に付く", head.cols.slice(-5).join(",") === "briefId,briefDate,trendDaily,trendH4,trendH1");
-  ok("既存の列順が変わっていない", head.cols[0] === "id" && head.cols[head.cols.length - 6] === "tags");
-  ok("環境認識の内容が書き出される", head.row.slice(-3).join(",") === "up,down,range");
+  ok("新しい列は末尾に付く",
+     head.cols.slice(-7).join(",") === "briefId,briefDate,trendDaily,trendH4,trendH1,trendM15,bias");
+  ok("既存の列順が変わっていない", head.cols[0] === "id" && head.cols[head.cols.length - 8] === "tags");
+  ok("環境認識の内容が書き出される", head.row.slice(-5).join(",") === "up,down,range,up,long");
   await page.close();
 }
 
@@ -339,6 +342,518 @@ for (const [w, h] of [[375, 812], [1024, 768], [1440, 900]]) {
   const over = await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth);
   ok(`${w}px: 横スクロールが出ない（表は容器内で収める）`, over <= 1);
 
+  await page.close();
+}
+
+/* =======================================================================
+   8. セッション時間（サマータイム）
+   ======================================================================= */
+group("8. セッション時間（サマータイム）");
+{
+  const page = await open();
+  const probe = () => page.evaluate(() => {
+    const pick = (d, k) => sessionWindows(d).filter(x => x.key === k)[0] || null;
+    return {
+      wAsia: pick("2026-01-15", "asia"),   sAsia: pick("2026-07-15", "asia"),
+      wLdn:  pick("2026-01-15", "london"), sLdn:  pick("2026-07-15", "london"),
+      wNy:   pick("2026-01-15", "newyork"),sNy:   pick("2026-07-15", "newyork"),
+      trans: pick("2026-03-29", "london"),
+    };
+  });
+  const w = await probe();
+
+  ok("東京は年間を通じて UTC+9（夏時間なし）",
+     w.wAsia.offsetMin === 540 && w.sAsia.offsetMin === 540 && !w.wAsia.dst && !w.sAsia.dst);
+  ok("ロンドンは冬 UTC+0 / 夏 UTC+1",
+     w.wLdn.offsetMin === 0 && w.sLdn.offsetMin === 60 && !w.wLdn.dst && w.sLdn.dst);
+  ok("ニューヨークは冬 UTC-5 / 夏 UTC-4",
+     w.wNy.offsetMin === -300 && w.sNy.offsetMin === -240 && !w.wNy.dst && w.sNy.dst);
+
+  // 固定UTCではなく「現地08:00」に追従しているか（夏冬で UTC 時刻が1時間ずれる）
+  ok("ロンドンの窓は現地08:00に追従する",
+     w.wLdn.startISO === "2026-01-15T08:00:00.000Z" && w.sLdn.startISO === "2026-07-15T07:00:00.000Z");
+  ok("ニューヨークの窓は現地08:00に追従する",
+     w.wNy.startISO === "2026-01-15T13:00:00.000Z" && w.sNy.startISO === "2026-07-15T12:00:00.000Z");
+  ok("東京の窓は現地09:00で動かない",
+     w.wAsia.startISO === "2026-01-15T00:00:00.000Z" && w.sAsia.startISO === "2026-07-15T00:00:00.000Z");
+  ok("切り替え当日も現地時刻で解ける（2026-03-29 ロンドン）",
+     w.trans.startISO === "2026-03-29T07:00:00.000Z" && w.trans.dst === true);
+  ok("窓の終わりは始まりより後",
+     [w.wAsia, w.sLdn, w.wNy].every(x => new Date(x.endISO) > new Date(x.startISO)));
+  await page.close();
+
+  // 端末のタイムゾーンが変わっても窓そのものは動かない
+  const la = await open(375, 812, "America/Los_Angeles");
+  const w2 = await la.evaluate(() => {
+    const pick = (d, k) => sessionWindows(d).filter(x => x.key === k)[0];
+    return { ldn: pick("2026-07-15", "london").startISO, ny: pick("2026-01-15", "newyork").startISO };
+  });
+  ok("端末のタイムゾーンに左右されない",
+     w2.ldn === w.sLdn.startISO && w2.ny === w.wNy.startISO);
+  await la.close();
+}
+
+/* =======================================================================
+   9. 朝分析と marketDataProvider
+   ======================================================================= */
+group("9. 朝分析と marketDataProvider");
+{
+  const page = await open();
+  await page.click('#nav button[data-tab="brief"]');
+
+  ok("既定の取得先は未接続",
+     (await page.evaluate(() => marketDataProvider.list().map(p => p.name).join(","))) === "none,demo" &&
+     (await page.evaluate(() => currentProviderName())) === "none");
+
+  // --- 未接続: 配線は通るが値は入らない。手入力を壊さない ---
+  await page.fill("#b_ph", "3333.3");
+  await page.fill("#b_memo", "手で書いたメモ");
+  answer(page, true);
+  await page.click("#b_run");
+  await page.waitForTimeout(400);
+  ok("未接続でも朝分析は実行できる",
+     (await page.$eval("#b_anastat", e => e.textContent)).includes("未接続"));
+  ok("取れない項目は推測で埋めない（データなしのまま）",
+     (await page.evaluate(() => [BRIEF.price.last, BRIEF.ema.e200, BRIEF.sessions.asia.high, BRIEF.bias]
+        .every(v => v === null || v === ""))) === true);
+  ok("未接続の朝分析で手入力が消えない",
+     (await page.inputValue("#b_ph")) === "3333.3" && (await page.inputValue("#b_memo")) === "手で書いたメモ");
+
+  // --- デモ: 取れた項目だけがフォームに入る ---
+  await page.selectOption("#b_provider", "demo");
+  await page.waitForTimeout(150);
+  answer(page, true);
+  await page.click("#b_run");
+  await page.waitForTimeout(400);
+  const f = await page.evaluate(() => ({
+    price: BRIEF.price.last, e10: BRIEF.ema.e10, e200: BRIEF.ema.e200,
+    m15: BRIEF.trend.m15, daily: BRIEF.trend.daily, bias: BRIEF.bias,
+    rh: BRIEF.levels.recentHigh, rl: BRIEF.levels.recentLow,
+    asia: BRIEF.sessions.asia.high, ldn: BRIEF.sessions.london.low, ny: BRIEF.sessions.newyork.high,
+    sum: BRIEF.aiSummary, demo: BRIEF.analysis.demo, src: BRIEF.analysis.source,
+    memo: BRIEF.memo,
+  }));
+  ok("Issue #2 の必要項目が埋まる",
+     [f.price, f.e10, f.e200, f.rh, f.rl, f.asia, f.ldn, f.ny].every(v => typeof v === "number") &&
+     ["up", "down", "range"].includes(f.m15) && ["up", "down", "range"].includes(f.daily) &&
+     ["long", "short", "wait"].includes(f.bias) && f.sum.length > 0);
+  ok("取得層が触らない項目（メモ）は手入力のまま", f.memo === "手で書いたメモ");
+  ok("デモ値には出所の印がつく", f.demo === true && f.src.includes("デモ"));
+  ok("デモ値には警告が出る", (await page.$eval(".demowarn", e => e.textContent)).includes("デモ"));
+  ok("結果が入力欄にも反映される", (await page.inputValue("#b_price")) === String(f.price));
+  ok("編集してから保存できる（保存前は未保存表示）",
+     (await page.$eval("#b_dirty", e => e.textContent)).includes("未保存"));
+
+  // 手で直してから保存 → リロードしても残る
+  await page.fill("#b_price", "3301.5");
+  answer(page, true);   // デモ値のまま保存するかの確認
+  await page.click('button:has-text("環境認識を保存")');
+  await page.waitForTimeout(250);
+  await page.reload();
+  await page.waitForSelector("#app .topbar");
+  const kept = await page.evaluate(() => {
+    const b = DB.briefs[0];
+    return { n: DB.briefs.length, price: b.price.last, m15: b.trend.m15, bias: b.bias,
+             ny: b.sessions.newyork.high, e200: b.ema.e200, src: b.analysis.source };
+  });
+  ok("朝分析の結果を編集した内容が保存される", kept.price === 3301.5);
+  ok("新しい項目がリロード後も残る",
+     kept.n === 1 && kept.m15 === f.m15 && kept.bias === f.bias &&
+     kept.ny === f.ny && kept.e200 === f.e200 && kept.src.includes("デモ"));
+
+  // --- 差し替え口そのものの確認 ---
+  const ext = await page.evaluate(async () => {
+    marketDataProvider.register("t_ok", { label: "テスト取得先",
+      fetch: () => Promise.resolve({ price: 1234.5, trend: { h1: "down" }, notes: ["ok"] }) });
+    marketDataProvider.register("t_err", { label: "こわれた取得先",
+      fetch: () => { throw new Error("boom"); } });
+    const req = { symbol: "XAUUSD", date: today(), sessions: sessionWindows(today()) };
+    const a = await marketDataProvider.fetch("t_ok", req);
+    const b = await marketDataProvider.fetch("t_err", req);
+    const c = await marketDataProvider.fetch("いない取得先", req);
+    return { aOk: a.ok, aPrice: a.snapshot.price, aH1: a.snapshot.trend.h1, aDaily: a.snapshot.trend.daily,
+             bOk: b.ok, bNote: b.snapshot.notes[0] || "", cOk: c.ok, cNote: c.snapshot.notes[0] || "" };
+  });
+  ok("あとから取得先を足せる（画面側は変更不要）",
+     ext.aOk === true && ext.aPrice === 1234.5 && ext.aH1 === "down");
+  ok("返さなかった項目は null のまま（データなし）", ext.aDaily === null);
+  ok("取得先が落ちても画面は止まらない", ext.bOk === false && ext.bNote.includes("失敗"));
+  ok("知らない取得先はエラーとして返る", ext.cOk === false && ext.cNote.includes("見つかりません"));
+
+  // 取得層はセッション窓を受け取る（Bookmap 等が高安を集計するための入口）
+  const gotWindows = await page.evaluate(async () => {
+    let seen = null;
+    marketDataProvider.register("t_req", { label: "受け取り確認",
+      fetch: (req) => { seen = req; return Promise.resolve({}); } });
+    await marketDataProvider.fetch("t_req", { symbol: "XAUUSD", date: "2026-07-15",
+      sessions: sessionWindows("2026-07-15") });
+    return { n: seen.sessions.length, keys: seen.sessions.map(s => s.key).join(","),
+             hasIso: seen.sessions.every(s => !!s.startISO && !!s.endISO), sym: seen.symbol };
+  });
+  ok("取得先にセッション窓が渡る",
+     gotWindows.n === 3 && gotWindows.keys === "asia,london,newyork" &&
+     gotWindows.hasIso && gotWindows.sym === "XAUUSD");
+  await page.close();
+}
+
+/* =======================================================================
+   10. スクロール位置
+   ======================================================================= */
+group("10. スクロール位置");
+{
+  const page = await open();
+  const y = () => page.evaluate(() => window.pageYOffset);
+  // Playwright の click は要素を勝手に画面内へスクロールするので、
+  // 位置を測る操作はページ内でクリックさせる
+  const tap = (sel) => page.evaluate(s => document.querySelector(s).click(), sel);
+  const tapText = (sel, text) => page.evaluate(([s, t]) =>
+    [...document.querySelectorAll(s)].find(e => e.textContent.includes(t)).click(), [sel, text]);
+  const scrollTo = async (v) => { await page.evaluate(n => window.scrollTo(0, n), v); await page.waitForTimeout(80); };
+
+  // --- 計画: 打ち込んでいる途中でチップを押しても位置が動かない ---
+  await page.click('#nav button[data-tab="plan"]');
+  await page.fill("#p_entry", "4414.17");
+  await page.fill("#p_sl", "4421.8");
+  await page.fill("#p_tp", "4391.18");
+  await scrollTo(600);
+  const p0 = await y();
+  await tap("button.chip[onclick*=\"'p_h4','down'\"]");
+  await page.waitForTimeout(120);
+  ok("計画: チップを押しても先頭に戻らない", p0 > 400 && Math.abs((await y()) - p0) <= 2);
+  ok("計画: チップの選択は効いている", (await page.evaluate(() => PLAN.h4env)) === "down");
+
+  await tap(".seg.ls button[data-v='short']");
+  await page.waitForTimeout(120);
+  ok("計画: 方向を切り替えても先頭に戻らない", Math.abs((await y()) - p0) <= 2);
+  ok("計画: 方向を切り替えても入力が残る",
+     (await page.inputValue("#p_entry")) === "4414.17" && (await page.inputValue("#p_sl")) === "4421.8");
+
+  // --- 環境 ---
+  await page.click('#nav button[data-tab="brief"]');
+  await page.waitForTimeout(80);
+  ok("タブを移ると先頭に戻る", (await y()) === 0);
+  await scrollTo(500);
+  const b0 = await y();
+  await tap("button.chip[onclick*=\"'daily','up'\"]");
+  await page.waitForTimeout(120);
+  ok("環境: チップを押しても先頭に戻らない", b0 > 300 && Math.abs((await y()) - b0) <= 2);
+
+  // --- 中身の短いタブへ移ってもずれない（トレード0件・成長） ---
+  for (const tab of ["trades", "growth"]) {
+    await page.click('#nav button[data-tab="plan"]');
+    await scrollTo(900);
+    await page.click(`#nav button[data-tab="${tab}"]`);
+    await page.waitForTimeout(250);
+    const top = await page.$eval("#app .topbar", e => Math.round(e.getBoundingClientRect().top));
+    ok(`${tab}: 長い画面から移っても先頭・見出しが隠れない`, (await y()) === 0 && top >= 0 && top < 60);
+  }
+
+  // --- 保存したあとも位置が飛ばない ---
+  await page.click('#nav button[data-tab="brief"]');
+  await page.fill("#b_memo", "位置を保つ");
+  await scrollTo(700);
+  const s0 = await y();
+  await tapText("button.btn.primary", "環境認識を");
+  await page.waitForTimeout(250);
+  ok("環境: 保存しても先頭に戻らない", s0 > 500 && Math.abs((await y()) - s0) <= 2);
+  ok("環境: 保存はできている", (await page.evaluate(() => DB.briefs.length)) === 1);
+  await page.close();
+}
+
+/* =======================================================================
+   11. 口座通貨への換算（USDJPY）
+   ======================================================================= */
+group("11. 口座通貨への換算");
+{
+  const page = await open();
+  // 本物のAPIは叩かない。取得層に差し込んだ偽の取得先で往復を見る
+  const stub = (rate) => page.evaluate((r) => {
+    window._fxCalls = 0;
+    fxRateProvider.register("stub", { label: "テスト取得先", fetch: () => {
+      window._fxCalls++;
+      return Promise.resolve({ base: "USD", rates: { JPY: r }, at: "2026-09-07T00:00:00.000Z" });
+    }});
+    fxRateProvider.register("stub_ng", { label: "落ちる取得先", fetch: () => Promise.reject(new Error("network")) });
+    FX_SOURCES = ["stub"];
+  }, rate);
+
+  ok("建値通貨を銘柄から読む", await page.evaluate(() =>
+    quoteCurrencyOf("XAUUSD") === "USD" && quoteCurrencyOf("EURJPY") === "JPY" && quoteCurrencyOf("US30") === "USD"));
+
+  // --- USD口座（既定）は今までどおり ---
+  const usd = await page.evaluate(() => {
+    DB.settings.currency = "USD";
+    const c = calcFromInputs({ dir:"short", entry:4414.17, sl:4421.8, tp:4391.18, lot:2,
+      contractSize:100, balance:50000000, fxRate:fxRateOrOne("XAUUSD") });
+    return { rate: fxRateFor("XAUUSD"), loss: Math.round(c.plannedLoss), needed: fxNeeded("XAUUSD") };
+  });
+  ok("USD口座は換算しない（従来の値のまま）", usd.rate === 1 && usd.loss === 1526 && usd.needed === false);
+
+  // --- JPY口座 + 自動取得 ---
+  await stub(156.2);
+  const jpy = await page.evaluate(async () => {
+    DB.settings.currency = "JPY";
+    DB.settings.fx = { auto:true, manual:null, quote:"", rate:null, at:null, rateAt:null, source:"" };
+    ensureFxRate(true);
+    await new Promise(r => setTimeout(r, 300));
+    const c = calcFromInputs({ dir:"short", entry:4414.17, sl:4421.8, tp:4391.18, lot:2,
+      contractSize:100, balance:50000000, fxRate:fxRateOrOne("XAUUSD") });
+    return { rate: fxRateFor("XAUUSD"), loss: Math.round(c.plannedLoss),
+             riskPct: c.riskPct, recLot: c.recLot, quote: DB.settings.fx.quote,
+             src: DB.settings.fx.source, calls: window._fxCalls };
+  });
+  ok("JPY口座はレートを取得して換算する", jpy.rate === 156.2 && jpy.quote === "JPY" && jpy.calls === 1);
+  ok("期限は取得した時刻で見る（提供元の更新時刻は別に持つ）", await page.evaluate(() =>
+     DB.settings.fx.rateAt === "2026-09-07T00:00:00.000Z" &&
+     Math.abs(Date.now() - new Date(DB.settings.fx.at).getTime()) < 60000));
+  ok("予定損失が口座通貨になる", jpy.loss === Math.round(7.63 * 2 * 100 * 156.2));
+  ok("リスク率が意味のある値になる（0.00%でなくなる）",
+     Math.abs(jpy.riskPct - (7.63 * 2 * 100 * 156.2) / 50000000 * 100) < 1e-9 && jpy.riskPct > 0.4);
+  ok("推奨ロットも換算後で出る",
+     Math.abs(jpy.recLot - (50000000 * 0.01) / (7.63 * 100 * 156.2)) < 1e-6);
+
+  // --- キャッシュ ---
+  const cached = await page.evaluate(async () => {
+    ensureFxRate(); await new Promise(r => setTimeout(r, 150));
+    return window._fxCalls;
+  });
+  ok("10分はキャッシュを使う（取り直さない）", cached === 1);
+  const forced = await page.evaluate(async () => {
+    ensureFxRate(true); await new Promise(r => setTimeout(r, 300));
+    return window._fxCalls;
+  });
+  ok("手動更新は取り直す", forced === 2);
+
+  // --- 失敗時は直近成功値を残す ---
+  const failed = await page.evaluate(async () => {
+    FX_SOURCES = ["stub_ng"];
+    ensureFxRate(true);
+    await new Promise(r => setTimeout(r, 400));
+    return { rate: fxRateFor("XAUUSD"), err: FX.lastError };
+  });
+  ok("取得に失敗しても直近値を捨てない", failed.rate === 156.2 && failed.err.length > 0);
+
+  // --- 手動レートは自動が無いときの控え ---
+  const manual = await page.evaluate(async () => {
+    DB.settings.fx = { auto:false, manual:150, quote:"", rate:null, at:null, source:"" };
+    return { rate: fxRateFor("XAUUSD"), line: fxLineHtml("XAUUSD") };
+  });
+  ok("自動値が無ければ手動レートを使う", manual.rate === 150 && manual.line.includes("手動設定"));
+
+  // --- 取れないときは 1 で計算し、そのことを画面に出す ---
+  const none = await page.evaluate(() => {
+    DB.settings.fx = { auto:false, manual:null, quote:"", rate:null, at:null, source:"" };
+    return { r: fxRateFor("XAUUSD"), used: fxRateOrOne("XAUUSD"), line: fxLineHtml("XAUUSD") };
+  });
+  ok("レートが無いときは 1 で計算し、断りを出す",
+     none.r === null && none.used === 1 && none.line.includes("1 で計算"));
+
+  // --- 記録に焼いたレートを使う（残高と同じ考え方） ---
+  await stub(156.2);
+  const baked = await page.evaluate(async () => {
+    DB.settings.fx = { auto:true, manual:null, quote:"", rate:null, at:null, source:"" };
+    ensureFxRate(true); await new Promise(r => setTimeout(r, 300));
+    TAB = "plan"; PLAN = freshPlan();
+    PLAN.symbol = "XAUUSD"; PLAN.dir = "short";
+    PLAN.entry = "4414.17"; PLAN.sl = "4421.8"; PLAN.tp = "4391.18"; PLAN.lot = "2";
+    const rec = planToRecord("open");
+    DB.trades = [rec, { id:"old", status:"open", symbol:"XAUUSD", dir:"short", entry:4414.17,
+      sl:4421.8, tp:4391.18, lot:2, contractSize:100, balanceAtEntry:50000000,
+      createdAt:new Date().toISOString(), tags:[] }];
+    // レートが動いても過去の記録は動かない
+    DB.settings.fx.rate = 200;
+    return { baked: rec.fxRate, cur: rec.acctCurrency,
+             newLoss: Math.round(calcTrade(DB.trades[0]).plannedLoss),
+             oldLoss: Math.round(calcTrade(DB.trades[1]).plannedLoss) };
+  });
+  ok("新しい記録にエントリー時のレートを焼く", baked.baked === 156.2 && baked.cur === "JPY");
+  ok("あとでレートが動いても記録の数字は揺れない", baked.newLoss === Math.round(7.63 * 2 * 100 * 156.2));
+  ok("レートを持たない過去の記録は 1 のまま（数字が勝手に変わらない）", baked.oldLoss === 1526);
+
+  // --- 設定が保存され、リロードしても残る ---
+  await page.evaluate(() => { DB.settings.currency = "JPY"; saveData(); TAB = "settings"; render(); });
+  await page.waitForTimeout(150);
+  ok("設定画面に口座通貨のプルダウンが出る",
+     (await page.$eval("#s_currency", e => e.value)) === "JPY");
+  ok("使っているレートが画面に出る",
+     (await page.$eval("#app .fxline", e => e.textContent)).includes("USDJPY"));
+
+  // 計画画面のレート行は入力中の銘柄に追従する
+  await page.evaluate(() => {
+    DB.settings.fx = { auto:false, manual:156.2, quote:"", rate:null, at:null, rateAt:null, source:"" };
+    TAB = "plan"; PLAN = freshPlan(); PLAN.symbol = "XAUUSD"; render();
+  });
+  await page.waitForTimeout(150);
+  const planLine = await page.$eval("#app .fxline", e => e.textContent);
+  await page.fill("#p_sym", "EURJPY");
+  await page.waitForTimeout(150);
+  const planLine2 = await page.$eval("#app .fxline", e => e.textContent);
+  ok("計画画面のレート行が銘柄に追従する",
+     planLine.includes("USDJPY") && planLine2 === "" && !planLine.includes("LAN"));
+  await page.reload();
+  await page.waitForSelector("#app .topbar");
+  const kept = await page.evaluate(() => ({ cur: DB.settings.currency, rate: DB.settings.fx.rate, q: DB.settings.fx.quote }));
+  ok("口座通貨とレートがリロード後も残る", kept.cur === "JPY" && kept.rate === 200 && kept.q === "JPY");
+
+  // --- 口座通貨を変えたら取得値は捨てる ---
+  const swapped = await page.evaluate(() => {
+    DB.settings.fx.auto = false;
+    TAB = "settings"; render();
+    document.getElementById("s_currency").value = "USD";
+    saveSettings();
+    return { rate: DB.settings.fx.rate, q: DB.settings.fx.quote, f: fxRateFor("XAUUSD") };
+  });
+  ok("口座通貨を変えたら古いレートを持ち越さない", swapped.rate === null && swapped.q === "" && swapped.f === 1);
+  await page.close();
+}
+
+/* =======================================================================
+   12. 実APIのレスポンスを読めるか（本物の応答を写した固定データ）
+   ======================================================================= */
+group("12. レート取得先の応答解釈");
+{
+  const page = await open();
+  // 通信はせず、実際の API から取った応答をそのまま window.fetch に差し込む。
+  // 「取得先の応答の形が変わったら気づける」ための固定データ。
+  const real = await page.evaluate(async () => {
+    const bodies = {
+      "open.er-api.com": {"result":"success","base_code":"USD",
+        "time_last_update_utc":"Mon, 07 Sep 2026 00:02:31 +0000",
+        "rates":{"JPY":156.177011,"EUR":0.861072}},
+      "cdn.jsdelivr.net": {"date":"2026-09-06","usd":{"jpy":156.24969077,"eur":0.86081177}},
+    };
+    const orig = window.fetch;
+    window.fetch = (url) => {
+      const key = Object.keys(bodies).find(k => String(url).includes(k));
+      if (!key) return Promise.reject(new Error("想定外のURL " + url));
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(bodies[key]) });
+    };
+    const a = await fxRateProvider.fetch("erapi", { base: "USD" });
+    const b = await fxRateProvider.fetch("currencyapi", { base: "USD" });
+    window.fetch = orig;
+    return {
+      aOk: a.ok, aJpy: a.snapshot.rates && a.snapshot.rates.JPY, aAt: a.snapshot.at, aSrc: a.snapshot.source,
+      bOk: b.ok, bJpy: b.snapshot.rates && b.snapshot.rates.JPY, bAt: b.snapshot.at,
+    };
+  });
+  ok("erapi の応答から USDJPY を読める", real.aOk && real.aJpy === 156.177011);
+  ok("erapi の更新時刻を ISO に直せる", real.aAt === "2026-09-07T00:02:31.000Z");
+  ok("currency-api の応答から USDJPY を読める（通貨コードは大文字に寄せる）",
+     real.bOk && real.bJpy === 156.24969077);
+  ok("currency-api の日付を ISO に直せる", real.bAt === "2026-09-06T00:00:00.000Z");
+
+  // 1つ目が落ちたら2つ目に回る
+  const failover = await page.evaluate(async () => {
+    const orig = window.fetch;
+    window.fetch = (url) => String(url).includes("open.er-api.com")
+      ? Promise.reject(new Error("down"))
+      : Promise.resolve({ ok: true, status: 200,
+          json: () => Promise.resolve({ date: "2026-09-06", usd: { jpy: 156.25 } }) });
+    const r = await fxRateProvider.fetchFirst(["erapi", "currencyapi"], { base: "USD" });
+    window.fetch = orig;
+    return { ok: r.ok, jpy: r.snapshot.rates && r.snapshot.rates.JPY, src: r.snapshot.source };
+  });
+  ok("1つ目が落ちたら控えの取得先に回る",
+     failover.ok && failover.jpy === 156.25 && failover.src.includes("jsDelivr"));
+
+  // 応答が壊れていても推測しない
+  const broken = await page.evaluate(async () => {
+    const orig = window.fetch;
+    window.fetch = () => Promise.resolve({ ok: true, status: 200,
+      json: () => Promise.resolve({ result: "error" }) });
+    const r = await fxRateProvider.fetch("erapi", { base: "USD" });
+    window.fetch = orig;
+    return { ok: r.ok, rates: r.snapshot.rates };
+  });
+  ok("応答が壊れていたら null（勝手な値を入れない）", broken.ok === false && broken.rates === null);
+  await page.close();
+}
+
+/* =======================================================================
+   13. 決済モーダル（符号の選択と口座通貨）
+   ======================================================================= */
+group("13. 決済登録の符号と通貨");
+{
+  const page = await open();
+  const seed = () => page.evaluate(() => {
+    DB.settings.currency = "JPY"; DB.settings.initialBalance = 50000000;
+    DB.settings.fx = { auto:false, manual:156.2, quote:"", rate:null, at:null, rateAt:null, source:"" };
+    DB.trades = [
+      { id:"t1", status:"open", symbol:"XAUUSD", dir:"short", entry:4407.45, sl:4412.85, tp:4391,
+        lot:2, contractSize:100, balanceAtEntry:50000000, fxRate:156.2, acctCurrency:"JPY",
+        createdAt:new Date().toISOString(), tags:[] },
+      { id:"t2", status:"open", symbol:"XAUUSD", dir:"short", entry:4407.45, sl:4412.85, tp:4391,
+        lot:2, contractSize:100, balanceAtEntry:50000000,   // レートを持たない古い記録
+        createdAt:new Date().toISOString(), tags:[] },
+    ];
+    saveData(); TAB = "trades"; UI.tradeTab = "open"; render();
+  });
+  await seed();
+  await page.waitForTimeout(150);
+
+  ok("古い記録には建値通貨の印が出る",
+     (await page.$eval("#app", e => e.innerText)).includes("USD建て"));
+
+  // --- 決済価格からの計算が口座通貨になる ---
+  await page.evaluate(() => openCloseModal("t1"));
+  await page.waitForTimeout(120);
+  await page.fill("#c_price", "4412.85");
+  await page.waitForTimeout(120);
+  const hint = await page.$eval("#c_plhint", e => e.textContent);
+  ok("決済価格からの計算にレートが掛かる（口座通貨）",
+     hint.includes(String(Math.round(5.4 * 2 * 100 * 156.2).toLocaleString("en-US"))) && hint.includes("JPY"));
+  ok("見出しの予定損失も口座通貨で単位つき",
+     (await page.$eval("#modalRoot", e => e.innerText)).includes("JPY"));
+
+  // --- 符号の選択 ---
+  ok("符号のボタンが出ている", (await page.$$("#c_plsign button")).length === 2);
+  ok("決済価格から符号が自動で決まる（損失側）",
+     (await page.$eval("#c_plsign button[data-v='neg']", e => e.className)).includes("on"));
+
+  await page.click(".miniapply");
+  await page.waitForTimeout(120);
+  const applied = await page.evaluate(() => ({
+    field: document.getElementById("c_pl").value,
+    sign: CLOSE.plSign,
+    value: closePLValue(),
+    sum: document.getElementById("c_plsum").textContent,
+  }));
+  ok("入力欄は絶対値、符号は別で持つ",
+     applied.field === String(Math.abs(5.4 * 2 * 100 * 156.2)) && applied.sign === "neg");
+  ok("保存される値は負になる", applied.value === -(5.4 * 2 * 100 * 156.2));
+  ok("登録される実現損益が確認できる", applied.sum.includes("-") && applied.sum.includes("JPY"));
+
+  // 利益側に切り替えられる（＝マイナスが打てない iOS でも符号を選べる）
+  await page.click("#c_plsign button[data-v='pos']");
+  await page.waitForTimeout(80);
+  ok("符号を利益側に切り替えられる",
+     (await page.evaluate(() => closePLValue())) === (5.4 * 2 * 100 * 156.2));
+
+  // 金額だけ打ち直しても符号は保たれる
+  await page.fill("#c_pl", "1080");
+  await page.waitForTimeout(80);
+  ok("金額を打ち直しても選んだ符号が残る", (await page.evaluate(() => closePLValue())) === 1080);
+
+  await page.click("#c_plsign button[data-v='neg']");
+  await page.waitForTimeout(80);
+  await page.evaluate(() => saveClose("t1"));
+  await page.waitForTimeout(250);
+  const saved = await page.evaluate(() => {
+    const t = DB.trades.filter(x => x.id === "t1")[0];
+    return { pl: t.realizedPL, status: t.status, r: calcTrade(t).realizedR };
+  });
+  ok("符号つきで保存される", saved.pl === -1080 && saved.status === "closed");
+  ok("R も口座通貨どうしで出る",
+     Math.abs(saved.r - (-1080 / (5.4 * 2 * 100 * 156.2))) < 1e-9);
+
+  // --- レートを持たない古い記録は換算しない ---
+  await page.evaluate(() => { UI.tradeTab = "open"; render(); openCloseModal("t2"); });
+  await page.waitForTimeout(150);
+  await page.fill("#c_price", "4412.85");
+  await page.waitForTimeout(120);
+  const oldHint = await page.$eval("#c_plhint", e => e.textContent);
+  ok("古い記録は換算せず建値通貨のまま示す",
+     oldHint.includes("1,080") && oldHint.includes("USD") && !oldHint.includes("JPY"));
   await page.close();
 }
 
