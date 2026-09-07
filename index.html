@@ -328,6 +328,12 @@ html[data-theme="light"] .btn.primary{color:#fff}
 .moredetails[open]>summary::after{content:"− 閉じる"}
 .moredetails .moreinner{padding:0 13px 13px}
 .plhint{margin:-2px 0 12px;font-size:13px;background:var(--card2);border:1px solid var(--line);border-radius:9px;padding:9px 11px;font-variant-numeric:tabular-nums}
+.seg.pl{margin-bottom:9px}
+.seg.pl button.on[data-v="neg"]{background:color-mix(in srgb,var(--red) 26%,var(--card));color:var(--txt)}
+.seg.pl button.on[data-v="pos"]{background:color-mix(in srgb,var(--green) 26%,var(--card));color:var(--txt)}
+.plsum{font-size:12.5px;color:var(--txt3);margin-top:7px;font-variant-numeric:tabular-nums}
+.plsum:empty{display:none}
+.plsum span{font-weight:700;font-size:14px}
 .miniapply{background:var(--blue);color:#fff;border:0;border-radius:7px;padding:4px 9px;font-size:11.5px;font-weight:700;margin-left:6px;cursor:pointer}
 .kv{display:flex;justify-content:space-between;padding:9px 0;border-bottom:1px solid var(--line);font-size:13.5px;align-items:center}
 .kv:last-child{border-bottom:0}
@@ -1657,6 +1663,15 @@ var BIAS_OPTS=[["long","ロング優勢"],["short","ショート優勢"],["wait"
 function labelBias(v){ return {long:"ロング優勢",short:"ショート優勢",wait:"様子見"}[v]||"未記入"; }
 function clsBias(v){ return v==="long"?"pos":v==="short"?"neg":"muted"; }
 function labelTf(v){ return {daily:"日足",h4:"4時間足",h1:"1時間足",m15:"15分足"}[v]||v||""; }
+// その記録の金額がどの通貨建てか。
+// レートを持たない古い記録は換算していないので、建値通貨のまま。
+function tradeCurrency(t){
+  if(t && t.acctCurrency) return String(t.acctCurrency).toUpperCase();
+  if(t && isNum(toNum(t.fxRate))) return acctCurrency();
+  return quoteCurrencyOf(t&&t.symbol);
+}
+function fmtMoneyCur(v,t,dec){ return fmtMoney(v,dec)+" "+tradeCurrency(t); }
+function fmtSignedCur(v,t,dec){ return fmtSigned(v,dec)+" "+tradeCurrency(t); }
 function labelTrend(v){ return {up:"上昇",down:"下降",range:"レンジ",na:"判断不能"}[v]||"未記入"; }
 function arrowTrend(v){ return {up:"↑",down:"↓",range:"→",na:"?"}[v]||"—"; }
 function clsTrend(v){ return v==="up"?"pos":v==="down"?"neg":"muted"; }
@@ -2483,6 +2498,8 @@ function tradeCard(t,tab){
 
   // メタ pill
   var pills=[];
+  // 換算レートを持たない古い記録は建値通貨のまま。取り違えないよう印をつける
+  if(tradeCurrency(t)!==acctCurrency()) pills.push(tradeCurrency(t)+"建て");
   if(t.pattern) pills.push(labelPat(t.pattern));
   if(t.h4env) pills.push(labelH4(t.h4env));
   if(t.m15purple&&t.m15purple!=="na") pills.push(labelM15(t.m15purple));
@@ -2609,14 +2626,28 @@ var CLOSE={};
 window.openCloseModal=function(id){
   var t=findTrade(id); if(!t) return;
   var editing = t.status==="closed";
-  CLOSE={id:id,result:t.result||"",ruleOk:t.ruleOk||"",sawLower:t.closeSawLower||t.sawLower||"",emotion:t.emotion||""};
+  var pl0=toNum(t.realizedPL);
+  CLOSE={id:id,result:t.result||"",ruleOk:t.ruleOk||"",sawLower:t.closeSawLower||t.sawLower||"",emotion:t.emotion||"",
+         // 実現損益の符号。iOS の数字キーパッドにマイナスが無いので、入力欄は絶対値にして符号はここで持つ
+         plSign:(isNum(pl0)&&pl0>0)?"pos":"neg",
+         plSignTouched:isNum(pl0)};
   window._closeShotTarget=id; window._closeShotDataUrl=IMG[id+"_exit"]||null;
   var c=calcTrade(t);
   var h="<h3>決済登録</h3>";
-  h+="<div class='smallnote' style='margin-bottom:12px'>"+esc(t.symbol)+" "+(t.dir==="long"?"ロング":"ショート")+"｜エントリー "+ (isNum(t.entry)?t.entry:"—") +"｜予定損失 "+(isNum(c.plannedLoss)?fmtMoney(c.plannedLoss):"—")+"</div>";
+  h+="<div class='smallnote' style='margin-bottom:12px'>"+esc(t.symbol)+" "+(t.dir==="long"?"ロング":"ショート")+
+     "｜エントリー "+ (isNum(t.entry)?t.entry:"—") +
+     "｜予定損失 "+(isNum(c.plannedLoss)?esc(fmtMoneyCur(c.plannedLoss,t)):"—")+"</div>";
   h+=field("決済日時","<input type='datetime-local' id='c_dt' value='"+esc(t.closedAt?toLocalInput(t.closedAt):nowLocalInput())+"'>");
   h+=field("決済価格（任意）","<input type='number' inputmode='decimal' step='any' id='c_price' value='"+esc(t.closePrice)+"' placeholder='0.00'>");
-  h+=field("実現損益額（これを正とします）","<input type='number' inputmode='decimal' step='any' id='c_pl' value='"+esc(t.realizedPL)+"' placeholder='例）-1000 / +1660'>");
+  h+="<div class='field'><label>実現損益額（これを正とします）</label>";
+  h+="<div class='seg pl' id='c_plsign'>"+
+     "<button type='button' data-v='neg' class='"+(CLOSE.plSign==="neg"?"on":"")+"' onclick=\"closeSignPick('neg')\">− 損失</button>"+
+     "<button type='button' data-v='pos' class='"+(CLOSE.plSign==="pos"?"on":"")+"' onclick=\"closeSignPick('pos')\">＋ 利益</button>"+
+     "</div>";
+  h+="<input type='number' inputmode='decimal' step='any' min='0' id='c_pl' value='"+
+     esc(isNum(pl0)?Math.abs(pl0):null)+"' placeholder='例）1080（金額だけ・符号は上で選ぶ）'>";
+  h+="<div id='c_plsum' class='plsum'></div>";
+  h+="</div>";
   h+="<div id='c_plhint'></div>";
   // ── ここまでが必須級。以下は任意でたたんでおく ──
   h+="<details class='moredetails'><summary>詳細を記録（任意）</summary><div class='moreinner'>";
@@ -2634,7 +2665,8 @@ window.openCloseModal=function(id){
   openModal(h);
   renderCloseShotPreview();
   // 決済価格→実現損益の候補を出す
-  window._closeCtx={entry:toNum(t.entry),lot:toNum(t.lot),cs:toNum(t.contractSize),dir:t.dir};
+  window._closeCtx={entry:toNum(t.entry),lot:toNum(t.lot),cs:toNum(t.contractSize),dir:t.dir,
+                    fx:(isNum(toNum(t.fxRate))?toNum(t.fxRate):1), cur:tradeCurrency(t)};
   var pe=document.getElementById("c_price"), plq=document.getElementById("c_pl");
   if(pe){ pe.addEventListener("input",renderClosePLHint); }
   if(plq){ plq.addEventListener("input",renderClosePLHint); }
@@ -2671,21 +2703,61 @@ function calcExitPL(){
   var exit=toNum(g("c_price"));
   if(exit===null||ctx.entry===null||ctx.lot===null||ctx.cs===null) return null;
   var diff = ctx.dir==="short" ? (ctx.entry-exit) : (exit-ctx.entry);
-  return diff*ctx.lot*ctx.cs;
+  // 口座通貨に直す（レートはエントリー時の値を記録から持ってくる）
+  return diff*ctx.lot*ctx.cs*(isNum(ctx.fx)&&ctx.fx>0?ctx.fx:1);
 }
+// 入力欄（絶対値）と符号の選択から、実際に保存される値
+function closePLValue(){
+  var el=document.getElementById("c_pl"); if(!el) return null;
+  var v=toNum(el.value); if(!isNum(v)) return null;
+  return (CLOSE.plSign==="pos"?1:-1)*Math.abs(v);
+}
+window.closeSignPick=function(v){
+  CLOSE.plSign=v; CLOSE.plSignTouched=true;
+  var box=document.getElementById("c_plsign"); if(box){
+    Array.prototype.forEach.call(box.querySelectorAll("button"),function(b){
+      b.classList.toggle("on", b.getAttribute("data-v")===v);
+    });
+  }
+  renderClosePLHint();
+};
 function renderClosePLHint(){
-  var box=document.getElementById("c_plhint"); if(!box) return;
+  var ctx=window._closeCtx||{}, unit=ctx.cur?(" "+ctx.cur):"";
   var sug=calcExitPL();
+  // 符号をまだ自分で選んでいなければ、決済価格から出た符号に合わせる
+  if(sug!==null && !CLOSE.plSignTouched){
+    var want=sug>=0?"pos":"neg";
+    if(CLOSE.plSign!==want){
+      CLOSE.plSign=want;
+      var sb=document.getElementById("c_plsign");
+      if(sb) Array.prototype.forEach.call(sb.querySelectorAll("button"),function(b){
+        b.classList.toggle("on", b.getAttribute("data-v")===want);
+      });
+    }
+  }
+  // 実際に保存される値を、保存ボタンの手前に出す（符号の取り違えよけ）
+  var sum=document.getElementById("c_plsum");
+  if(sum){
+    var v=closePLValue();
+    sum.innerHTML = (v===null) ? "" :
+      "登録される実現損益 <span class='"+clsSign(v)+"'>"+esc(fmtSigned(round2(v))+unit)+"</span>";
+  }
+  var box=document.getElementById("c_plhint"); if(!box) return;
   if(sug===null){ box.innerHTML=""; return; }
-  var cur=toNum((document.getElementById("c_pl")||{}).value);
+  var cur=closePLValue();
   var same = cur!==null && Math.abs(cur-sug)<0.5;
-  box.innerHTML="<div class='plhint'>決済価格から計算：<span class='"+clsSign(sug)+"'>"+fmtSigned(round2(sug))+"</span>"+
+  box.innerHTML="<div class='plhint'>決済価格から計算：<span class='"+clsSign(sug)+"'>"+esc(fmtSigned(round2(sug))+unit)+"</span>"+
     (same?" <span class='muted'>（反映済み）</span>":" <button type='button' class='miniapply' onclick='applyExitPL()'>実現損益に反映</button>")+
     "<div class='smallnote'>手数料・スワップは含みません。実際の約定額と違えば上書きしてOK</div></div>";
 }
 window.applyExitPL=function(){
   var sug=calcExitPL(); if(sug===null) return;
-  var el=document.getElementById("c_pl"); if(el){ el.value=String(round2(sug)); }
+  CLOSE.plSign = sug>=0?"pos":"neg";
+  var sb=document.getElementById("c_plsign");
+  if(sb) Array.prototype.forEach.call(sb.querySelectorAll("button"),function(b){
+    b.classList.toggle("on", b.getAttribute("data-v")===CLOSE.plSign);
+  });
+  var el=document.getElementById("c_pl"); if(el){ el.value=String(Math.abs(round2(sug))); }
   renderClosePLHint();
 };
 window.saveClose=function(id){
@@ -2695,7 +2767,7 @@ window.saveClose=function(id){
   var dt=g("c_dt");
   t.closedAt = dt ? new Date(dt).toISOString() : now();
   t.closePrice=toNum(g("c_price"));
-  t.realizedPL=toNum(g("c_pl"));
+  t.realizedPL=closePLValue();
   t.fee=toNum(g("c_fee")); t.swap=toNum(g("c_swap"));
   t.result=CLOSE.result||null; t.ruleOk=CLOSE.ruleOk||null;
   t.closeSawLower=CLOSE.sawLower||null; t.emotion=CLOSE.emotion||null;

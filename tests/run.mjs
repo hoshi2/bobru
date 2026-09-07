@@ -769,6 +769,94 @@ group("12. レート取得先の応答解釈");
   await page.close();
 }
 
+/* =======================================================================
+   13. 決済モーダル（符号の選択と口座通貨）
+   ======================================================================= */
+group("13. 決済登録の符号と通貨");
+{
+  const page = await open();
+  const seed = () => page.evaluate(() => {
+    DB.settings.currency = "JPY"; DB.settings.initialBalance = 50000000;
+    DB.settings.fx = { auto:false, manual:156.2, quote:"", rate:null, at:null, rateAt:null, source:"" };
+    DB.trades = [
+      { id:"t1", status:"open", symbol:"XAUUSD", dir:"short", entry:4407.45, sl:4412.85, tp:4391,
+        lot:2, contractSize:100, balanceAtEntry:50000000, fxRate:156.2, acctCurrency:"JPY",
+        createdAt:new Date().toISOString(), tags:[] },
+      { id:"t2", status:"open", symbol:"XAUUSD", dir:"short", entry:4407.45, sl:4412.85, tp:4391,
+        lot:2, contractSize:100, balanceAtEntry:50000000,   // レートを持たない古い記録
+        createdAt:new Date().toISOString(), tags:[] },
+    ];
+    saveData(); TAB = "trades"; UI.tradeTab = "open"; render();
+  });
+  await seed();
+  await page.waitForTimeout(150);
+
+  ok("古い記録には建値通貨の印が出る",
+     (await page.$eval("#app", e => e.innerText)).includes("USD建て"));
+
+  // --- 決済価格からの計算が口座通貨になる ---
+  await page.evaluate(() => openCloseModal("t1"));
+  await page.waitForTimeout(120);
+  await page.fill("#c_price", "4412.85");
+  await page.waitForTimeout(120);
+  const hint = await page.$eval("#c_plhint", e => e.textContent);
+  ok("決済価格からの計算にレートが掛かる（口座通貨）",
+     hint.includes(String(Math.round(5.4 * 2 * 100 * 156.2).toLocaleString("en-US"))) && hint.includes("JPY"));
+  ok("見出しの予定損失も口座通貨で単位つき",
+     (await page.$eval("#modalRoot", e => e.innerText)).includes("JPY"));
+
+  // --- 符号の選択 ---
+  ok("符号のボタンが出ている", (await page.$$("#c_plsign button")).length === 2);
+  ok("決済価格から符号が自動で決まる（損失側）",
+     (await page.$eval("#c_plsign button[data-v='neg']", e => e.className)).includes("on"));
+
+  await page.click(".miniapply");
+  await page.waitForTimeout(120);
+  const applied = await page.evaluate(() => ({
+    field: document.getElementById("c_pl").value,
+    sign: CLOSE.plSign,
+    value: closePLValue(),
+    sum: document.getElementById("c_plsum").textContent,
+  }));
+  ok("入力欄は絶対値、符号は別で持つ",
+     applied.field === String(Math.abs(5.4 * 2 * 100 * 156.2)) && applied.sign === "neg");
+  ok("保存される値は負になる", applied.value === -(5.4 * 2 * 100 * 156.2));
+  ok("登録される実現損益が確認できる", applied.sum.includes("-") && applied.sum.includes("JPY"));
+
+  // 利益側に切り替えられる（＝マイナスが打てない iOS でも符号を選べる）
+  await page.click("#c_plsign button[data-v='pos']");
+  await page.waitForTimeout(80);
+  ok("符号を利益側に切り替えられる",
+     (await page.evaluate(() => closePLValue())) === (5.4 * 2 * 100 * 156.2));
+
+  // 金額だけ打ち直しても符号は保たれる
+  await page.fill("#c_pl", "1080");
+  await page.waitForTimeout(80);
+  ok("金額を打ち直しても選んだ符号が残る", (await page.evaluate(() => closePLValue())) === 1080);
+
+  await page.click("#c_plsign button[data-v='neg']");
+  await page.waitForTimeout(80);
+  await page.evaluate(() => saveClose("t1"));
+  await page.waitForTimeout(250);
+  const saved = await page.evaluate(() => {
+    const t = DB.trades.filter(x => x.id === "t1")[0];
+    return { pl: t.realizedPL, status: t.status, r: calcTrade(t).realizedR };
+  });
+  ok("符号つきで保存される", saved.pl === -1080 && saved.status === "closed");
+  ok("R も口座通貨どうしで出る",
+     Math.abs(saved.r - (-1080 / (5.4 * 2 * 100 * 156.2))) < 1e-9);
+
+  // --- レートを持たない古い記録は換算しない ---
+  await page.evaluate(() => { UI.tradeTab = "open"; render(); openCloseModal("t2"); });
+  await page.waitForTimeout(150);
+  await page.fill("#c_price", "4412.85");
+  await page.waitForTimeout(120);
+  const oldHint = await page.$eval("#c_plhint", e => e.textContent);
+  ok("古い記録は換算せず建値通貨のまま示す",
+     oldHint.includes("1,080") && oldHint.includes("USD") && !oldHint.includes("JPY"));
+  await page.close();
+}
+
 /* ---------- 後始末 ---------- */
 await browser.close();
 server.close();
