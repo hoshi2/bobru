@@ -851,8 +851,17 @@ function todayPL(){
 /* =========================================================================
    レンダリング
    ========================================================================= */
+var _renderedTab=null;   // 直前に描画したタブ。同じタブの描き直しではスクロール位置を保つ
 function render(){
   var app=document.getElementById("app");
+  var sameTab=(_renderedTab===TAB);
+  // 同じタブの描き直し（チップを押した等）は今の位置のまま。
+  // タブが変わるときだけ先頭に戻す。
+  var keepY=sameTab ? (window.pageYOffset||document.documentElement.scrollTop||0) : 0;
+  // ★ 中身を入れ替える前に先頭へ。iOS は中身が縮んだあとに
+  //   スクロール位置を勝手に詰めるので、入れ替えたあとに戻すだけでは
+  //   画面がずれたまま残る（トレード・成長など中身が短いタブで出る）
+  if(!sameTab) window.scrollTo(0,0);
   var html="";
   if(TAB==="home") html=viewHome();
   else if(TAB==="brief") html=viewBrief();
@@ -867,12 +876,18 @@ function render(){
   Array.prototype.forEach.call(document.querySelectorAll("#nav button"),function(b){
     b.classList.toggle("on", b.getAttribute("data-tab")===TAB);
   });
-  window.scrollTo(0,0);
+  _renderedTab=TAB;
+  window.scrollTo(0,keepY);
   // 画面別の初期化
   if(TAB==="plan") initPlan();
   if(TAB==="brief") updateBriefDirtyMark();
   if(TAB==="growth") drawGrowthCharts();
   if(TAB==="home") drawEquitySpark();
+  // 初期化で高さが変わるので、タブを移ったときはもう一度そろえる
+  if(!sameTab && window.requestAnimationFrame){
+    var t=TAB;
+    window.requestAnimationFrame(function(){ if(TAB===t) window.scrollTo(0,0); });
+  }
 }
 
 function topbar(sub){
@@ -1622,8 +1637,8 @@ function updateBriefDirtyMark(){
   el.className = dirty ? "smallnote gold" : "smallnote";
 }
 
-// chip や行追加での再描画でスクロール位置を保つ（フォームが長いため）
-function rerenderBrief(){ var y=window.pageYOffset||document.documentElement.scrollTop||0; render(); window.scrollTo(0,y); }
+// スクロール位置の維持は render() が面倒を見る（同じタブの描き直しは動かない）
+function rerenderBrief(){ render(); }
 
 window.briefChipPick=function(key,val){
   if(!BRIEF) return;

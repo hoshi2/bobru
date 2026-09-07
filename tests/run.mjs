@@ -496,6 +496,70 @@ group("9. 朝分析と marketDataProvider");
   await page.close();
 }
 
+/* =======================================================================
+   10. スクロール位置
+   ======================================================================= */
+group("10. スクロール位置");
+{
+  const page = await open();
+  const y = () => page.evaluate(() => window.pageYOffset);
+  // Playwright の click は要素を勝手に画面内へスクロールするので、
+  // 位置を測る操作はページ内でクリックさせる
+  const tap = (sel) => page.evaluate(s => document.querySelector(s).click(), sel);
+  const tapText = (sel, text) => page.evaluate(([s, t]) =>
+    [...document.querySelectorAll(s)].find(e => e.textContent.includes(t)).click(), [sel, text]);
+  const scrollTo = async (v) => { await page.evaluate(n => window.scrollTo(0, n), v); await page.waitForTimeout(80); };
+
+  // --- 計画: 打ち込んでいる途中でチップを押しても位置が動かない ---
+  await page.click('#nav button[data-tab="plan"]');
+  await page.fill("#p_entry", "4414.17");
+  await page.fill("#p_sl", "4421.8");
+  await page.fill("#p_tp", "4391.18");
+  await scrollTo(600);
+  const p0 = await y();
+  await tap("button.chip[onclick*=\"'p_h4','down'\"]");
+  await page.waitForTimeout(120);
+  ok("計画: チップを押しても先頭に戻らない", p0 > 400 && Math.abs((await y()) - p0) <= 2);
+  ok("計画: チップの選択は効いている", (await page.evaluate(() => PLAN.h4env)) === "down");
+
+  await tap(".seg.ls button[data-v='short']");
+  await page.waitForTimeout(120);
+  ok("計画: 方向を切り替えても先頭に戻らない", Math.abs((await y()) - p0) <= 2);
+  ok("計画: 方向を切り替えても入力が残る",
+     (await page.inputValue("#p_entry")) === "4414.17" && (await page.inputValue("#p_sl")) === "4421.8");
+
+  // --- 環境 ---
+  await page.click('#nav button[data-tab="brief"]');
+  await page.waitForTimeout(80);
+  ok("タブを移ると先頭に戻る", (await y()) === 0);
+  await scrollTo(500);
+  const b0 = await y();
+  await tap("button.chip[onclick*=\"'daily','up'\"]");
+  await page.waitForTimeout(120);
+  ok("環境: チップを押しても先頭に戻らない", b0 > 300 && Math.abs((await y()) - b0) <= 2);
+
+  // --- 中身の短いタブへ移ってもずれない（トレード0件・成長） ---
+  for (const tab of ["trades", "growth"]) {
+    await page.click('#nav button[data-tab="plan"]');
+    await scrollTo(900);
+    await page.click(`#nav button[data-tab="${tab}"]`);
+    await page.waitForTimeout(250);
+    const top = await page.$eval("#app .topbar", e => Math.round(e.getBoundingClientRect().top));
+    ok(`${tab}: 長い画面から移っても先頭・見出しが隠れない`, (await y()) === 0 && top >= 0 && top < 60);
+  }
+
+  // --- 保存したあとも位置が飛ばない ---
+  await page.click('#nav button[data-tab="brief"]');
+  await page.fill("#b_memo", "位置を保つ");
+  await scrollTo(700);
+  const s0 = await y();
+  await tapText("button.btn.primary", "環境認識を");
+  await page.waitForTimeout(250);
+  ok("環境: 保存しても先頭に戻らない", s0 > 500 && Math.abs((await y()) - s0) <= 2);
+  ok("環境: 保存はできている", (await page.evaluate(() => DB.briefs.length)) === 1);
+  await page.close();
+}
+
 /* ---------- 後始末 ---------- */
 await browser.close();
 server.close();
