@@ -245,6 +245,14 @@ html[data-theme="light"] .btn.primary{color:#fff}
 .tag-ls{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px}
 .tag-ls.long{background:color-mix(in srgb,var(--green) 22%,transparent);color:var(--green)}
 .tag-ls.short{background:color-mix(in srgb,var(--red) 22%,transparent);color:var(--red)}
+.fxline:empty{display:none}
+.fxline b{font-weight:700}
+.fxwarn{color:var(--gold)}
+.chk{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--txt2);font-weight:400}
+.chk input{width:18px;height:18px;flex:0 0 auto;accent-color:var(--accent)}
+.tag-rr{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px;
+  background:color-mix(in srgb,var(--gold) 16%,transparent);color:var(--gold);
+  font-variant-numeric:tabular-nums;letter-spacing:.02em}
 .tcard .when{font-size:11px;color:var(--txt3)}
 .tgrid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px 10px;margin:10px 0}
 .tgrid .ti .k{font-size:10.5px;color:var(--txt3);margin-bottom:2px}
@@ -449,6 +457,15 @@ function defaultSettings(){
     baseLot:1.00,            // 内部: 基本ロット目安
     lossStreakWarn:4,        // 内部: 連敗注意ライン
     marketProvider:"none",   // 朝分析の取得先（marketDataProvider の登録名）
+    fx:{                     // 口座通貨への換算（USD建ての損益を口座通貨に直す）
+      auto:true,             // 自動取得する
+      manual:null,           // 手動レート（自動が取れないときの控え）
+      quote:"",              // 取得値がどの通貨向けか
+      rate:null,             // 直近で取得できた USD→口座通貨 のレート
+      at:null,               // こちらが取得した時刻（キャッシュ期限はこれで見る）
+      rateAt:null,           // 提供元がそのレートを出した時刻（日次更新なので古い）
+      source:""
+    },
     fin:{                    // Fintokei 公式ルール
       dailyLossPct:5,
       maxLossPct:10,
@@ -619,8 +636,9 @@ function migrate(p){
 function mergeSettings(def,s){
   if(!s||typeof s!=="object") return def;
   var out=JSON.parse(JSON.stringify(def));
-  for(var k in s){ if(k==="fin") continue; if(s[k]!==undefined&&s[k]!==null) out[k]=s[k]; }
+  for(var k in s){ if(k==="fin"||k==="fx") continue; if(s[k]!==undefined&&s[k]!==null) out[k]=s[k]; }
   if(s.fin&&typeof s.fin==="object"){ for(var f in def.fin){ if(s.fin[f]!==undefined&&s.fin[f]!==null) out.fin[f]=s.fin[f]; } }
+  if(s.fx&&typeof s.fx==="object"){ for(var x in def.fx){ if(s.fx[x]!==undefined&&s.fx[x]!==null) out.fx[x]=s.fx[x]; } }
   return out;
 }
 function saveData(){
@@ -715,9 +733,11 @@ function currentBalance(){
 }
 // 計画/トレード共通の損益計算（入力オブジェクトから）
 function calcFromInputs(o){
-  // o: {dir, entry, sl, tp, lot, contractSize, balance}
+  // o: {dir, entry, sl, tp, lot, contractSize, balance, fxRate}
+  // fxRate は損益（建値通貨）→ 口座通貨 の掛け率。未指定・不正なら 1（＝従来どおり）
   var dir=o.dir, entry=toNum(o.entry), sl=toNum(o.sl), tp=toNum(o.tp),
       lot=toNum(o.lot), cs=toNum(o.contractSize), bal=toNum(o.balance);
+  var fx=toNum(o.fxRate); if(!isNum(fx)||fx<=0) fx=1;
   var out={
     slDist:null, tpDist:null, plannedLoss:null, plannedProfit:null,
     riskPct:null, rr:null, recLot:null, lotDiff:null,
@@ -734,21 +754,26 @@ function calcFromInputs(o){
     if(dir==="short" && tp>=entry) out.errTP="ショートのTPはエントリーより下です";
     out.tpDist=Math.abs(tp-entry);
   }
-  if(isNum(out.slDist)&&isNum(lot)&&lot>0){ out.plannedLoss=out.slDist*lot*cs; }
-  if(isNum(out.tpDist)&&isNum(lot)&&lot>0){ out.plannedProfit=out.tpDist*lot*cs; }
+  out.fxRate=fx;
+  if(isNum(out.slDist)&&isNum(lot)&&lot>0){ out.plannedLoss=out.slDist*lot*cs*fx; }
+  if(isNum(out.tpDist)&&isNum(lot)&&lot>0){ out.plannedProfit=out.tpDist*lot*cs*fx; }
   if(isNum(out.plannedLoss)&&isNum(bal)&&bal>0){ out.riskPct=out.plannedLoss/bal*100; }
   if(isNum(out.plannedProfit)&&isNum(out.plannedLoss)&&out.plannedLoss>0){ out.rr=out.plannedProfit/out.plannedLoss; }
   // 推奨ロット（内部リスク%に収める）
   var riskAmt = (isNum(bal)&&bal>0) ? bal*(toNum(DB.settings.internalRiskPct)||1)/100 : null;
   if(isNum(riskAmt)&&isNum(out.slDist)&&out.slDist>0){
-    out.recLot=riskAmt/(out.slDist*cs);
+    out.recLot=riskAmt/(out.slDist*cs*fx);
     if(isNum(lot)) out.lotDiff=lot-out.recLot;
   }
   return out;
 }
 // 保存済みトレードの計算
 function calcTrade(t){
-  var c=calcFromInputs({dir:t.dir,entry:t.entry,sl:t.sl,tp:t.tp,lot:t.lot,contractSize:t.contractSize,balance:t.balanceAtEntry});
+  // レートはエントリー時の値を記録に焼いてある（残高と同じ考え方）。
+  // 持っていない過去の記録は 1＝換算なしのまま動かさない。
+  var c=calcFromInputs({dir:t.dir,entry:t.entry,sl:t.sl,tp:t.tp,lot:t.lot,
+                        contractSize:t.contractSize,balance:t.balanceAtEntry,
+                        fxRate:isNum(toNum(t.fxRate))?toNum(t.fxRate):1});
   // 実現R = 実現損益 / 予定損失（予定損失0/未定義なら計算しない）
   c.realizedR=null;
   var pl=toNum(t.realizedPL);
@@ -883,6 +908,8 @@ function render(){
   if(TAB==="brief") updateBriefDirtyMark();
   if(TAB==="growth") drawGrowthCharts();
   if(TAB==="home") drawEquitySpark();
+  updateFxLine();
+  ensureFxRate();          // 期限切れのときだけ動く
   // 初期化で高さが変わるので、タブを移ったときはもう一度そろえる
   if(!sameTab && window.requestAnimationFrame){
     var t=TAB;
@@ -986,6 +1013,255 @@ function meter(lab,right,pct,color){
   return "<div class='meter'><div class='lab'><span>"+esc(lab)+"</span><span class='tabular'>"+right+"</span></div>"+
     "<div class='bar'><div class='fill' style='width:"+Math.max(0,Math.min(100,pct))+"%;background:"+color+"'></div></div></div>";
 }
+
+/* =========================================================================
+   fxRateProvider — 為替レート取得の抽象化層
+   -------------------------------------------------------------------------
+   marketDataProvider と同じ作りにしてある（register で取得先を足す／
+   失敗とタイムアウトは層の中で握って必ず解決する／取れない値は null）。
+   将来この2つを1つの取得層にまとめられるよう、形とエラーの扱いを揃えた。
+
+     fxRateProvider.register(name, {
+       label, note,
+       fetch: function(req){ return Promise<{base, rates:{JPY:156.1,…}, at}>; }
+     });
+
+   req      : { base:"USD" }
+   snapshot : { base, rates:{通貨コード:数値}, at:ISO文字列, source, notes[] }
+              取得できなければ rates は null。推測値は入れない。
+   ========================================================================= */
+var FX_SOURCES=["erapi","currencyapi"];   // 上から順に試す
+var FX_TIMEOUT_MS=12000;
+var FX_TTL_MS=10*60*1000;      // 10分は取り直さない（日次更新のレートなので十分）
+
+function emptyRateSnapshot(req){
+  return { base:(req&&req.base)||"USD", rates:null, at:null, source:"", notes:[] };
+}
+// fetch を Promise でくるむ。タイムアウトと失敗はここで吸収する
+function fxFetchJson(url){
+  return new Promise(function(resolve,reject){
+    if(typeof fetch!=="function"){ reject(new Error("fetch が使えません")); return; }
+    var done=false;
+    var timer=setTimeout(function(){ if(!done){ done=true; reject(new Error("タイムアウト")); } },FX_TIMEOUT_MS);
+    fetch(url,{cache:"no-store"}).then(function(r){
+      if(!r.ok) throw new Error("HTTP "+r.status);
+      return r.json();
+    }).then(function(j){
+      if(done) return; done=true; clearTimeout(timer); resolve(j);
+    })["catch"](function(e){
+      if(done) return; done=true; clearTimeout(timer); reject(e);
+    });
+  });
+}
+var fxRateProvider=(function(){
+  var reg={}, order=[];
+  return {
+    register:function(name,impl){
+      if(!name||!impl||typeof impl.fetch!=="function") return false;
+      if(!reg[name]) order.push(name);
+      reg[name]=impl; return true;
+    },
+    has:function(name){ return !!reg[name]; },
+    list:function(){ return order.map(function(n){ return {name:n,label:reg[n].label||n,note:reg[n].note||""}; }); },
+    fetch:function(name,req){
+      var impl=reg[name];
+      if(!impl){
+        var miss=emptyRateSnapshot(req);
+        miss.notes=["取得先「"+name+"」が見つかりません。"];
+        return Promise.resolve({ok:false,snapshot:miss});
+      }
+      return new Promise(function(resolve){
+        try{
+          Promise.resolve(impl.fetch(req)).then(function(res){
+            var snap=emptyRateSnapshot(req);
+            if(res&&typeof res==="object"){
+              if(typeof res.base==="string"&&res.base) snap.base=res.base;
+              if(typeof res.at==="string") snap.at=res.at;
+              if(res.rates&&typeof res.rates==="object"){
+                var out={}, any=false;
+                for(var k in res.rates){
+                  var v=toNum(res.rates[k]);
+                  if(isNum(v)&&v>0){ out[String(k).toUpperCase()]=v; any=true; }
+                }
+                if(any) snap.rates=out;
+              }
+            }
+            snap.source=impl.label||name;
+            if(!snap.rates) snap.notes=["レートを読み取れませんでした。"];
+            resolve({ok:!!snap.rates,snapshot:snap});
+          },function(err){
+            var e=emptyRateSnapshot(req);
+            e.source=impl.label||name;
+            e.notes=["取得に失敗しました："+((err&&err.message)||String(err))];
+            resolve({ok:false,snapshot:e});
+          });
+        }catch(err2){
+          var e2=emptyRateSnapshot(req);
+          e2.source=impl.label||name;
+          e2.notes=["取得に失敗しました："+((err2&&err2.message)||String(err2))];
+          resolve({ok:false,snapshot:e2});
+        }
+      });
+    },
+    // 登録順に試して、最初に取れたものを返す
+    fetchFirst:function(names,req){
+      var self=this, list=(names&&names.length?names:order).slice(), notes=[];
+      return new Promise(function(resolve){
+        (function step(){
+          if(!list.length){
+            var none=emptyRateSnapshot(req); none.notes=notes;
+            resolve({ok:false,snapshot:none}); return;
+          }
+          var n=list.shift();
+          self.fetch(n,req).then(function(r){
+            if(r.ok){ resolve(r); return; }
+            notes=notes.concat(r.snapshot.notes||[]);
+            step();
+          });
+        })();
+      });
+    }
+  };
+})();
+
+/* ---------- 同梱の取得先（どちらも無料・キー不要・CORS 許可） ---------- */
+// どちらも1日1回の更新。日中は動かないが、リスク計算の精度としては十分。
+fxRateProvider.register("erapi",{
+  label:"exchangerate-api（open.er-api.com）",
+  note:"無料・キー不要。1日1回更新。",
+  fetch:function(req){
+    return fxFetchJson("https://open.er-api.com/v6/latest/"+encodeURIComponent(req.base||"USD"))
+      .then(function(j){
+        if(!j||j.result!=="success") throw new Error("応答が success ではありません");
+        return {base:j.base_code||req.base, rates:j.rates,
+                at:j.time_last_update_utc?new Date(j.time_last_update_utc).toISOString():null};
+      });
+  }
+});
+fxRateProvider.register("currencyapi",{
+  label:"currency-api（jsDelivr）",
+  note:"無料・キー不要。1日1回更新。erapi が落ちたときの控え。",
+  fetch:function(req){
+    var base=String(req.base||"USD").toLowerCase();
+    return fxFetchJson("https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@latest/v1/currencies/"+base+".min.json")
+      .then(function(j){
+        var m=j&&j[base];
+        if(!m||typeof m!=="object") throw new Error("応答の形が違います");
+        return {base:req.base, rates:m, at:j.date?new Date(j.date+"T00:00:00Z").toISOString():null};
+      });
+  }
+});
+
+/* =========================================================================
+   口座通貨への換算
+   XAUUSD の損益は USD で出るが、口座が JPY なら JPY に直さないと
+   リスク率が意味を持たない。ここはその1点だけを担う。
+   ========================================================================= */
+var FX={ fetching:false, lastError:"" };
+
+function acctCurrency(){ return String((DB&&DB.settings&&DB.settings.currency)||"USD").toUpperCase(); }
+// 銘柄の建値通貨。XAUUSD / EURUSD のように末尾3文字が通貨コードならそれ
+function quoteCurrencyOf(symbol){
+  var s=String(symbol||"").toUpperCase().replace(/[^A-Z]/g,"");
+  var m=/([A-Z]{3})$/.exec(s);
+  return m?m[1]:"USD";
+}
+function fxSettings(){
+  if(!DB.settings.fx||typeof DB.settings.fx!=="object") DB.settings.fx=defaultSettings().fx;
+  return DB.settings.fx;
+}
+// いま使える USD → 口座通貨 のレート（取得値 → 手動 の順）。無ければ null
+function usdToAcctRate(){
+  var a=acctCurrency(), f=fxSettings();
+  if(a==="USD") return 1;
+  if(f.quote===a && isNum(f.rate) && f.rate>0) return f.rate;
+  if(isNum(f.manual) && f.manual>0) return f.manual;
+  return null;
+}
+// 損益（建値通貨）→ 口座通貨 の掛け率。換算できないときは null
+function fxRateFor(symbol){
+  var q=quoteCurrencyOf(symbol), a=acctCurrency();
+  if(q===a) return 1;
+  if(q!=="USD") return null;          // USD建て以外の換算は未対応
+  return usdToAcctRate();
+}
+// 計算に実際に使う値。換算できないときは 1 のまま（画面側で断りを出す）
+function fxRateOrOne(symbol){ var r=fxRateFor(symbol); return isNum(r)&&r>0?r:1; }
+// 換算が要る場面かどうか（＝レート行を出すか）
+function fxNeeded(symbol){ return quoteCurrencyOf(symbol)!==acctCurrency(); }
+
+function fxCacheAgeMs(){
+  var f=fxSettings(); if(!f.at) return Infinity;
+  var t=new Date(f.at).getTime(); if(isNaN(t)) return Infinity;
+  return Date.now()-t;
+}
+// 取り直しが要るか。要らなければ何もしない（描画のたびに呼ばれる）
+function fxStale(){
+  var f=fxSettings();
+  if(f.quote!==acctCurrency()) return true;
+  if(!isNum(f.rate)||f.rate<=0) return true;
+  return fxCacheAgeMs()>FX_TTL_MS;
+}
+function ensureFxRate(force){
+  var f=fxSettings();
+  if(!f.auto && !force) return;
+  if(acctCurrency()==="USD") return;         // 換算が要らない
+  if(FX.fetching) return;
+  if(!force && !fxStale()) return;
+  var want=acctCurrency();
+  FX.fetching=true; updateFxLine();
+  fxRateProvider.fetchFirst(FX_SOURCES,{base:"USD"}).then(function(res){
+    FX.fetching=false;
+    var r=res.ok&&res.snapshot.rates?toNum(res.snapshot.rates[want]):null;
+    if(isNum(r)&&r>0){
+      // 取得中に口座通貨が変わっていたら書き込まない
+      if(acctCurrency()===want){
+        // ★ 期限は「こちらが取りに行った時刻」で見る。提供元の更新時刻を使うと、
+        //   1日1回しか動かないレートが常に期限切れ扱いになり、描画のたびに取りに行く。
+        f.rate=r; f.quote=want; f.at=now(); f.rateAt=res.snapshot.at||null;
+        f.source=res.snapshot.source||"";
+        FX.lastError="";
+        saveData();
+      }
+    }else{
+      // 直近成功値はそのまま残す（消さない）
+      FX.lastError=(res.snapshot.notes&&res.snapshot.notes[0])||"レートを取得できませんでした";
+    }
+    updateFxLine();
+    if(TAB==="plan") renderPlanCalc();      // 入力を壊さないよう計算欄だけ描き直す
+  });
+}
+// 「USDJPY 156.18 ・最終取得 13:52」の1行
+function fxLineHtml(symbol){
+  var a=acctCurrency(), q=quoteCurrencyOf(symbol||"XAUUSD");
+  if(q===a) return "";
+  if(q!=="USD") return "<span class='fxwarn'>"+esc(q+"建ての"+a+"換算には未対応です。1 で計算しています")+"</span>";
+  var f=fxSettings(), r=usdToAcctRate();
+  if(FX.fetching && !isNum(r)) return "レートを取得中…";
+  if(!isNum(r)) return "<span class='fxwarn'>"+esc("USD"+a+" を取得できていないため 1 で計算しています")+"</span>";
+  var used=(f.quote===a&&isNum(f.rate)&&f.rate>0)?"auto":"manual";
+  var h="USD"+esc(a)+" <b class='tabular'>"+fmtMoney(r,2)+"</b>";
+  if(used==="auto"){
+    h+=" ・最終取得 "+esc(fmtWhen(f.at));
+    if(f.rateAt) h+=" ・提供元の更新 "+esc(fmtWhen(f.rateAt));
+    if(fxCacheAgeMs()>24*60*60*1000) h+=" <span class='fxwarn'>（1日以上取得できていません）</span>";
+  }else{
+    h+=" ・手動設定";
+  }
+  if(FX.fetching) h+=" ・更新中…";
+  else if(FX.lastError) h+=" <span class='fxwarn'>・更新できず直近値を使用</span>";
+  return h;
+}
+function updateFxLine(){
+  var els=document.querySelectorAll(".fxline");
+  Array.prototype.forEach.call(els,function(el){
+    var sym=el.getAttribute("data-sym")||"XAUUSD";
+    // 計画画面は入力中の銘柄に追従させる（打ち替えても再描画されないため）
+    if(sym==="@plan") sym=(typeof PLAN==="object"&&PLAN&&PLAN.symbol)||"XAUUSD";
+    el.innerHTML=fxLineHtml(sym);
+  });
+}
+window.refreshFxRate=function(){ FX.lastError=""; ensureFxRate(true); toast("レートを取得しています"); };
 
 /* =========================================================================
    セッション時間（サマータイム対応）
@@ -1912,7 +2188,9 @@ function viewPlan(){
   h+=field("TP価格","<input type='number' inputmode='decimal' step='any' id='p_tp' value='"+esc(PLAN.tp)+"' placeholder='0.00'>","p_tp_err");
   h+="</div>";
   h+=field("ロット","<input type='number' inputmode='decimal' step='any' id='p_lot' value='"+esc(PLAN.lot)+"'>");
-  h+="<div class='smallnote'>残高 "+fmtMoney(toNum(PLAN.balance)||0,0)+"・契約サイズ "+esc(PLAN.contractSize)+" で計算（設定で変更）</div>";
+  h+="<div class='smallnote'>残高 "+fmtMoney(toNum(PLAN.balance)||0,0)+" "+esc(acctCurrency())+
+     "・契約サイズ "+esc(PLAN.contractSize)+" で計算（設定で変更）</div>";
+  h+="<div class='smallnote fxline' data-sym='@plan'></div>";
   h+="</div>";
 
   // ライブ計算
@@ -1996,8 +2274,10 @@ function renderPlanBriefHint(){
 }
 function renderPlanCalc(){
   renderPlanBriefHint();
+  updateFxLine();
   var box=document.getElementById("p_calc"); if(!box) return;
-  var c=calcFromInputs({dir:PLAN.dir,entry:PLAN.entry,sl:PLAN.sl,tp:PLAN.tp,lot:PLAN.lot,contractSize:PLAN.contractSize,balance:PLAN.balance});
+  var c=calcFromInputs({dir:PLAN.dir,entry:PLAN.entry,sl:PLAN.sl,tp:PLAN.tp,lot:PLAN.lot,
+    contractSize:PLAN.contractSize,balance:PLAN.balance,fxRate:fxRateOrOne(PLAN.symbol)});
   // インラインエラー表示
   setErr("p_sl_err","p_sl",c.errSL); setErr("p_tp_err","p_tp",c.errTP);
   var s=DB.settings;
@@ -2073,7 +2353,8 @@ window.clearPlan=function(){ if(confirm("入力内容をクリアしますか？
 
 function validatePlanForEntry(){
   syncPlanFromDOM();
-  var c=calcFromInputs({dir:PLAN.dir,entry:PLAN.entry,sl:PLAN.sl,tp:PLAN.tp,lot:PLAN.lot,contractSize:PLAN.contractSize,balance:PLAN.balance});
+  var c=calcFromInputs({dir:PLAN.dir,entry:PLAN.entry,sl:PLAN.sl,tp:PLAN.tp,lot:PLAN.lot,
+    contractSize:PLAN.contractSize,balance:PLAN.balance,fxRate:fxRateOrOne(PLAN.symbol)});
   if(toNum(PLAN.entry)===null){ toast("エントリー価格を入力して下さい"); return null; }
   if(toNum(PLAN.sl)===null){ toast("SL価格を入力して下さい"); return null; }
   if(c.errSL){ toast(c.errSL); return null; }
@@ -2094,6 +2375,9 @@ function planToRecord(status){
     h4env:PLAN.h4env, m15purple:PLAN.m15purple, trigger:PLAN.trigger, pattern:PLAN.pattern,
     entry:toNum(PLAN.entry), sl:toNum(PLAN.sl), tp:toNum(PLAN.tp),
     lot:toNum(PLAN.lot), balanceAtEntry:toNum(PLAN.balance), contractSize:toNum(PLAN.contractSize),
+    // 残高と同じで、あとでレートが動いても当時のリスク率・R が揺れないよう焼き込む
+    fxRate:fxRateFor(symbol),
+    acctCurrency:acctCurrency(),
     sawLower:PLAN.sawLower, memo:PLAN.memo, tags:PLAN.tags||[],
     briefId:(brief&&brief.id)||null,
     // 決済系（未設定）
@@ -2176,7 +2460,9 @@ function fmtWhen(iso){ if(!iso) return ""; var d=new Date(iso); if(isNaN(d)) ret
 function tradeCard(t,tab){
   var c=calcTrade(t);
   var h="<div class='tcard'>";
-  h+="<div class='th'><div class='sym'>"+esc(t.symbol)+" "+dirTag(t.dir)+"</div><div class='when'>"+fmtWhen(t.createdAt)+"</div></div>";
+  h+="<div class='th'><div class='sym'>"+esc(t.symbol)+" "+dirTag(t.dir)+
+     (isNum(c.rr)?"<span class='tag-rr'>RR 1:"+c.rr.toFixed(2)+"</span>":"")+
+     "</div><div class='when'>"+fmtWhen(t.createdAt)+"</div></div>";
   h+="<div class='tgrid'>";
   h+=ti("エントリー", isNum(t.entry)?t.entry:"—");
   h+=ti("SL", isNum(t.sl)?t.sl:"—");
@@ -2197,7 +2483,6 @@ function tradeCard(t,tab){
 
   // メタ pill
   var pills=[];
-  if(isNum(c.rr)) pills.push("RR 1:"+c.rr.toFixed(2));
   if(t.pattern) pills.push(labelPat(t.pattern));
   if(t.h4env) pills.push(labelH4(t.h4env));
   if(t.m15purple&&t.m15purple!=="na") pills.push(labelM15(t.m15purple));
@@ -2251,7 +2536,8 @@ window.promoteDraft=function(id){ var t=findDraft(id); if(!t) return; t.status="
 /* ---------- 編集モーダル（保有中/下書き 内容編集） ---------- */
 var EDIT={};
 function editForm(t,isDraft){
-  EDIT={id:t.id,isDraft:isDraft,dir:t.dir,h4env:t.h4env,m15purple:t.m15purple,trigger:t.trigger,pattern:t.pattern,sawLower:t.sawLower};
+  EDIT={id:t.id,isDraft:isDraft,dir:t.dir,h4env:t.h4env,m15purple:t.m15purple,trigger:t.trigger,pattern:t.pattern,sawLower:t.sawLower,
+        fxRate:isNum(toNum(t.fxRate))?toNum(t.fxRate):1};
   var dtLocal = t.createdAt ? toLocalInput(t.createdAt) : nowLocalInput();
   var h="<h3>"+(isDraft?"下書きを編集":"トレードを編集")+"</h3>";
   h+=field("日時","<input type='datetime-local' id='e_dt' value='"+esc(dtLocal)+"'>");
@@ -2302,7 +2588,9 @@ window.saveEdit=function(){
   if(!t) return;
   var entry=toNum(g("e_entry")),sl=toNum(g("e_sl")),tp=toNum(g("e_tp"));
   // 方向チェック
-  var c=calcFromInputs({dir:EDIT.dir,entry:entry,sl:sl,tp:tp,lot:toNum(g("e_lot")),contractSize:toNum(g("e_cs")),balance:toNum(g("e_bal"))});
+  var c=calcFromInputs({dir:EDIT.dir,entry:entry,sl:sl,tp:tp,lot:toNum(g("e_lot")),
+    contractSize:toNum(g("e_cs")),balance:toNum(g("e_bal")),
+    fxRate:isNum(toNum(EDIT.fxRate))?toNum(EDIT.fxRate):1});
   if(c.errSL){ setErr("e_sl_err","e_sl",c.errSL); return; } else setErr("e_sl_err","e_sl",null);
   if(c.errTP){ setErr("e_tp_err","e_tp",c.errTP); return; } else setErr("e_tp_err","e_tp",null);
   t.dir=EDIT.dir; t.symbol=g("e_sym")||t.symbol;
@@ -2672,13 +2960,35 @@ function viewSettings(){
 
   h+="<div class='sect-title'>基本</div><div class='card'>";
   h+=field("アプリ名","<input type='text' id='s_appName' value='"+esc(s.appName)+"'>");
-  h+="<div class='row2'>"+field("表示通貨","<input type='text' id='s_currency' value='"+esc(s.currency)+"'>")+
+  var curOpts=["JPY","USD","EUR","GBP","AUD","CHF"];
+  if(curOpts.indexOf(acctCurrency())<0) curOpts.unshift(acctCurrency());
+  h+="<div class='row2'>"+
+     field("口座通貨","<select id='s_currency'>"+curOpts.map(function(o){
+       return "<option value='"+esc(o)+"'"+(acctCurrency()===o?" selected":"")+">"+esc(o)+"</option>";
+     }).join("")+"</select>")+
      field("口座名","<input type='text' id='s_accName' value='"+esc(s.accountName)+"'>")+"</div>";
   h+=field("口座タイプ","<input type='text' id='s_accType' value='"+esc(s.accountType)+"'>");
   h+="<div class='row2'>"+field("初期残高","<input type='number' inputmode='decimal' step='any' id='s_init' value='"+esc(s.initialBalance)+"'>")+
      field("契約サイズ","<input type='number' inputmode='decimal' step='any' id='s_cs' value='"+esc(s.contractSize)+"'>")+"</div>";
   h+=field("現在残高の計算方法","<select id='s_balmode'><option value='auto' "+(s.balanceMode==="auto"?"selected":"")+">自動（初期残高＋決済損益）</option><option value='manual' "+(s.balanceMode==="manual"?"selected":"")+">手入力</option></select>");
   h+=field("手入力残高（手入力時のみ）","<input type='number' inputmode='decimal' step='any' id='s_manual' value='"+esc(s.manualBalance)+"' placeholder='"+Math.round(currentBalance())+"'>");
+  h+="</div>";
+
+  h+="<div class='sect-title'>為替レート</div><div class='card'>";
+  if(acctCurrency()==="USD"){
+    h+="<div class='smallnote' style='margin:0 0 11px'>口座通貨が USD なので、USD建ての銘柄では換算しません（レート 1）。</div>";
+  }else{
+    h+="<div class='smallnote' style='margin:0 0 11px'>XAUUSD のような USD建ての銘柄は損益が USD で出ます。"+
+       "口座通貨（"+esc(acctCurrency())+"）に直さないと、予定損失・リスク率・推奨ロットが合いません。</div>";
+  }
+  var fxs=fxSettings();
+  h+="<div class='field'><label>自動取得</label><label class='chk'><input type='checkbox' id='s_fxauto'"+
+     (fxs.auto?" checked":"")+"><span>起動時と画面に戻ったときに取得する（10分はキャッシュ）</span></label></div>";
+  h+=field("手動レート（自動が取れないときの控え・任意）",
+     "<input type='number' inputmode='decimal' step='any' id='s_fxmanual' value='"+esc(fxs.manual)+"' placeholder='例）156.20'>");
+  h+="<div class='smallnote fxline' data-sym='XAUUSD' style='margin:0 0 11px'></div>";
+  if(acctCurrency()!=="USD") h+="<button class='btn ghost sm' onclick='refreshFxRate()'>いま取得する</button>";
+  if(fxs.source) h+="<div class='smallnote'>取得元 "+esc(fxs.source)+"。無料の公開レートで、更新は1日1回です。日中の変動は反映されません。</div>";
   h+="</div>";
 
   h+="<div class='sect-title'>内部ルール（自主設定）</div><div class='card'>";
@@ -2730,7 +3040,14 @@ function viewSettings(){
 window.saveSettings=function(){
   var g=function(x){var e=document.getElementById(x);return e?e.value:"";};
   var s=DB.settings;
-  s.appName=g("s_appName")||"ぼぶる"; s.currency=g("s_currency")||"USD";
+  s.appName=g("s_appName")||"ぼぶる";
+  var prevCur=s.currency;
+  s.currency=(g("s_currency")||"USD").toUpperCase();
+  var fxa=document.getElementById("s_fxauto"); if(fxa) s.fx.auto=fxa.checked;
+  s.fx.manual=g("s_fxmanual")===""?null:toNum(g("s_fxmanual"));
+  if(prevCur!==s.currency){
+    s.fx.rate=null; s.fx.at=null; s.fx.rateAt=null; s.fx.quote=""; s.fx.source=""; FX.lastError="";
+  }
   s.accountName=g("s_accName"); s.accountType=g("s_accType");
   s.initialBalance=toNum(g("s_init")); s.contractSize=toNum(g("s_cs"))||100;
   s.balanceMode=g("s_balmode"); s.manualBalance=g("s_manual")===""?null:toNum(g("s_manual"));
@@ -2988,6 +3305,10 @@ function boot(){
     b.addEventListener("click",function(){ TAB=b.getAttribute("data-tab"); if(TAB!=="plan"){} render(); });
   });
   bindBriefLiveSync();
+  // 画面に戻ってきたら、期限が切れていればレートを取り直す
+  document.addEventListener("visibilitychange",function(){
+    if(!document.hidden) ensureFxRate();
+  });
   window.addEventListener("beforeunload",function(e){
     // 保存していない環境認識があるまま閉じる／再読込するのを止める
     if(!briefDirty()) return;

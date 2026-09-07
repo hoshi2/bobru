@@ -560,6 +560,215 @@ group("10. スクロール位置");
   await page.close();
 }
 
+/* =======================================================================
+   11. 口座通貨への換算（USDJPY）
+   ======================================================================= */
+group("11. 口座通貨への換算");
+{
+  const page = await open();
+  // 本物のAPIは叩かない。取得層に差し込んだ偽の取得先で往復を見る
+  const stub = (rate) => page.evaluate((r) => {
+    window._fxCalls = 0;
+    fxRateProvider.register("stub", { label: "テスト取得先", fetch: () => {
+      window._fxCalls++;
+      return Promise.resolve({ base: "USD", rates: { JPY: r }, at: "2026-09-07T00:00:00.000Z" });
+    }});
+    fxRateProvider.register("stub_ng", { label: "落ちる取得先", fetch: () => Promise.reject(new Error("network")) });
+    FX_SOURCES = ["stub"];
+  }, rate);
+
+  ok("建値通貨を銘柄から読む", await page.evaluate(() =>
+    quoteCurrencyOf("XAUUSD") === "USD" && quoteCurrencyOf("EURJPY") === "JPY" && quoteCurrencyOf("US30") === "USD"));
+
+  // --- USD口座（既定）は今までどおり ---
+  const usd = await page.evaluate(() => {
+    DB.settings.currency = "USD";
+    const c = calcFromInputs({ dir:"short", entry:4414.17, sl:4421.8, tp:4391.18, lot:2,
+      contractSize:100, balance:50000000, fxRate:fxRateOrOne("XAUUSD") });
+    return { rate: fxRateFor("XAUUSD"), loss: Math.round(c.plannedLoss), needed: fxNeeded("XAUUSD") };
+  });
+  ok("USD口座は換算しない（従来の値のまま）", usd.rate === 1 && usd.loss === 1526 && usd.needed === false);
+
+  // --- JPY口座 + 自動取得 ---
+  await stub(156.2);
+  const jpy = await page.evaluate(async () => {
+    DB.settings.currency = "JPY";
+    DB.settings.fx = { auto:true, manual:null, quote:"", rate:null, at:null, rateAt:null, source:"" };
+    ensureFxRate(true);
+    await new Promise(r => setTimeout(r, 300));
+    const c = calcFromInputs({ dir:"short", entry:4414.17, sl:4421.8, tp:4391.18, lot:2,
+      contractSize:100, balance:50000000, fxRate:fxRateOrOne("XAUUSD") });
+    return { rate: fxRateFor("XAUUSD"), loss: Math.round(c.plannedLoss),
+             riskPct: c.riskPct, recLot: c.recLot, quote: DB.settings.fx.quote,
+             src: DB.settings.fx.source, calls: window._fxCalls };
+  });
+  ok("JPY口座はレートを取得して換算する", jpy.rate === 156.2 && jpy.quote === "JPY" && jpy.calls === 1);
+  ok("期限は取得した時刻で見る（提供元の更新時刻は別に持つ）", await page.evaluate(() =>
+     DB.settings.fx.rateAt === "2026-09-07T00:00:00.000Z" &&
+     Math.abs(Date.now() - new Date(DB.settings.fx.at).getTime()) < 60000));
+  ok("予定損失が口座通貨になる", jpy.loss === Math.round(7.63 * 2 * 100 * 156.2));
+  ok("リスク率が意味のある値になる（0.00%でなくなる）",
+     Math.abs(jpy.riskPct - (7.63 * 2 * 100 * 156.2) / 50000000 * 100) < 1e-9 && jpy.riskPct > 0.4);
+  ok("推奨ロットも換算後で出る",
+     Math.abs(jpy.recLot - (50000000 * 0.01) / (7.63 * 100 * 156.2)) < 1e-6);
+
+  // --- キャッシュ ---
+  const cached = await page.evaluate(async () => {
+    ensureFxRate(); await new Promise(r => setTimeout(r, 150));
+    return window._fxCalls;
+  });
+  ok("10分はキャッシュを使う（取り直さない）", cached === 1);
+  const forced = await page.evaluate(async () => {
+    ensureFxRate(true); await new Promise(r => setTimeout(r, 300));
+    return window._fxCalls;
+  });
+  ok("手動更新は取り直す", forced === 2);
+
+  // --- 失敗時は直近成功値を残す ---
+  const failed = await page.evaluate(async () => {
+    FX_SOURCES = ["stub_ng"];
+    ensureFxRate(true);
+    await new Promise(r => setTimeout(r, 400));
+    return { rate: fxRateFor("XAUUSD"), err: FX.lastError };
+  });
+  ok("取得に失敗しても直近値を捨てない", failed.rate === 156.2 && failed.err.length > 0);
+
+  // --- 手動レートは自動が無いときの控え ---
+  const manual = await page.evaluate(async () => {
+    DB.settings.fx = { auto:false, manual:150, quote:"", rate:null, at:null, source:"" };
+    return { rate: fxRateFor("XAUUSD"), line: fxLineHtml("XAUUSD") };
+  });
+  ok("自動値が無ければ手動レートを使う", manual.rate === 150 && manual.line.includes("手動設定"));
+
+  // --- 取れないときは 1 で計算し、そのことを画面に出す ---
+  const none = await page.evaluate(() => {
+    DB.settings.fx = { auto:false, manual:null, quote:"", rate:null, at:null, source:"" };
+    return { r: fxRateFor("XAUUSD"), used: fxRateOrOne("XAUUSD"), line: fxLineHtml("XAUUSD") };
+  });
+  ok("レートが無いときは 1 で計算し、断りを出す",
+     none.r === null && none.used === 1 && none.line.includes("1 で計算"));
+
+  // --- 記録に焼いたレートを使う（残高と同じ考え方） ---
+  await stub(156.2);
+  const baked = await page.evaluate(async () => {
+    DB.settings.fx = { auto:true, manual:null, quote:"", rate:null, at:null, source:"" };
+    ensureFxRate(true); await new Promise(r => setTimeout(r, 300));
+    TAB = "plan"; PLAN = freshPlan();
+    PLAN.symbol = "XAUUSD"; PLAN.dir = "short";
+    PLAN.entry = "4414.17"; PLAN.sl = "4421.8"; PLAN.tp = "4391.18"; PLAN.lot = "2";
+    const rec = planToRecord("open");
+    DB.trades = [rec, { id:"old", status:"open", symbol:"XAUUSD", dir:"short", entry:4414.17,
+      sl:4421.8, tp:4391.18, lot:2, contractSize:100, balanceAtEntry:50000000,
+      createdAt:new Date().toISOString(), tags:[] }];
+    // レートが動いても過去の記録は動かない
+    DB.settings.fx.rate = 200;
+    return { baked: rec.fxRate, cur: rec.acctCurrency,
+             newLoss: Math.round(calcTrade(DB.trades[0]).plannedLoss),
+             oldLoss: Math.round(calcTrade(DB.trades[1]).plannedLoss) };
+  });
+  ok("新しい記録にエントリー時のレートを焼く", baked.baked === 156.2 && baked.cur === "JPY");
+  ok("あとでレートが動いても記録の数字は揺れない", baked.newLoss === Math.round(7.63 * 2 * 100 * 156.2));
+  ok("レートを持たない過去の記録は 1 のまま（数字が勝手に変わらない）", baked.oldLoss === 1526);
+
+  // --- 設定が保存され、リロードしても残る ---
+  await page.evaluate(() => { DB.settings.currency = "JPY"; saveData(); TAB = "settings"; render(); });
+  await page.waitForTimeout(150);
+  ok("設定画面に口座通貨のプルダウンが出る",
+     (await page.$eval("#s_currency", e => e.value)) === "JPY");
+  ok("使っているレートが画面に出る",
+     (await page.$eval("#app .fxline", e => e.textContent)).includes("USDJPY"));
+
+  // 計画画面のレート行は入力中の銘柄に追従する
+  await page.evaluate(() => {
+    DB.settings.fx = { auto:false, manual:156.2, quote:"", rate:null, at:null, rateAt:null, source:"" };
+    TAB = "plan"; PLAN = freshPlan(); PLAN.symbol = "XAUUSD"; render();
+  });
+  await page.waitForTimeout(150);
+  const planLine = await page.$eval("#app .fxline", e => e.textContent);
+  await page.fill("#p_sym", "EURJPY");
+  await page.waitForTimeout(150);
+  const planLine2 = await page.$eval("#app .fxline", e => e.textContent);
+  ok("計画画面のレート行が銘柄に追従する",
+     planLine.includes("USDJPY") && planLine2 === "" && !planLine.includes("LAN"));
+  await page.reload();
+  await page.waitForSelector("#app .topbar");
+  const kept = await page.evaluate(() => ({ cur: DB.settings.currency, rate: DB.settings.fx.rate, q: DB.settings.fx.quote }));
+  ok("口座通貨とレートがリロード後も残る", kept.cur === "JPY" && kept.rate === 200 && kept.q === "JPY");
+
+  // --- 口座通貨を変えたら取得値は捨てる ---
+  const swapped = await page.evaluate(() => {
+    DB.settings.fx.auto = false;
+    TAB = "settings"; render();
+    document.getElementById("s_currency").value = "USD";
+    saveSettings();
+    return { rate: DB.settings.fx.rate, q: DB.settings.fx.quote, f: fxRateFor("XAUUSD") };
+  });
+  ok("口座通貨を変えたら古いレートを持ち越さない", swapped.rate === null && swapped.q === "" && swapped.f === 1);
+  await page.close();
+}
+
+/* =======================================================================
+   12. 実APIのレスポンスを読めるか（本物の応答を写した固定データ）
+   ======================================================================= */
+group("12. レート取得先の応答解釈");
+{
+  const page = await open();
+  // 通信はせず、実際の API から取った応答をそのまま window.fetch に差し込む。
+  // 「取得先の応答の形が変わったら気づける」ための固定データ。
+  const real = await page.evaluate(async () => {
+    const bodies = {
+      "open.er-api.com": {"result":"success","base_code":"USD",
+        "time_last_update_utc":"Mon, 07 Sep 2026 00:02:31 +0000",
+        "rates":{"JPY":156.177011,"EUR":0.861072}},
+      "cdn.jsdelivr.net": {"date":"2026-09-06","usd":{"jpy":156.24969077,"eur":0.86081177}},
+    };
+    const orig = window.fetch;
+    window.fetch = (url) => {
+      const key = Object.keys(bodies).find(k => String(url).includes(k));
+      if (!key) return Promise.reject(new Error("想定外のURL " + url));
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(bodies[key]) });
+    };
+    const a = await fxRateProvider.fetch("erapi", { base: "USD" });
+    const b = await fxRateProvider.fetch("currencyapi", { base: "USD" });
+    window.fetch = orig;
+    return {
+      aOk: a.ok, aJpy: a.snapshot.rates && a.snapshot.rates.JPY, aAt: a.snapshot.at, aSrc: a.snapshot.source,
+      bOk: b.ok, bJpy: b.snapshot.rates && b.snapshot.rates.JPY, bAt: b.snapshot.at,
+    };
+  });
+  ok("erapi の応答から USDJPY を読める", real.aOk && real.aJpy === 156.177011);
+  ok("erapi の更新時刻を ISO に直せる", real.aAt === "2026-09-07T00:02:31.000Z");
+  ok("currency-api の応答から USDJPY を読める（通貨コードは大文字に寄せる）",
+     real.bOk && real.bJpy === 156.24969077);
+  ok("currency-api の日付を ISO に直せる", real.bAt === "2026-09-06T00:00:00.000Z");
+
+  // 1つ目が落ちたら2つ目に回る
+  const failover = await page.evaluate(async () => {
+    const orig = window.fetch;
+    window.fetch = (url) => String(url).includes("open.er-api.com")
+      ? Promise.reject(new Error("down"))
+      : Promise.resolve({ ok: true, status: 200,
+          json: () => Promise.resolve({ date: "2026-09-06", usd: { jpy: 156.25 } }) });
+    const r = await fxRateProvider.fetchFirst(["erapi", "currencyapi"], { base: "USD" });
+    window.fetch = orig;
+    return { ok: r.ok, jpy: r.snapshot.rates && r.snapshot.rates.JPY, src: r.snapshot.source };
+  });
+  ok("1つ目が落ちたら控えの取得先に回る",
+     failover.ok && failover.jpy === 156.25 && failover.src.includes("jsDelivr"));
+
+  // 応答が壊れていても推測しない
+  const broken = await page.evaluate(async () => {
+    const orig = window.fetch;
+    window.fetch = () => Promise.resolve({ ok: true, status: 200,
+      json: () => Promise.resolve({ result: "error" }) });
+    const r = await fxRateProvider.fetch("erapi", { base: "USD" });
+    window.fetch = orig;
+    return { ok: r.ok, rates: r.snapshot.rates };
+  });
+  ok("応答が壊れていたら null（勝手な値を入れない）", broken.ok === false && broken.rates === null);
+  await page.close();
+}
+
 /* ---------- 後始末 ---------- */
 await browser.close();
 server.close();
