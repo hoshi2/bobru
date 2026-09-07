@@ -118,6 +118,33 @@ def order_sl_tp(mt5, order_ticket):
     return (None, None)
 
 
+def account_snapshot(acc):
+    """口座情報。MT5 が持っている数字だけを、そのまま写す。
+
+    profit は保有中の建玉の含み損益（Floating P/L）。
+    margin_level は証拠金維持率（%）で、建玉が無いときは 0 が返るので None にする。
+    """
+    if acc is None:
+        return None
+    lvl = float(getattr(acc, "margin_level", 0.0) or 0.0)
+    return {
+        "login": str(acc.login),
+        "server": acc.server,
+        "name": acc.name,
+        "company": getattr(acc, "company", ""),
+        "currency": acc.currency,
+        "leverage": int(acc.leverage or 0) or None,
+        "balance": float(acc.balance),
+        "equity": float(acc.equity),
+        "profit": float(acc.profit),                       # 含み損益
+        "credit": float(getattr(acc, "credit", 0.0) or 0.0),
+        "margin": float(acc.margin),
+        "marginFree": float(acc.margin_free),
+        "marginLevel": lvl if lvl > 0 else None,
+        "at": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
+    }
+
+
 def collect(mt5, days):
     acc = mt5.account_info()
     now = datetime.now(timezone.utc)
@@ -177,15 +204,7 @@ def collect(mt5, days):
         "version": 1,
         "source": "MT5 エージェント",
         "generatedAt": now.isoformat().replace("+00:00", "Z"),
-        "account": {
-            "login": str(acc.login) if acc else None,
-            "server": acc.server if acc else "",
-            "name": acc.name if acc else "",
-            "currency": acc.currency if acc else "",
-            "balance": float(acc.balance) if acc else None,
-            "equity": float(acc.equity) if acc else None,
-            "leverage": int(acc.leverage) if acc else None,
-        } if acc else None,
+        "account": account_snapshot(acc),
         "deals": deals,
         "positions": positions,
         "notes": [],

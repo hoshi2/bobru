@@ -911,7 +911,9 @@ group("14. MT5 取引同期");
      t1.memo === "" && t1.reviewMemo === "" && t1.learn === "");
   ok("口座通貨は MT5 の値を焼き込む", t1.acctCurrency === "USD");
   ok("MT5 由来の印がつく", t1.source === "mt5" && t1.mt5.entryDeal === "501");
-  ok("残高は分からないので空のまま", t1.balanceAtEntry === null);
+  // エントリー時の残高は「いまの残高 − その時刻以降の約定の増減」で戻す
+  //   100000 − (−14) − (2000−7−1.5) − (−7) = 98029.5
+  ok("エントリー時の残高を約定から逆算する", Math.abs(t1.balanceAtEntry - 98029.5) < 1e-9);
 
   const t2 = await page.evaluate(() => DB.trades.filter(t => t.mt5 && t.mt5.positionId === "310")[0]);
   ok("保有中の SL は建玉スナップショットの現在値が勝つ", t2.sl === 3318 && t2.dir === "short");
@@ -937,6 +939,9 @@ group("14. MT5 取引同期");
   });
   ok("追加の決済で建玉が閉じる（新しい記録は作らない）",
      closed.count === 2 && closed.rep.tradesCreated === 0 && closed.rep.tradesUpdated === 1);
+  // 口座情報が付いてこない回の約定は、まだこの残高に入っていないので巻き戻さない
+  ok("残高が古いままの回はエントリー時残高を動かさない",
+     Math.abs(closed.t.balanceAtEntry - 98029.5) < 1e-9);
   ok("決済価格は数量加重平均", closed.t.status === "closed" && closed.t.closePrice === 3315);
   ok("実現損益・手数料・スワップは MT5 の合計", 
      closed.t.realizedPL === 3000 && closed.t.fee === -28 && closed.t.swap === -3);
@@ -997,6 +1002,117 @@ group("14. MT5 取引同期");
     closed: DB.trades.filter(t => t.mt5 && t.mt5.positionId === "301")[0].realizedPL
   }));
   ok("リロードしても約定と記録が残る", after.deals === 7 && after.trades === 2 && after.closed === 3000);
+  await page.close();
+}
+
+/* =======================================================================
+   14b. MT5 の口座情報と Fintokei の残り許容額
+   ======================================================================= */
+group("14b. 口座情報と残り許容額");
+{
+  const page = await open();
+  const ACC = {
+    source: "テスト",
+    account: { login: "555", server: "Fintokei-Live", currency: "USD", leverage: 100,
+      balance: 102000, equity: 101300, profit: -700, margin: 3300, marginFree: 98000,
+      marginLevel: 3070, at: "2026-09-07T06:00:00.000Z" },
+    deals: [
+      // 当日：+1500 と −800（手数料・スワップ込み）
+      { ticket: 701, positionId: 601, time: Date.now() / 1000 - 3600, type: 0, entry: 0,
+        symbol: "XAUUSD", volume: 1, price: 3300, profit: 0, commission: -7, contractSize: 100 },
+      { ticket: 702, positionId: 601, time: Date.now() / 1000 - 1800, type: 1, entry: 1,
+        symbol: "XAUUSD", volume: 1, price: 3315, profit: 1500, commission: -7, swap: -1,
+        contractSize: 100 },
+      { ticket: 703, positionId: 602, time: Date.now() / 1000 - 1200, type: 1, entry: 0,
+        symbol: "XAUUSD", volume: 1, price: 3310, profit: 0, commission: -7, contractSize: 100 },
+      { ticket: 704, positionId: 602, time: Date.now() / 1000 - 600, type: 0, entry: 1,
+        symbol: "XAUUSD", volume: 1, price: 3318, profit: -800, commission: -7, swap: 0,
+        contractSize: 100 },
+    ],
+  };
+
+  const fs = await page.evaluate(async (acc) => {
+    DB.settings.initialBalance = 100000;
+    DB.settings.currency = "USD";
+    DB.settings.fin.dailyLossPct = 5;
+    DB.settings.fin.maxLossPct = 10;
+    DB.settings.fin.step1TargetPct = 8;
+    DB.settings.fin.dailyBasis = "dayStart";
+    DB.settings.fin.lossBasis = "initial";
+    DB.settings.fin.useEquity = true;
+    saveData();
+    const r = await tradeSyncProvider.fetch("paste", { text: JSON.stringify(acc) });
+    const rep = importDealBatch(r.batch);
+    return { rep, fs: finState(), bal: currentBalance() };
+  }, ACC);
+
+  ok("口座情報が保存される", fs.rep.accountUpdated === true);
+  ok("残高は MT5 の値になる（人が入れ直さない）", fs.bal === 102000 && fs.fs.source === "mt5");
+  ok("有効証拠金・含み損益・証拠金が入る",
+     fs.fs.equity === 101300 && fs.fs.floating === -700 &&
+     fs.fs.margin === 3300 && fs.fs.marginFree === 98000);
+  // 当日実現 = (0−7) + (1500−7−1) + (0−7) + (−800−7) = 671（手数料・スワップ込み）
+  const DAY = 671, START = 102000 - DAY;      // 前日終わりの残高 = 101329
+  ok("当日実現損益を約定から出す", Math.abs(fs.fs.todayRealized - DAY) < 1e-9);
+  ok("前日終わりの残高は残高から当日ぶんを戻したもの", Math.abs(fs.fs.dayStart - START) < 1e-9);
+  ok("前日比は含み損益込み", Math.abs(fs.fs.todayChange - (101300 - START)) < 1e-9);
+
+  // 日次: 上限 = 101329 × 5% = 5066.45 / 下限 = 96262.55 / 残り = 101300 − 96262.55
+  ok("1日損失の残り許容額",
+     Math.abs(fs.fs.dailyLimit - START * 0.05) < 1e-6 &&
+     Math.abs(fs.fs.dailyRemain - (101300 - (START - START * 0.05))) < 1e-6);
+  ok("含み損で下がったぶんが日次の損失に入る", Math.abs(fs.fs.dailyLoss - (START - 101300)) < 1e-6);
+  // 全体: 上限 = 初期 100000 × 10% = 10000 / 下限 = 90000 / 残り = 101300 − 90000
+  ok("最大DDまでの残り許容額",
+     fs.fs.maxLimit === 10000 && fs.fs.ddFloor === 90000 &&
+     Math.abs(fs.fs.ddRemain - 11300) < 1e-9);
+  ok("含み益が出ている間はドローダウン 0", fs.fs.ddNow === 0);
+  ok("ステップ1目標は初期残高から",
+     fs.fs.stepTarget === 8000 && Math.abs(fs.fs.stepProgress - 1300) < 1e-9);
+
+  // --- 基準を変えると数字が変わる ---
+  const alt = await page.evaluate(() => {
+    DB.settings.fin.dailyBasis = "initial";
+    DB.settings.fin.useEquity = false;
+    DB.settings.fin.lossBasis = "peak";
+    saveData();
+    return finState();
+  });
+  ok("日次の基準を初期残高にできる", Math.abs(alt.dailyLimit - 5000) < 1e-9);
+  ok("含み損益を外して判定できる", alt.judge === 102000);
+  ok("トレーリングのDDに切り替えられる", alt.ddRef >= 102000 && alt.ddFloor === alt.ddRef - 10000);
+
+  // --- 画面に出る ---
+  await page.evaluate(() => {
+    DB.settings.fin.dailyBasis = "dayStart"; DB.settings.fin.useEquity = true;
+    DB.settings.fin.lossBasis = "initial"; saveData(); TAB = "home"; render();
+  });
+  await page.waitForTimeout(80);
+  const home = await page.$eval("#app", e => e.innerText);
+  ok("ホームに口座の状態が出る",
+     home.includes("有効証拠金") && home.includes("含み損益") && home.includes("余剰証拠金"));
+  ok("ホームに残り許容額が出る", home.includes("今日あと負けられる") && home.includes("最大DDまで"));
+  ok("MT5 由来だと分かる", home.includes("MT5"));
+
+  await page.click('#nav button[data-tab="brief"]');
+  await page.waitForTimeout(80);
+  const brief = await page.$eval("#app", e => e.innerText);
+  ok("環境認識にも口座の状態が出る",
+     brief.includes("口座の状態") && brief.includes("今日あと負けられる") && brief.includes("最大DDまで"));
+
+  // --- リロードしても残る ---
+  await page.reload();
+  await page.waitForSelector("#app .topbar");
+  ok("口座情報がリロード後も残る",
+     await page.evaluate(() => DB.account && DB.account.balance === 102000 && finState().source === "mt5"));
+
+  // --- MT5 が無ければ従来どおり ---
+  ok("MT5 が無ければ初期残高＋決済損益に戻る",
+     await page.evaluate(() => {
+       DB.account = null; DB.deals = []; DB.trades = []; saveData();
+       const f = finState();
+       return f.source === "local" && f.balance === 100000 && f.equity === 100000;
+     }));
   await page.close();
 }
 

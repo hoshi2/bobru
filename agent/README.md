@@ -119,9 +119,14 @@ python mt5_agent.py --print > deals.json
 
 `mt5_agent.py` が送るのは MT5 が持っている事実だけ。
 
-**取れる** — symbol / buy・sell / エントリー時刻・価格 / 決済時刻・価格 / lot /
-profit / commission / swap / order ticket / deal ticket / position ID / SL / TP /
-契約サイズ / 口座番号・サーバ・口座通貨・残高
+**取れる（約定）** — symbol / buy・sell / エントリー時刻・価格 / 決済時刻・価格 / lot /
+profit / commission / swap / order ticket / deal ticket / position ID / SL / TP / 契約サイズ
+
+**取れる（口座）** — 口座番号 / サーバ / 業者 / 口座通貨 / レバレッジ /
+Balance / Equity / Floating P/L / Credit / Margin / Free Margin / 証拠金維持率
+
+当日実現損益・前日比・ドローダウン・Fintokei の残り許容額は、
+この口座情報と約定からぼぶる側で計算する（人間は入力しない）。
 
 **取れない（作らない）** — エントリー根拠 / 感情 / 相場観 / パターン / ルール遵守度 /
 エントリー時の口座残高
