@@ -1524,6 +1524,105 @@ group("20. 振り返り待ちと昨日の取引");
   await page.close();
 }
 
+/* =======================================================================
+   21. 計画と MT5 取引の紐付け（B）
+   ======================================================================= */
+group("21. 計画と MT5 の紐付け");
+{
+  const page = await open();
+  const T0 = Date.now() - 6 * 3600 * 1000;      // 6時間前に建てた
+  const seed = await page.evaluate(async (t0) => {
+    const iso = (ms) => new Date(ms).toISOString();
+    // 手で立てた計画：保有中1件、下書き1件、方向違い1件、時刻が遠い1件
+    DB.trades = [
+      { id: "p1", status: "open", symbol: "XAUUSD", dir: "long", entry: 3300, sl: 3290, tp: 3330, lot: 1,
+        contractSize: 100, balanceAtEntry: 100000, fxRate: 1, acctCurrency: "USD",
+        createdAt: iso(t0 - 20 * 60000), pattern: "A", trigger: "cross", memo: "押し目で入る", tags: ["押し目"],
+        closedAt: null, realizedPL: null, emotion: null, ruleOk: null, reviewMemo: "", learn: "" },
+      { id: "far", status: "open", symbol: "XAUUSD", dir: "long", entry: 3300, sl: 3290, tp: 3330, lot: 1,
+        contractSize: 100, createdAt: iso(t0 - 10 * 3600 * 1000), tags: [] },
+      { id: "short1", status: "open", symbol: "XAUUSD", dir: "short", entry: 3300, sl: 3310, tp: 3280, lot: 1,
+        contractSize: 100, createdAt: iso(t0), tags: [] },
+    ];
+    DB.tradePlans = [
+      { id: "d1", status: "draft", symbol: "XAUUSD", dir: "long", entry: 3299, sl: 3289, tp: 3329, lot: 1,
+        contractSize: 100, createdAt: iso(t0 - 90 * 60000), tags: [] },
+    ];
+    IMG["p1_entry"] = "data:image/png;base64,AAAA"; saveImg();
+    saveData();
+    const b = { source: "テスト", account: { login: "1", currency: "USD", balance: 100000, equity: 100000 },
+      deals: [
+        { ticket: 901, positionId: 801, time: Math.floor(t0 / 1000), type: 0, entry: 0, symbol: "XAUUSD",
+          volume: 1.2, price: 3301.5, sl: 3291, tp: 3330, contractSize: 100 },
+        { ticket: 902, positionId: 801, time: Math.floor(t0 / 1000) + 5400, type: 1, entry: 1, symbol: "XAUUSD",
+          volume: 1.2, price: 3318, profit: 1980, contractSize: 100 },
+      ] };
+    const r = await tradeSyncProvider.fetch("paste", { text: JSON.stringify(b) });
+    const rep = importDealBatch(r.batch);
+    const mt = DB.trades.filter(t => t.source === "mt5")[0];
+    const cands = planCandidatesFor(mt);
+    return { rep, mtId: mt.id, cands: cands.map(c => [c.plan.id, c.isDraft, c.dtMin]), all: linkCandidates().length };
+  }, T0);
+  ok("取り込み結果に候補の件数が出る", seed.rep.linkCandidates === 1);
+  ok("同銘柄・同方向・時刻近傍だけが候補になる",
+     seed.cands.map(c => c[0]).join(",") === "p1,d1" && seed.all === 1);
+  ok("いちばん近い計画が先頭", seed.cands[0][0] === "p1" && seed.cands[0][2] === 20);
+  ok("方向違い・時刻が遠いものは候補にしない", !seed.cands.some(c => c[0] === "short1" || c[0] === "far"));
+
+  await page.click('#nav button[data-tab="trades"]');
+  await page.waitForTimeout(100);
+  const listText = await page.$eval("#app", e => e.innerText);
+  ok("トレードタブの上に候補カードが出る", listText.includes("計画との紐付け候補") && listText.includes("紐付ける"));
+
+  // --- 「違う」を選ぶと、その組み合わせは出なくなる ---
+  await page.evaluate((id) => dismissLink(id, "d1"), seed.mtId);
+  ok("違うと言った組み合わせは候補から外れる",
+     await page.evaluate((id) => planCandidatesFor(findTrade(id)).map(c => c.plan.id).join(","), seed.mtId) === "p1");
+
+  // --- 紐付ける（確認ダイアログは承諾） ---
+  answer(page, true);
+  await page.evaluate((id) => linkPlan(id, "p1"), seed.mtId);
+  await page.waitForTimeout(150);
+  const linked = await page.evaluate((id) => {
+    const t = findTrade(id);
+    return { plan: t.plan, pattern: t.pattern, trigger: t.trigger, memo: t.memo, tags: t.tags,
+             img: !!IMG[id + "_entry"], oldImg: !!IMG["p1_entry"],
+             gone: !findTrade("p1"), count: DB.trades.length, entry: t.entry, lot: t.lot, pl: t.realizedPL };
+  }, seed.mtId);
+  ok("計画の数字が plan に写る", linked.plan && linked.plan.entry === 3300 && linked.plan.sl === 3290 &&
+     linked.plan.tp === 3330 && linked.plan.lot === 1 && linked.plan.rr === 3 && linked.plan.plannedLoss === 1000);
+  ok("人が書いた欄が MT5 の記録に引き継がれる",
+     linked.pattern === "A" && linked.trigger === "cross" && linked.memo === "押し目で入る" && linked.tags.indexOf("押し目") >= 0);
+  ok("画像も付け替わる", linked.img === true && linked.oldImg === false);
+  ok("計画の記録は消えて1つにまとまる（二重計上しない）", linked.gone === true && linked.count === 3);
+  ok("MT5 の事実はそのまま", linked.entry === 3301.5 && linked.lot === 1.2 && linked.pl === 1980);
+
+  await page.evaluate(() => { UI.tradeTab = "closed"; render(); });
+  await page.waitForTimeout(100);
+  const card = await page.$eval("#app", e => e.innerText);
+  ok("カードに計画 vs 実際が出る", card.includes("計画 vs 実際") && card.includes("TP → Exit") && card.includes("RR → 実績R"));
+  ok("候補カードは消える", !card.includes("計画との紐付け候補"));
+
+  // --- 紐付け後に同期し直しても plan が残る ---
+  const again = await page.evaluate(async (t0) => {
+    const b = { deals: [
+      { ticket: 901, positionId: 801, time: Math.floor(t0 / 1000), type: 0, entry: 0, symbol: "XAUUSD",
+        volume: 1.2, price: 3301.5, sl: 3291, tp: 3330, contractSize: 100 },
+      { ticket: 902, positionId: 801, time: Math.floor(t0 / 1000) + 5400, type: 1, entry: 1, symbol: "XAUUSD",
+        volume: 1.2, price: 3318, profit: 1980, contractSize: 100 } ] };
+    const r = await tradeSyncProvider.fetch("paste", { text: JSON.stringify(b) });
+    importDealBatch(r.batch);
+    const t = DB.trades.filter(x => x.source === "mt5")[0];
+    return { hasPlan: !!t.plan, memo: t.memo, n: DB.trades.length };
+  }, T0);
+  ok("同期し直しても紐付けと人の欄は残る", again.hasPlan && again.memo === "押し目で入る" && again.n === 3);
+
+  await page.reload();
+  await page.waitForSelector("#app .topbar");
+  ok("リロード後も残る", await page.evaluate(() => !!DB.trades.filter(x => x.source === "mt5")[0].plan));
+  await page.close();
+}
+
 /* ---------- 後始末 ---------- */
 await browser.close();
 server.close();

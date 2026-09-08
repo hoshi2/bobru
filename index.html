@@ -248,6 +248,20 @@ html[data-theme="light"] .btn.primary{color:#fff}
 .srctag.mt5{color:var(--green);border-color:color-mix(in srgb,var(--green) 45%,var(--line2))}
 .srctag.stale{color:var(--gold);border-color:color-mix(in srgb,var(--gold) 50%,var(--line2))}
 .ydc{border-top:1px solid var(--line);padding-top:12px}
+/* ---- 計画との紐付け ---- */
+.lk{padding:11px 0;border-bottom:1px solid var(--line)}
+.lk:last-of-type{border-bottom:0}
+.lk .lkh{font-weight:700;font-size:13.5px;display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:7px}
+.lk .lkg{display:grid;grid-template-columns:1fr 1fr;gap:7px}
+.lk .lkg>div{background:var(--card2);border:1px solid var(--line);border-radius:var(--radius-s);padding:8px 10px}
+.lk .lkg .k{font-size:10.5px;color:var(--txt3);font-weight:600;margin-bottom:2px}
+.lk .lkg .v{font-size:12px;line-height:1.5;font-variant-numeric:tabular-nums}
+.cmp{background:var(--card2);border:1px solid var(--line);border-radius:var(--radius-s);padding:9px 11px;margin-top:10px}
+.cmp .cmph{display:flex;justify-content:space-between;font-size:11.5px;font-weight:700;color:var(--txt2);margin-bottom:5px}
+.cmp .cmpr{display:grid;grid-template-columns:1.2fr 1fr 1fr .9fr;gap:6px;font-size:12.5px;padding:4px 0;
+  font-variant-numeric:tabular-nums;border-top:1px dashed var(--line)}
+.cmp .cmpr.cmphead{border-top:0;color:var(--txt3);font-size:10.5px;font-weight:600}
+.cmp .cmpr .ck{color:var(--txt2)}
 /* ---- 振り返り待ち ---- */
 .rq{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:9px 2px;
   border-bottom:1px solid var(--line);cursor:pointer;font-size:13.5px}
@@ -1078,6 +1092,162 @@ function initialDepositCandidate(){
   var head=(DB.deals||[])[0];
   if(!head||head.ticket!==first.ticket) return null;
   return v;
+}
+
+/* =========================================================================
+   計画と MT5 取引の紐付け
+   -------------------------------------------------------------------------
+   手で立てた計画（下書き／保有中／決済済み）と、MT5 から入った取引を
+   symbol・方向・エントリー時刻の近さで候補にする。自動では確定しない。
+   紐付けると MT5 の記録が本体になり、計画の数字は plan に写して比較できるようにする。
+   人が書いた欄（根拠・感情・反省・タグ・画像）は MT5 の記録へ引き継ぐ。
+   ========================================================================= */
+var LINK_WINDOW_MS=3*3600*1000;      // エントリー時刻のずれの許容（±3時間）
+
+function planCandidatesFor(mt){
+  if(!mt||mt.source!=="mt5"||mt.plan) return [];
+  var t0=mt.createdAt?new Date(mt.createdAt).getTime():NaN;
+  if(isNaN(t0)) return [];
+  var dismissed=(mt.mt5&&mt.mt5.notLinked)||[];
+  var out=[];
+  var consider=function(p,isDraft){
+    if(!p||p.source==="mt5"||p.status==="cancelled") return;
+    if(dismissed.indexOf(p.id)>=0) return;
+    if(!sameSymbol(p.symbol,mt.symbol)||p.dir!==mt.dir) return;
+    var tp=p.createdAt?new Date(p.createdAt).getTime():NaN;
+    if(isNaN(tp)||Math.abs(tp-t0)>LINK_WINDOW_MS) return;
+    var pe=toNum(p.entry), me=toNum(mt.entry);
+    var pdiff=(isNum(pe)&&isNum(me))?Math.abs(pe-me):null;
+    out.push({plan:p,isDraft:isDraft,dtMin:Math.round(Math.abs(tp-t0)/60000),priceDiff:pdiff});
+  };
+  DB.trades.forEach(function(p){ consider(p,false); });
+  DB.tradePlans.forEach(function(p){ consider(p,true); });
+  out.sort(function(a,b){ return a.dtMin-b.dtMin; });
+  return out;
+}
+// 全体の候補（MT5 の記録ごとに、いちばん近い計画を1つ）
+function linkCandidates(){
+  var list=[];
+  DB.trades.forEach(function(mt){
+    var c=planCandidatesFor(mt);
+    if(c.length) list.push({mt5:mt,best:c[0],others:c.length-1});
+  });
+  list.sort(function(a,b){ return new Date(b.mt5.createdAt)-new Date(a.mt5.createdAt); });
+  return list;
+}
+function findPlanAnywhere(id){ return findTrade(id)||findDraft(id); }
+// 計画の数字を写して、人の欄を引き継ぎ、計画の記録を消す
+function linkPlanToMt5(mt5Id,planId){
+  var mt=findTrade(mt5Id), p=findPlanAnywhere(planId);
+  if(!mt||!p||mt.source!=="mt5") return false;
+  var isDraft=!!findDraft(planId);
+  var c=calcFromInputs({dir:p.dir,entry:p.entry,sl:p.sl,tp:p.tp,lot:p.lot,contractSize:p.contractSize,
+                        balance:p.balanceAtEntry,fxRate:isNum(toNum(p.fxRate))?toNum(p.fxRate):1});
+  mt.plan={
+    id:p.id, status:isDraft?"draft":(p.status||"open"), createdAt:p.createdAt||null,
+    entry:toNum(p.entry), sl:toNum(p.sl), tp:toNum(p.tp), lot:toNum(p.lot),
+    contractSize:toNum(p.contractSize), balanceAtEntry:toNum(p.balanceAtEntry),
+    fxRate:isNum(toNum(p.fxRate))?toNum(p.fxRate):null,
+    plannedLoss:isNum(c.plannedLoss)?round2(c.plannedLoss):null,
+    plannedProfit:isNum(c.plannedProfit)?round2(c.plannedProfit):null,
+    rr:isNum(c.rr)?Math.round(c.rr*100)/100:null,
+    linkedAt:now()
+  };
+  // 人が書いた欄は、MT5 側が空のときだけ引き継ぐ（振り返り済みの内容を潰さない）
+  ["h4env","m15purple","trigger","pattern","sawLower","memo","reviewMemo","learn"].forEach(function(k){
+    if(!mt[k]&&p[k]) mt[k]=p[k];
+  });
+  ["emotion","ruleOk","closeSawLower","result"].forEach(function(k){
+    if((mt[k]===null||mt[k]===undefined||mt[k]==="")&&p[k]) mt[k]=p[k];
+  });
+  if(Array.isArray(p.tags)&&p.tags.length){
+    mt.tags=(mt.tags||[]).slice();
+    p.tags.forEach(function(x){ if(mt.tags.indexOf(x)<0) mt.tags.push(x); });
+  }
+  if(!mt.briefId&&p.briefId) mt.briefId=p.briefId;
+  if(p.reviewedAt&&!mt.reviewedAt) mt.reviewedAt=p.reviewedAt;
+  // 画像はキーを付け替える
+  ["_entry","_exit"].forEach(function(sfx){
+    if(IMG[p.id+sfx]&&!IMG[mt.id+sfx]) IMG[mt.id+sfx]=IMG[p.id+sfx];
+    delete IMG[p.id+sfx];
+  });
+  saveImg();
+  DB.trades=DB.trades.filter(function(x){ return x.id!==p.id; });
+  DB.tradePlans=DB.tradePlans.filter(function(x){ return x.id!==p.id; });
+  mt.updatedAt=now();
+  saveData();
+  return true;
+}
+function dismissLink(mt5Id,planId){
+  var mt=findTrade(mt5Id); if(!mt||!mt.mt5) return;
+  mt.mt5.notLinked=(mt.mt5.notLinked||[]).slice();
+  if(mt.mt5.notLinked.indexOf(planId)<0) mt.mt5.notLinked.push(planId);
+  saveData();
+}
+window.linkPlan=function(mt5Id,planId){
+  var mt=findTrade(mt5Id), p=findPlanAnywhere(planId);
+  if(!mt||!p) return;
+  if(!confirm("この計画を MT5 の取引に紐付けますか？\n\n計画の記録は MT5 の記録にまとめられ、計画の数字は「計画 vs 実際」として残ります。")) return;
+  if(linkPlanToMt5(mt5Id,planId)){ toast("紐付けました"); render(); }
+};
+window.dismissLinkCandidate=function(mt5Id,planId){
+  dismissLink(mt5Id,planId); toast("この組み合わせは出さないようにしました"); render();
+};
+function fmtDiff(a,b,dec){
+  if(!isNum(a)||!isNum(b)) return "";
+  var d=b-a; if(Math.abs(d)<1e-9) return "<span class='muted'>±0</span>";
+  return "<span class='"+(d>0?"pos":"neg")+"'>"+(d>0?"+":"")+d.toFixed(dec===undefined?2:dec)+"</span>";
+}
+function num2(v,dec){ return isNum(v)?v.toFixed(dec===undefined?2:dec):"—"; }
+// 候補の一覧（トレードタブの上に出す）
+function linkCandidatesCard(){
+  var cs=linkCandidates();
+  if(!cs.length) return "";
+  var h="<div class='card'><h2>計画との紐付け候補 <span class='cnt'>"+cs.length+"</span></h2>";
+  h+="<div class='smallnote' style='margin:0 0 9px'>手で立てた計画と、MT5 から入った取引が同じものに見えます。紐付けると1つの記録にまとまり、計画と実際を比べられます。自動では確定しません。</div>";
+  cs.forEach(function(c){
+    var p=c.best.plan, mt=c.mt5;
+    h+="<div class='lk'>";
+    h+="<div class='lkh'>"+esc(mt.symbol)+" "+dirTag(mt.dir)+
+       "<span class='muted' style='font-size:11.5px;margin-left:8px'>時刻差 "+c.best.dtMin+"分"+
+       (isNum(c.best.priceDiff)?" ・ 価格差 "+c.best.priceDiff.toFixed(2):"")+
+       (c.others?" ・ ほか候補 "+c.others+"件":"")+"</span></div>";
+    h+="<div class='lkg'>";
+    h+="<div><div class='k'>計画"+(c.best.isDraft?"（下書き）":"")+"</div><div class='v'>"+esc(fmtWhen(p.createdAt))+
+       "<br>Entry "+num2(toNum(p.entry))+" ・ SL "+num2(toNum(p.sl))+" ・ TP "+num2(toNum(p.tp))+" ・ "+num2(toNum(p.lot))+" lot</div></div>";
+    h+="<div><div class='k'>MT5</div><div class='v'>"+esc(fmtWhen(mt.createdAt))+
+       "<br>Entry "+num2(toNum(mt.entry))+" ・ SL "+num2(toNum(mt.sl))+" ・ TP "+num2(toNum(mt.tp))+" ・ "+num2(toNum(mt.lot))+" lot</div></div>";
+    h+="</div>";
+    h+="<div class='btnrow' style='margin-top:9px'>"+
+       "<button class='btn primary sm' onclick=\"linkPlan('"+esc(mt.id)+"','"+esc(p.id)+"')\">紐付ける</button>"+
+       "<button class='btn ghost sm' onclick=\"dismissLinkCandidate('"+esc(mt.id)+"','"+esc(p.id)+"')\">違う</button></div>";
+    h+="</div>";
+  });
+  h+="</div>";
+  return h;
+}
+// 紐付いた記録の「計画 vs 実際」
+function planVsActualHtml(t){
+  var p=t&&t.plan; if(!p) return "";
+  var c=calcTrade(t);
+  var rows=[];
+  rows.push(["ロット", num2(p.lot), num2(toNum(t.lot)), fmtDiff(p.lot,toNum(t.lot))]);
+  rows.push(["Entry", num2(p.entry), num2(toNum(t.entry)), fmtDiff(p.entry,toNum(t.entry))]);
+  rows.push(["SL", num2(p.sl), num2(toNum(t.sl)), fmtDiff(p.sl,toNum(t.sl))]);
+  if(t.status==="closed"){
+    rows.push(["TP → Exit", num2(p.tp), num2(toNum(t.closePrice)), fmtDiff(p.tp,toNum(t.closePrice))]);
+    rows.push(["RR → 実績R", isNum(p.rr)?("1:"+p.rr.toFixed(2)):"—", isNum(c.realizedR)?fmtR(c.realizedR):"—", ""]);
+  }else{
+    rows.push(["TP", num2(p.tp), num2(toNum(t.tp)), fmtDiff(p.tp,toNum(t.tp))]);
+    rows.push(["予定RR", isNum(p.rr)?("1:"+p.rr.toFixed(2)):"—", isNum(c.rr)?("1:"+c.rr.toFixed(2)):"—", ""]);
+  }
+  var h="<div class='cmp'><div class='cmph'><span>計画 vs 実際</span><span class='muted'>計画 "+esc(fmtWhen(p.createdAt))+"</span></div>";
+  h+="<div class='cmpr cmphead'><span>&nbsp;</span><span>計画</span><span>実際</span><span>差</span></div>";
+  rows.forEach(function(r){
+    h+="<div class='cmpr'><span class='ck'>"+esc(r[0])+"</span><span>"+r[1]+"</span><span>"+r[2]+"</span><span>"+r[3]+"</span></div>";
+  });
+  h+="</div>";
+  return h;
 }
 
 /* ---------- 口座カード ---------- */
@@ -2605,29 +2775,14 @@ function applyMt5Facts(t,pos,report){
   };
   return changed;
 }
-// 手入力の記録と MT5 の記録が同じトレードを指していそうなら報告する（自動では混ぜない）
-function looksDuplicate(pos){
-  if(!isNum(pos.entryPrice)||!pos.entryTime) return null;
-  var t0=new Date(pos.entryTime).getTime();
-  var hit=null;
-  DB.trades.forEach(function(t){
-    if(hit||t.source==="mt5") return;
-    if(!sameSymbol(t.symbol,pos.symbol)||t.dir!==pos.dir) return;
-    var e=toNum(t.entry); if(!isNum(e)) return;
-    if(Math.abs(e-pos.entryPrice)/Math.max(Math.abs(pos.entryPrice),1)>0.005) return;
-    var td=t.createdAt?new Date(t.createdAt).getTime():NaN;
-    if(isNaN(td)||Math.abs(td-t0)>2*3600*1000) return;
-    hit=t;
-  });
-  return hit;
-}
 function findMt5Trade(pos){
   var id=mt5TradeId(pos);
   for(var i=0;i<DB.trades.length;i++){
     var t=DB.trades[i];
     if(t.id===id) return t;
+    // 口座番号はどちらかが分からなければ問わない（貼り付けで口座情報が付かないことがある）
     if(t.source==="mt5"&&t.mt5&&pos.positionId&&t.mt5.positionId===pos.positionId&&
-       String(t.mt5.account||"")===String(pos.account||"")) return t;
+       (!t.mt5.account||!pos.account||String(t.mt5.account)===String(pos.account))) return t;
   }
   return null;
 }
@@ -2637,9 +2792,6 @@ function upsertMt5Trade(pos,report){
   if(!pos.symbol||!pos.entryTime){ report.skippedPositions.push(pos.positionId||pos.key); return; }
   var t=findMt5Trade(pos);
   if(t){ if(applyMt5Facts(t,pos,report)){ t.updatedAt=now(); report.tradesUpdated++; } return; }
-
-  var dup=looksDuplicate(pos);
-  if(dup) report.duplicates.push({mine:dup.id,positionId:pos.positionId});
 
   var symbol=pos.symbol;
   var brief=briefFor(localDateOf(pos.entryTime),symbol);
@@ -2670,7 +2822,7 @@ function emptySyncReport(){
           dealsAdded:0,dealsUpdated:0,dealsSkipped:0,dealsDropped:0,
           positions:0,tradesCreated:0,tradesUpdated:0,
           accountUpdated:false,balanceDelta:null,
-          conflicts:[],duplicates:[],skippedPositions:[],notes:[],ok:true};
+          conflicts:[],linkCandidates:0,skippedPositions:[],notes:[],ok:true};
 }
 // バッチを DB に流し込む。何度実行しても結果が同じになること（冪等）が要件。
 function importDealBatch(batch){
@@ -2683,7 +2835,11 @@ function importDealBatch(batch){
     if(!d||!d.ticket){ rep.dealsSkipped++; return; }
     var ex=ix[d.ticket];
     if(!ex){ DB.deals.push(d); ix[d.ticket]=d; rep.dealsAdded++; return; }
-    // 同じ ticket は上書きしない。中身が変わっていたときだけ差し替える
+    // 同じ ticket は上書きしない。中身が変わっていたときだけ差し替える。
+    // 今回の取得で分からなかった項目（null）は、前に分かっていた値を残す
+    for(var k in ex){
+      if((d[k]===null||d[k]===undefined||d[k]==="")&&(ex[k]!==null&&ex[k]!==undefined&&ex[k]!=="")) d[k]=ex[k];
+    }
     if(JSON.stringify(ex)!==JSON.stringify(d)){
       for(var i=0;i<DB.deals.length;i++){ if(DB.deals[i]===ex){ DB.deals[i]=d; break; } }
       ix[d.ticket]=d; rep.dealsUpdated++;
@@ -2718,6 +2874,7 @@ function importDealBatch(batch){
   var poss=applyOpenPositionFacts(positionsFromDeals(DB.deals),batch.positions);
   rep.positions=poss.length;
   if(mt5Settings().autoImport) poss.forEach(function(p){ upsertMt5Trade(p,rep); });
+  rep.linkCandidates=linkCandidates().length;
   var s=DB.settings.mt5;
   s.lastSync=now(); s.lastCount=rep.dealsAdded;
   if(batch.account&&batch.account.currency&&batch.account.currency!==acctCurrency()){
@@ -3550,9 +3707,8 @@ function syncReportHtml(rep){
   (rep.conflicts||[]).forEach(function(c){
     li.push("手で直した値と MT5 の値が食い違っています（"+c.field+"）。手入力を残しました。");
   });
-  (rep.duplicates||[]).forEach(function(){
-    li.push("同じトレードを手入力でも記録している可能性があります。自動では混ぜていないので、重複していたら片方を削除して下さい。");
-  });
+  if(rep.linkCandidates)
+    li.push("手で立てた計画と同じに見える取引が "+rep.linkCandidates+" 件あります。トレードタブの上に候補が出るので、紐付けるか「違う」を選んで下さい。");
   if(li.length){
     h+="<ul class='anotes'>";
     li.forEach(function(n){ h+="<li>"+esc(n)+"</li>"; });
@@ -3898,6 +4054,8 @@ function viewTrades(){
   h+=tradeTabBtn("cancelled","取消",cancN);
   h+="</div>";
 
+  h+=linkCandidatesCard();
+
   var list;
   if(UI.tradeTab==="draft") list=DB.tradePlans.slice();
   else if(UI.tradeTab==="review") list=reviewQueue();
@@ -3956,6 +4114,11 @@ function tradeCard(t,tab){
     h+=ti("実現R", isNum(c.realizedR)?("<span class='"+clsSign(c.realizedR)+"'>"+fmtR(c.realizedR)+"</span>"):"—");
     h+="</div>";
   }
+
+  // 紐付けた計画との比較
+  h+=planVsActualHtml(t);
+  if(t.source==="mt5"&&!t.plan&&planCandidatesFor(t).length&&tab!=="review")
+    h+="<div class='smallnote' style='margin:8px 0 0'>この取引に紐付けられそうな計画があります（一覧の上に候補が出ています）。</div>";
 
   // メタ pill
   var pills=[];
