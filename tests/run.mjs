@@ -1218,7 +1218,7 @@ group("16. 朝やろ");
   const hashed = await page2.evaluate(() => ({
     tab: TAB, steps: MORNING.steps.length, hash: location.hash
   }));
-  ok("#morning で朝の処理が走る", hashed.steps === 3 && hashed.tab === "brief");
+  ok("#morning で朝の処理が走る", hashed.steps === 4 && hashed.tab === "brief");
   ok("ハッシュは消えるので再読込で二重に走らない", hashed.hash === "");
   await page2.close();
   await page.close();
@@ -1424,6 +1424,103 @@ group("19. 環境認識との突き合わせ");
   ok("成長タブに朝の見方との関係が出る", text.includes("朝の見方との関係") && text.includes("朝と逆の方向"));
   ok("成長タブに4時間足との関係が出る", text.includes("4Hトレンドに逆らった"));
   ok("記録の出どころが分かる", text.includes("MT5 から同期"));
+  await page.close();
+}
+
+/* =======================================================================
+   20. 振り返り待ち（A）と 昨日の取引（E）
+   ======================================================================= */
+group("20. 振り返り待ちと昨日の取引");
+{
+  const page = await open();
+  const yd = await page.evaluate(() => yesterdayStr());
+  const tsec = (iso, h) => Math.floor(new Date(iso + "T00:00:00").getTime() / 1000) + h * 3600;
+  const BATCH = {
+    source: "テスト",
+    account: { login: "1", currency: "USD", balance: 100500, equity: 100500, profit: 0 },
+    deals: [
+      // 昨日：勝ち +800、負け −300
+      { ticket: 801, positionId: 701, time: tsec(yd, 9),  type: 0, entry: 0, symbol: "XAUUSD", volume: 1, price: 3300, sl: 3290, tp: 3320, contractSize: 100 },
+      { ticket: 802, positionId: 701, time: tsec(yd, 10), type: 1, entry: 1, symbol: "XAUUSD", volume: 1, price: 3308, profit: 800, contractSize: 100 },
+      { ticket: 803, positionId: 702, time: tsec(yd, 12), type: 1, entry: 0, symbol: "XAUUSD", volume: 1, price: 3310, sl: 3320, contractSize: 100 },
+      { ticket: 804, positionId: 702, time: tsec(yd, 13), type: 0, entry: 1, symbol: "XAUUSD", volume: 1, price: 3313, profit: -300, contractSize: 100 },
+    ],
+  };
+  const r0 = await page.evaluate(async (b) => {
+    const r = await tradeSyncProvider.fetch("paste", { text: JSON.stringify(b) });
+    importDealBatch(r.batch);
+    // 手入力で決済した記録（振り返り待ちの対象外）
+    DB.trades.push({ id: "manual1", status: "closed", symbol: "XAUUSD", dir: "long", entry: 3300, sl: 3290,
+      lot: 1, contractSize: 100, realizedPL: 100, createdAt: new Date().toISOString(),
+      closedAt: new Date().toISOString(), tags: [] });
+    saveData(); TAB = "home"; render();
+    return { q: reviewQueue().map(t => t.id), ys: daySummary(yesterdayStr()) };
+  }, BATCH);
+  ok("MT5 由来の決済済みは振り返り待ちに入る", r0.q.length === 2);
+  ok("手入力の記録は対象にしない", r0.q.indexOf("manual1") < 0);
+  ok("昨日のまとめ：件数・損益・勝敗・未記入",
+     r0.ys.n === 2 && r0.ys.pl === 500 && r0.ys.wins === 1 && r0.ys.losses === 1 && r0.ys.unreviewed === 2);
+
+  const home = await page.$eval("#app", e => e.innerText);
+  ok("ホームに件数が出る", home.includes("振り返り待ち") && home.includes("2 件"));
+  ok("ホームに昨日の取引が出る", home.includes("昨日の取引") && home.includes("未記入 2件"));
+
+  // --- 振り返りモーダル：人の欄だけ書いて保存 ---
+  const id1 = r0.q[0];
+  const before = await page.evaluate((id) => { const t = DB.trades.filter(x => x.id === id)[0]; return { pl: t.realizedPL, entry: t.entry }; }, id1);
+  await page.evaluate((id) => openReviewModal(id), id1);
+  await page.waitForTimeout(100);
+  const modal = await page.$eval("#modalRoot", e => e.innerText);
+  ok("モーダルに MT5 の事実が読み取り用に出る", modal.includes("MT5 の事実") && modal.includes("実現損益"));
+  ok("事実の入力欄は無い（書き換えさせない）", (await page.$$("#modalRoot input[type=number]")).length === 0);
+  await page.click("#rc_emotion button:nth-child(2)");       // 焦り
+  await page.click("#rc_ruleOk button:nth-child(1)");        // はい
+  await page.fill("#r_review", "追いかけて入った");
+  await page.evaluate((id) => saveReview(id), id1);
+  await page.waitForTimeout(120);
+  const after1 = await page.evaluate((id) => {
+    const t = DB.trades.filter(x => x.id === id)[0];
+    return { emotion: t.emotion, ruleOk: t.ruleOk, review: t.reviewMemo, reviewed: isReviewed(t),
+             pl: t.realizedPL, entry: t.entry, q: reviewQueue().length };
+  }, id1);
+  ok("判断と振り返りが保存される", after1.emotion === "rush" && after1.ruleOk === "yes" && after1.review === "追いかけて入った");
+  ok("事実は触られない", after1.pl === before.pl && after1.entry === before.entry && isFinite(before.pl));
+  ok("書いたら待ち行列から消える", after1.reviewed === true && after1.q === 1);
+
+  // --- 書くことが無くても「済み」にできる ---
+  const id2 = r0.q[1];
+  await page.evaluate((id) => { openReviewModal(id); saveReview(id); }, id2);
+  await page.waitForTimeout(120);
+  ok("空のまま保存で済みになる",
+     await page.evaluate(() => reviewQueue().length === 0 && DB.trades.filter(t => t.source === "mt5").every(t => t.reviewedAt)));
+
+  // --- リロードしても済みのまま ---
+  await page.reload();
+  await page.waitForSelector("#app .topbar");
+  ok("済みがリロード後も残る", await page.evaluate(() => reviewQueue().length === 0));
+  ok("済めばホームの入口は消える", !(await page.$eval("#app", e => e.innerText)).includes("振り返り待ち"));
+
+  // --- トレードタブのサブタブと、朝やろの段 ---
+  await page.evaluate(() => { DB.trades.forEach(t => { if (t.source === "mt5") { delete t.reviewedAt; t.emotion = null; t.ruleOk = null; t.reviewMemo = ""; } }); saveData(); });
+  await page.evaluate(() => gotoReviewQueue());
+  await page.waitForTimeout(100);
+  const tr = await page.$eval("#app", e => e.innerText);
+  ok("トレードタブに振り返り待ちのサブタブが出る", tr.includes("振り返り待ち") && (await page.$$("#app .tcard")).length === 2);
+  ok("カードから振り返れる", (await page.$$("#app .tcard button")).length > 0 && tr.includes("振り返る"));
+
+  await page.evaluate(async () => { DB.settings.marketProvider = "none"; saveData(); await runMorningRoutine(); });
+  await page.waitForTimeout(120);
+  const m = await page.evaluate(() => ({
+    steps: MORNING.steps.map(s => [s.key, s.state, s.text]),
+    text: document.getElementById("app").innerText,
+  }));
+  const yStep = m.steps.filter(s => s[0] === "yesterday")[0];
+  ok("朝やろに昨日の取引の段がある", !!yStep && yStep[2].includes("2件") && yStep[2].includes("未記入 2件"));
+  ok("未記入があれば注意になる", yStep[1] === "warn");
+  ok("朝やろから振り返り待ちへ飛べる", m.text.includes("振り返り待ちへ"));
+  await page.click("text=振り返り待ちへ");
+  await page.waitForTimeout(100);
+  ok("押すと振り返り待ちの一覧に着く", await page.evaluate(() => TAB === "trades" && UI.tradeTab === "review"));
   await page.close();
 }
 

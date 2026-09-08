@@ -247,6 +247,15 @@ html[data-theme="light"] .btn.primary{color:#fff}
   border:1px solid var(--line2);color:var(--txt3);margin-left:6px;vertical-align:middle}
 .srctag.mt5{color:var(--green);border-color:color-mix(in srgb,var(--green) 45%,var(--line2))}
 .srctag.stale{color:var(--gold);border-color:color-mix(in srgb,var(--gold) 50%,var(--line2))}
+.ydc{border-top:1px solid var(--line);padding-top:12px}
+/* ---- 振り返り待ち ---- */
+.rq{display:grid;grid-template-columns:1fr auto auto;gap:10px;align-items:center;padding:9px 2px;
+  border-bottom:1px solid var(--line);cursor:pointer;font-size:13.5px}
+.rq:last-of-type{border-bottom:0}
+.rq .rqs{font-weight:700;display:flex;align-items:center;gap:6px}
+.rq .rqw{font-size:11.5px;color:var(--txt3);font-variant-numeric:tabular-nums}
+.rq .rqp{font-weight:700;font-variant-numeric:tabular-nums;min-width:64px;text-align:right}
+
 /* live calc panel */
 .calc{background:var(--card2);border:1px solid var(--line);border-radius:var(--radius-s);padding:13px;margin-bottom:13px}
 .calc .cline{display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line);font-size:13.5px}
@@ -1071,7 +1080,7 @@ function initialDepositCandidate(){
   return v;
 }
 
-/* ---------- ホーム ---------- */
+/* ---------- 口座カード ---------- */
 /* ---------- 口座カード（ホーム・環境認識で共用） ---------- */
 function acctSourceTag(fs){
   if(fs.source!=="mt5") return "<span class='srctag'>"+esc(labelBalanceSource(fs.source))+"</span>";
@@ -1147,6 +1156,155 @@ function briefAccountCard(){
   return h;
 }
 
+/* =========================================================================
+   振り返り待ち
+   -------------------------------------------------------------------------
+   システムから取れる事実は自動で入る。人が入れるのは判断と振り返りだけ。
+   その「人の欄」が空のままの決済済みトレードを、待ち行列として見せる。
+   対象は MT5 から入った記録（手入力の記録は決済登録のときに書く場が既にある）。
+   ========================================================================= */
+// 人が書く欄のどれかが埋まっているか。「書くことが無い」も reviewedAt で完了にできる
+function isReviewed(t){
+  if(!t) return false;
+  if(t.reviewedAt) return true;
+  return !!(t.reviewMemo||t.learn||t.emotion||t.ruleOk||t.pattern||t.trigger||t.h4env);
+}
+function needsReview(t){
+  return !!t && t.status==="closed" && t.source==="mt5" && !isReviewed(t);
+}
+function reviewQueue(){
+  return DB.trades.filter(needsReview).sort(function(a,b){
+    return new Date(b.closedAt||b.createdAt)-new Date(a.closedAt||a.createdAt);
+  });
+}
+// ホームの入口。件数と直近の数件、そこから直接ひらける
+function reviewQueueCard(){
+  var q=reviewQueue();
+  if(!q.length) return "";
+  var h="<div class='card'>";
+  h+="<div class='bhead'><div class='bk'>振り返り待ち</div><div class='bdate'>"+q.length+" 件</div></div>";
+  h+="<div class='smallnote' style='margin:0 0 9px'>MT5 から入った決済済みの記録で、根拠・感情・反省がまだ空のものです。事実は入っているので、判断と振り返りだけ書けば終わります。</div>";
+  q.slice(0,3).forEach(function(t){
+    var pl=toNum(t.realizedPL);
+    h+="<div class='rq' onclick=\"openReviewModal('"+esc(t.id)+"')\">"+
+       "<span class='rqs'>"+esc(t.symbol)+" "+dirTag(t.dir)+"</span>"+
+       "<span class='rqw'>"+esc(fmtWhen(t.closedAt||t.createdAt))+"</span>"+
+       "<span class='rqp "+clsSign(pl)+"'>"+(isNum(pl)?fmtSigned(pl):"—")+"</span></div>";
+  });
+  if(q.length>3) h+="<div class='smallnote'>ほか "+(q.length-3)+" 件</div>";
+  h+="<button class='btn ghost sm' style='margin-top:11px' onclick='gotoReviewQueue()'>振り返り待ちをすべて見る</button>";
+  h+="</div>";
+  return h;
+}
+window.gotoReviewQueue=function(){ TAB="trades"; UI.tradeTab="review"; render(); };
+
+// ある日の決済済みトレードのまとめ（件数・実現損益・勝敗・振り返り未記入）
+function daySummary(dateStr){
+  var o={date:dateStr,n:0,pl:0,wins:0,losses:0,be:0,unreviewed:0,r:0,rc:0};
+  DB.trades.forEach(function(t){
+    if(t.status!=="closed") return;
+    if(localDateOf(t.closedAt||t.createdAt)!==dateStr) return;
+    o.n++;
+    var pl=toNum(t.realizedPL); if(isNum(pl)) o.pl+=pl;
+    var res=t.result||(isNum(pl)?(pl>0?"win":pl<0?"lose":"be"):null);
+    if(res==="win") o.wins++; else if(res==="lose") o.losses++; else if(res==="be") o.be++;
+    var c=calcTrade(t); if(isNum(c.realizedR)){ o.r+=c.realizedR; o.rc++; }
+    if(needsReview(t)) o.unreviewed++;
+  });
+  o.pl=Math.round(o.pl*100)/100;
+  return o;
+}
+function yesterdayStr(){ var d=new Date(); d.setDate(d.getDate()-1); return isoDate(d); }
+function daySummaryLine(o){
+  if(!o.n) return "取引なし";
+  var parts=[o.n+"件", fmtSigned(o.pl), o.wins+"勝"+o.losses+"敗"+(o.be?o.be+"分":"")];
+  if(o.rc) parts.push(fmtR(o.r));
+  parts.push(o.unreviewed?("振り返り未記入 "+o.unreviewed+"件"):"振り返り済み");
+  return parts.join(" ・ ");
+}
+// 朝いちばんの「昨日どうだったか」。未記入があれば、そこから振り返り待ちへ飛べる
+function yesterdayHtml(){
+  var o=daySummary(yesterdayStr());
+  var h="<div class='ydc'>";
+  h+="<div class='bhead' style='margin-bottom:6px'><div class='bk'>昨日の取引</div><div class='bdate'>"+esc(o.date)+"</div></div>";
+  if(!o.n){
+    h+="<div class='smallnote' style='margin:0'>決済した取引はありません。</div>";
+  }else{
+    h+="<div class='acctgrid' style='margin-top:0'>";
+    h+=acctCell("件数", o.n+"");
+    h+=acctCell("実現損益", "<span class='"+clsSign(o.pl)+"'>"+fmtSigned(o.pl)+"</span>"+
+       (o.rc?" <span class='muted' style='font-size:12px'>"+fmtR(o.r)+"</span>":""));
+    h+=acctCell("勝敗", o.wins+"勝 "+o.losses+"敗"+(o.be?" "+o.be+"分":""));
+    h+=acctCell("振り返り", o.unreviewed?("<span class='gold'>未記入 "+o.unreviewed+"件</span>"):"<span class='pos'>済み</span>");
+    h+="</div>";
+    if(o.unreviewed) h+="<button class='btn ghost sm' style='margin-top:9px' onclick='gotoReviewQueue()'>振り返り待ちへ（"+reviewQueue().length+"件）</button>";
+  }
+  h+="</div>";
+  return h;
+}
+
+/* ---------- 振り返りモーダル（人の欄だけ。事実は表示のみ） ---------- */
+var REVIEW={};
+function reviewChip(label,k,opts){
+  var c="<div class='field'><label>"+esc(label)+"</label><div class='chips' id='rc_"+k+"'>";
+  opts.forEach(function(o){ c+="<button type='button' class='chip"+(REVIEW[k]===o[0]?" on":"")+"' onclick=\"reviewChipPick('"+k+"','"+o[0]+"')\">"+esc(o[1])+"</button>"; });
+  c+="</div></div>"; return c;
+}
+window.reviewChipPick=function(k,v){
+  REVIEW[k]=(REVIEW[k]===v?"":v);
+  var box=document.getElementById("rc_"+k); if(!box) return;
+  Array.prototype.forEach.call(box.querySelectorAll("button"),function(b){
+    var val=b.getAttribute("onclick").match(/'([^']+)'\)$/)[1];
+    b.classList.toggle("on", REVIEW[k]===val);
+  });
+};
+window.openReviewModal=function(id){
+  var t=findTrade(id); if(!t) return;
+  REVIEW={id:id,h4env:t.h4env||"",m15purple:t.m15purple||"",trigger:t.trigger||"",pattern:t.pattern||"",
+          sawLower:t.closeSawLower||t.sawLower||"",ruleOk:t.ruleOk||"",emotion:t.emotion||""};
+  var c=calcTrade(t);
+  var pl=toNum(t.realizedPL);
+  var h="<h3>振り返り</h3>";
+  // 事実（MT5 から）。ここは書き換えない
+  h+="<div class='smallnote' style='margin-bottom:4px'>MT5 の事実</div>";
+  h+="<div class='tgrid' style='margin-bottom:12px'>";
+  h+=ti("銘柄", esc(t.symbol)+" "+dirTag(t.dir));
+  h+=ti("エントリー", (isNum(t.entry)?t.entry:"—")+"<div class='smallnote' style='margin:0'>"+esc(fmtWhen(t.createdAt))+"</div>");
+  h+=ti("決済", (isNum(t.closePrice)?t.closePrice:"—")+"<div class='smallnote' style='margin:0'>"+esc(fmtWhen(t.closedAt))+"</div>");
+  h+=ti("ロット", isNum(t.lot)?t.lot.toFixed(2):"—");
+  h+=ti("SL / TP", (isNum(t.sl)?t.sl:"—")+" / "+(isNum(t.tp)?t.tp:"—"));
+  h+=ti("実現損益", isNum(pl)?("<span class='"+clsSign(pl)+"'>"+fmtSigned(pl)+"</span>"+
+        (isNum(c.realizedR)?" <span class='muted'>"+fmtR(c.realizedR)+"</span>":"")):"—");
+  h+="</div>";
+  // 人が書く欄
+  h+=reviewChip("4時間足環境","h4env",[["up","上昇"],["down","下降"],["range","レンジ"],["na","判断不能"]]);
+  h+=reviewChip("15分足 紫ライン","m15purple",[["conv","収束中"],["start","拡散開始"],["expand","拡散中"],["end","拡散終了気味"],["na","判断不能"]]);
+  h+=reviewChip("トリガー","trigger",[["cross","白水色クロス"],["red","赤ライン"],["other","その他"]]);
+  h+=reviewChip("パターン","pattern",[["A","A"],["B","B"],["range","レンジ"],["other","その他"]]);
+  h+=reviewChip("1分・5分足","sawLower",[["no","見てない"],["yes","見た"]]);
+  h+=reviewChip("ルール通りだったか","ruleOk",[["yes","はい"],["no","いいえ"],["partial","一部逸脱"]]);
+  h+=reviewChip("感情状態","emotion",[["calm","冷静"],["rush","焦り"],["anger","怒り"],["fear","恐怖"],["greed","欲"],["tired","疲労"],["other","その他"]]);
+  h+=field("エントリー根拠・メモ","<textarea id='r_memo' placeholder='なぜ入ったか'>"+esc(t.memo||"")+"</textarea>");
+  h+=field("反省","<textarea id='r_review' placeholder='どこが良くて、どこがまずかったか'>"+esc(t.reviewMemo||"")+"</textarea>");
+  h+=field("学び","<textarea id='r_learn' placeholder='次に活かすこと'>"+esc(t.learn||"")+"</textarea>");
+  h+=field("タグ（カンマ区切り）","<input type='text' id='r_tags' value='"+esc((t.tags||[]).join(", "))+"'>");
+  h+="<button class='btn primary' onclick=\"saveReview('"+esc(id)+"')\">振り返りを保存</button>";
+  h+="<div class='smallnote' style='text-align:center'>何も書くことが無ければ、そのまま保存で「済み」になります。</div>";
+  openModal(h);
+};
+window.saveReview=function(id){
+  var t=findTrade(id); if(!t) return;
+  var g=function(x){var e=document.getElementById(x);return e?e.value:"";};
+  t.h4env=REVIEW.h4env||""; t.m15purple=REVIEW.m15purple||""; t.trigger=REVIEW.trigger||"";
+  t.pattern=REVIEW.pattern||""; t.sawLower=REVIEW.sawLower||""; t.closeSawLower=REVIEW.sawLower||null;
+  t.ruleOk=REVIEW.ruleOk||null; t.emotion=REVIEW.emotion||null;
+  t.memo=g("r_memo"); t.reviewMemo=g("r_review"); t.learn=g("r_learn");
+  t.tags=g("r_tags").split(",").map(function(x){return x.trim();}).filter(Boolean);
+  t.reviewedAt=now(); t.updatedAt=now();
+  collectTags(t.tags);
+  saveData(); closeModal(); toast("振り返りを保存しました"); render();
+};
+
 /* ---------- ホーム ---------- */
 function viewHome(){
   var s=DB.settings;
@@ -1168,6 +1326,8 @@ function viewHome(){
 
   // 口座カード（MT5 が繋がっていれば、残高も証拠金も当日実現損益も自動で入る）
   h+=accountCard();
+  // 振り返り待ち（人が書く欄が空のままの決済済み）
+  h+=reviewQueueCard();
 
   h+="<div class='card'>";
   h+="<div class='balrow'><span class='bal tabular' style='font-size:15px'>通算 "+fmtSigned(netAll)+
@@ -3286,6 +3446,7 @@ function morningCard(){
     h+="<div style='margin-top:13px'>"+morningStepsHtml()+"</div>";
     if(MORNING.at) h+="<div class='smallnote'>最終実行 "+esc(fmtWhen(MORNING.at))+"</div>";
   }
+  h+="<div style='margin-top:13px'>"+yesterdayHtml()+"</div>";
   h+="</div>";
   return h;
 }
@@ -3302,6 +3463,7 @@ window.runMorningRoutine=function(){
 
   MORNING.running=true; MORNING.at=now(); MORNING.steps=[];
   var sSync=mstep("sync","前日の取引を同期");
+  var sYest=mstep("yesterday","昨日の取引を確認");
   var sData=mstep("data","市場データを取得");
   var sSave=mstep("save","環境認識を保存");
   render();
@@ -3325,6 +3487,10 @@ window.runMorningRoutine=function(){
   }
 
   return syncStep.then(function(){
+    // 同期が済んでから数えるので、昨日の決済ぶんが入っている
+    var y=daySummary(yesterdayStr());
+    sYest.state=y.unreviewed?"warn":"ok";
+    sYest.text=daySummaryLine(y);
     morningPaint();
     return morningAnalysisStep();
   }).then(function(r){
@@ -3454,6 +3620,7 @@ function homeBriefCard(){
         " onclick='runMorningRoutine()'>"+(MORNING.running?"実行中…":"朝やろ")+"</button>";
     h0+="<button class='btn ghost sm' style='margin-top:9px' onclick='gotoBriefToday()'>手で作る</button>";
     if(MORNING.steps.length) h0+="<div style='margin-top:12px'>"+morningStepsHtml()+"</div>";
+    h0+="<div style='margin-top:12px'>"+yesterdayHtml()+"</div>";
     h0+="</div>";
     return h0;
   }
@@ -3722,20 +3889,25 @@ function viewTrades(){
   var planN=DB.tradePlans.length;
   var closedN=DB.trades.filter(function(t){return t.status==="closed";}).length;
   var cancN=DB.trades.filter(function(t){return t.status==="cancelled";}).length;
+  var revN=reviewQueue().length;
   h+="<div class='tabs'>";
   h+=tradeTabBtn("open","保有中",openN);
   h+=tradeTabBtn("draft","計画中",planN);
   h+=tradeTabBtn("closed","決済済み",closedN);
+  if(revN||UI.tradeTab==="review") h+=tradeTabBtn("review","振り返り待ち",revN);
   h+=tradeTabBtn("cancelled","取消",cancN);
   h+="</div>";
 
   var list;
   if(UI.tradeTab==="draft") list=DB.tradePlans.slice();
+  else if(UI.tradeTab==="review") list=reviewQueue();
   else list=DB.trades.filter(function(t){return t.status===UI.tradeTab;});
   list.sort(function(a,b){ return new Date(b.closedAt||b.createdAt)-new Date(a.closedAt||a.createdAt); });
 
   if(list.length===0){
-    var msg={open:"保有中のトレードはありません",draft:"計画中の下書きはありません",closed:"決済済みの記録はありません",cancelled:"取消したトレードはありません"}[UI.tradeTab];
+    var msg={open:"保有中のトレードはありません",draft:"計画中の下書きはありません",closed:"決済済みの記録はありません",
+             review:"振り返り待ちはありません。MT5 から入った決済済みの記録は全部書き終わっています",
+             cancelled:"取消したトレードはありません"}[UI.tradeTab];
     h+="<div class='card'><div class='empty'>"+esc(msg)+"</div></div>";
     return h;
   }
@@ -3765,6 +3937,7 @@ function tradeCard(t,tab){
   h+="<div class='th'><div class='sym'>"+esc(t.symbol)+" "+dirTag(t.dir)+
      (isNum(c.rr)?"<span class='tag-rr'>RR 1:"+c.rr.toFixed(2)+"</span>":"")+
      (t.source==="mt5"?"<span class='mt5tag'>MT5</span>":"")+
+     (needsReview(t)?"<span class='mt5tag' style='color:var(--gold)'>振り返り待ち</span>":"")+
      "</div><div class='when'>"+fmtWhen(t.createdAt)+"</div></div>";
   h+="<div class='tgrid'>";
   h+=ti("エントリー", isNum(t.entry)?t.entry:"—");
@@ -3815,7 +3988,11 @@ function tradeCard(t,tab){
     h+="<button class='btn primary sm' onclick=\"promoteDraft('"+t.id+"')\">エントリー化</button>";
     h+="<button class='btn ghost sm' onclick=\"editDraft('"+t.id+"')\">編集</button>";
     h+="<button class='btn danger sm' onclick=\"deleteDraft('"+t.id+"')\">削除</button>";
+  }else if(tab==="review"){
+    h+="<button class='btn primary sm' onclick=\"openReviewModal('"+t.id+"')\">振り返る</button>";
+    h+="<button class='btn ghost sm' onclick=\"editClose('"+t.id+"')\">決済内容を編集</button>";
   }else if(tab==="closed"){
+    if(t.source==="mt5") h+="<button class='btn "+(needsReview(t)?"primary":"ghost")+" sm' onclick=\"openReviewModal('"+t.id+"')\">振り返る</button>";
     h+="<button class='btn ghost sm' onclick=\"editClose('"+t.id+"')\">決済内容を編集</button>";
     h+="<button class='btn ghost sm' onclick=\"reopenTrade('"+t.id+"')\">保有中に戻す</button>";
     h+="<button class='btn danger sm' onclick=\"deleteTrade('"+t.id+"')\">削除</button>";
@@ -4060,6 +4237,7 @@ window.saveClose=function(id){
   t.result=CLOSE.result||null; t.ruleOk=CLOSE.ruleOk||null;
   t.closeSawLower=CLOSE.sawLower||null; t.emotion=CLOSE.emotion||null;
   t.reviewMemo=g("c_review"); t.learn=g("c_learn");
+  if(t.source==="mt5"&&(t.reviewMemo||t.learn||t.emotion||t.ruleOk)) t.reviewedAt=t.reviewedAt||now();
   t.status="closed"; t.updatedAt=now();
   // 画像
   if(window._closeShotDataUrl){ IMG[id+"_exit"]=window._closeShotDataUrl; } else { delete IMG[id+"_exit"]; }
