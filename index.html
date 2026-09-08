@@ -4512,8 +4512,86 @@ function viewGrowth(){
     ["手入力",function(t){ return t.source!=="mt5"; }]
   ]);
   h+="</div>";
+  h+=timeAxisTables(list);
   return h;
 }
+/* =========================================================================
+   時間軸の分析（曜日 / セッション / エントリー時間帯 / 保有時間）
+   -------------------------------------------------------------------------
+   エントリー時刻と決済時刻は MT5 から入っているので、記録を増やさずに切れる。
+   時間帯と曜日は端末の時計（日本なら JST）で数える。セッションは各市場の
+   タイムゾーンで解くので、夏時間は自動で追従する。
+   ========================================================================= */
+var WEEKDAY_LABELS=["日","月","火","水","木","金","土"];
+function tradeEntryDate(t){ var d=t&&t.createdAt?new Date(t.createdAt):null; return (d&&!isNaN(d))?d:null; }
+function tradeWeekday(t){ var d=tradeEntryDate(t); return d?d.getDay():null; }
+function tradeEntryHour(t){ var d=tradeEntryDate(t); return d?d.getHours():null; }
+// エントリー時間帯（端末時刻・4時間刻み）
+var HOUR_BUCKETS=[[0,4,"0〜3時"],[4,8,"4〜7時"],[8,12,"8〜11時"],[12,16,"12〜15時"],[16,20,"16〜19時"],[20,24,"20〜23時"]];
+function tradeHourBucket(t){
+  var h=tradeEntryHour(t); if(h===null) return null;
+  for(var i=0;i<HOUR_BUCKETS.length;i++){ if(h>=HOUR_BUCKETS[i][0]&&h<HOUR_BUCKETS[i][1]) return HOUR_BUCKETS[i][2]; }
+  return null;
+}
+// 保有時間（分）
+function tradeHoldMin(t){
+  if(!t||!t.createdAt||!t.closedAt) return null;
+  var a=new Date(t.createdAt).getTime(), b=new Date(t.closedAt).getTime();
+  if(isNaN(a)||isNaN(b)||b<a) return null;
+  return (b-a)/60000;
+}
+// 上端を含める（ちょうど1時間は「15分〜1時間」）
+var HOLD_BUCKETS=[[0,15,"15分以内"],[15,60,"15分〜1時間"],[60,240,"1〜4時間"],[240,1440,"4〜24時間"],[1440,Infinity,"1日超"]];
+function tradeHoldBucket(t){
+  var m=tradeHoldMin(t); if(m===null) return null;
+  for(var i=0;i<HOLD_BUCKETS.length;i++){ if(m<=HOLD_BUCKETS[i][1]) return HOLD_BUCKETS[i][2]; }
+  return null;
+}
+// エントリー時刻がどの市場の時間帯に入るか。
+// セッション窓は「その市場の壁時計の日付」で決まるので、端末の日付とその前日の窓を両方見る
+// （ニューヨークの 08〜17 時は JST では 22 時〜翌 7 時になるため）。
+// ロンドンとニューヨークは重なる時間があるので、両方に入るものは「重複」として分ける。
+function tradeSessions(t){
+  var d=tradeEntryDate(t); if(!d) return [];
+  var iso=d.toISOString();
+  var days=[isoDate(d)];
+  var prev=new Date(d.getTime()-86400000); days.push(isoDate(prev));
+  var hit={};
+  days.forEach(function(ds){
+    sessionWindows(ds).forEach(function(w){
+      if(iso>=w.startISO&&iso<w.endISO) hit[w.key]=true;
+    });
+  });
+  return Object.keys(hit);
+}
+function tradeSessionBucket(t){
+  var s=tradeSessions(t);
+  if(!s.length) return "セッション外";
+  if(s.indexOf("london")>=0&&s.indexOf("newyork")>=0) return "ロンドン×NY 重複";
+  if(s.indexOf("asia")>=0&&s.indexOf("london")>=0) return "アジア×ロンドン 重複";
+  return {asia:"アジア",london:"ロンドン",newyork:"ニューヨーク"}[s[0]]||"セッション外";
+}
+// 成長タブの「時間軸」ブロック。classTable をそのまま使うので列は他と同じ
+function timeAxisTables(list){
+  var h="<div class='sect-title'>時間軸</div>";
+  h+="<div class='smallnote' style='margin:-6px 2px 10px'>曜日・時間帯は端末の時計、セッションは各市場の時計（夏時間は自動）。エントリー時刻で数えます。</div>";
+  h+="<div class='tablegrid'>";
+  h+=classTable("曜日", list, [1,2,3,4,5,0,6].map(function(w){
+    return [WEEKDAY_LABELS[w]+"曜", function(t){ return tradeWeekday(t)===w; }];
+  }));
+  h+=classTable("セッション", list, ["アジア","アジア×ロンドン 重複","ロンドン","ロンドン×NY 重複","ニューヨーク","セッション外"].map(function(k){
+    return [k, function(t){ return tradeSessionBucket(t)===k; }];
+  }));
+  h+=classTable("エントリー時間帯", list, HOUR_BUCKETS.map(function(b){
+    return [b[2], function(t){ return tradeHourBucket(t)===b[2]; }];
+  }));
+  h+=classTable("保有時間", list, HOLD_BUCKETS.map(function(b){
+    return [b[2], function(t){ return tradeHoldBucket(t)===b[2]; }];
+  }));
+  h+="</div>";
+  return h;
+}
+
 /* ---------- 環境認識とトレードの突き合わせ ----------
    朝どう見ていたかと、実際にどちらへ取ったか。
    将来の分析（朝と同方向/逆方向の成績、4Hに沿った/逆らった勝率）の土台になる。

@@ -1623,6 +1623,59 @@ group("21. 計画と MT5 の紐付け");
   await page.close();
 }
 
+/* =======================================================================
+   22. 時間軸の分析（D）
+   ======================================================================= */
+group("22. 時間軸の分析");
+{
+  // 端末を東京にして、曜日・時間帯が JST で数えられることを固定する
+  const page = await open(375, 812, "Asia/Tokyo");
+  const r = await page.evaluate(() => {
+    const mk = (id, entryISO, exitISO, pl) => ({ id, status: "closed", symbol: "XAUUSD", dir: "long",
+      entry: 3300, sl: 3290, tp: 3320, lot: 1, contractSize: 100, balanceAtEntry: 100000,
+      realizedPL: pl, createdAt: entryISO, closedAt: exitISO, tags: [] });
+    DB.trades = [
+      // 2026-07-15（水）JST 10:30 = 01:30Z → 東京セッション。保有 10 分
+      mk("a", "2026-07-15T01:30:00.000Z", "2026-07-15T01:40:00.000Z", 500),
+      // 同日 JST 17:00 = 08:00Z → ロンドン（夏時間 07:00Z〜15:30Z）。保有 2 時間
+      mk("b", "2026-07-15T08:00:00.000Z", "2026-07-15T10:00:00.000Z", -300),
+      // 同日 JST 23:00 = 14:00Z → ロンドン×NY 重複（NY 夏時間 12:00Z〜21:00Z）。保有 30 時間
+      mk("c", "2026-07-15T14:00:00.000Z", "2026-07-16T20:00:00.000Z", 900),
+      // 2026-07-16（木）JST 03:00 = 07/15 18:00Z → NY のみ（端末日付の前日の窓で拾う）。保有 45 分
+      mk("d", "2026-07-15T18:00:00.000Z", "2026-07-15T18:45:00.000Z", -200),
+      // 2026-07-18（土）JST 06:00 = 21:00Z 金曜 → セッション外
+      mk("e", "2026-07-17T21:00:00.000Z", "2026-07-17T22:00:00.000Z", 100),
+    ];
+    saveData();
+    UI.growthPeriod = "all"; TAB = "growth"; render();
+    return {
+      wd: DB.trades.map(t => tradeWeekday(t)),
+      sess: DB.trades.map(t => tradeSessionBucket(t)),
+      hour: DB.trades.map(t => tradeHourBucket(t)),
+      hold: DB.trades.map(t => tradeHoldBucket(t)),
+      text: document.getElementById("app").innerText,
+    };
+  });
+  ok("曜日は端末の日付で数える（JST）", r.wd.join(",") === "3,3,3,4,6");
+  ok("セッションは各市場の時計で解く（夏時間込み）",
+     r.sess.join("|") === "アジア|ロンドン|ロンドン×NY 重複|ニューヨーク|セッション外");
+  ok("エントリー時間帯は端末の時刻", r.hour.join("|") === "8〜11時|16〜19時|20〜23時|0〜3時|4〜7時");
+  ok("保有時間で分ける", r.hold.join("|") === "15分以内|1〜4時間|1日超|15分〜1時間|15分〜1時間");
+  ok("成長タブに4つの表が出る",
+     ["曜日", "セッション", "エントリー時間帯", "保有時間"].every(k => r.text.includes(k)));
+
+  // 端末の時計を変えても、セッションの判定は動かない
+  const ny = await open(375, 812, "America/New_York");
+  const sessNY = await ny.evaluate(() => {
+    DB.trades = [{ id: "x", status: "closed", symbol: "XAUUSD", dir: "long", entry: 3300, sl: 3290, lot: 1,
+      contractSize: 100, realizedPL: 1, createdAt: "2026-07-15T14:00:00.000Z", closedAt: "2026-07-15T15:00:00.000Z", tags: [] }];
+    return tradeSessionBucket(DB.trades[0]);
+  });
+  ok("端末のタイムゾーンを変えてもセッションは同じ", sessNY === "ロンドン×NY 重複");
+  await ny.close();
+  await page.close();
+}
+
 /* ---------- 後始末 ---------- */
 await browser.close();
 server.close();
