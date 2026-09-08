@@ -1787,6 +1787,40 @@ group("23. MAE / MFE");
   await page.close();
 }
 
+/* =======================================================================
+   24. Morning Brief 一覧の日次サマリ（F）
+   ======================================================================= */
+group("24. Morning Brief 一覧");
+{
+  const page = await open();
+  const r = await page.evaluate(() => {
+    DB.briefs = [
+      { id: "b8", date: "2026-09-08", symbol: "XAUUSD", bias: "long", trend: { daily: "up", h4: "up", h1: "range", m15: "" }, levels: {}, events: [], scenarios: {}, memo: "" },
+      { id: "b7", date: "2026-09-07", symbol: "XAUUSD", bias: "wait", trend: { daily: "range", h4: "range", h1: "range", m15: "" }, levels: {}, events: [], scenarios: {}, memo: "" },
+      { id: "b6", date: "2026-09-06", symbol: "XAUUSD", bias: "", trend: {}, levels: {}, events: [], scenarios: {}, memo: "" },
+    ];
+    const mk = (id, dir, pl, briefId, status) => ({ id, status: status || "closed", symbol: "XAUUSD", dir, entry: 3300, sl: 3290, lot: 1,
+      contractSize: 100, realizedPL: pl, briefId, createdAt: "2026-09-08T01:00:00.000Z", closedAt: "2026-09-08T02:00:00.000Z", tags: [] });
+    DB.trades = [ mk("t1", "long", 800, "b8"), mk("t2", "long", -300, "b8"), mk("t3", "short", 200, "b8"),
+                  mk("t4", "long", null, "b8", "open"), mk("t5", "long", 100, "b7") ];
+    saveData();
+    UI.briefDate = "2026-09-08"; BRIEF = null; TAB = "brief"; render();
+    return { s8: briefDaySummary(DB.briefs[0]), s7: briefDaySummary(DB.briefs[1]), s6: briefDaySummary(DB.briefs[2]),
+             title: briefTitle(DB.briefs[0]), text: document.getElementById("app").innerText };
+  });
+  ok("見出しが「9/8 Morning Brief」の形", r.title === "9/8 Morning Brief");
+  ok("その日の件数・損益・勝敗", r.s8.n === 3 && r.s8.pl === 700 && r.s8.wins === 2 && r.s8.losses === 1 && r.s8.open === 1);
+  ok("朝の見方と同方向／逆方向を数える", r.s8.withN === 2 && r.s8.againstN === 1);
+  ok("様子見の日は別に数える", r.s7.n === 1 && r.s7.waitN === 1);
+  ok("取引の無い日は取引なし", r.s6.n === 0);
+  // 見出しは .sect-title が大文字化するので innerText では MORNING BRIEF になる
+  ok("一覧に日次サマリが出る",
+     r.text.includes("これまでの MORNING BRIEF") && r.text.includes("9/8 Morning Brief") &&
+     r.text.includes("3件") && r.text.includes("+700") && r.text.includes("2勝1敗") &&
+     r.text.includes("朝と同方向 2 / 逆 1") && r.text.includes("取引なし"));
+  await page.close();
+}
+
 /* ---------- 後始末 ---------- */
 await browser.close();
 server.close();

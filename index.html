@@ -193,6 +193,9 @@ html[data-theme="light"] .btn.primary{color:#fff}
 .blist .bl:last-child{border-bottom:0}
 .blist .bl .bld{font-weight:700;font-size:13.5px;font-variant-numeric:tabular-nums}
 .blist .bl .blt{font-size:14px;color:var(--txt2);font-variant-numeric:tabular-nums;letter-spacing:.08em}
+.blist .bl.bl2{display:block}
+.blist .bl2 .blrow{display:flex;justify-content:space-between;align-items:center;gap:10px}
+.blist .bl2 .blrow.bls{margin-top:4px;justify-content:flex-start;flex-wrap:wrap;gap:2px;font-size:12px;color:var(--txt2);font-variant-numeric:tabular-nums}
 
 /* ---- 朝分析（marketDataProvider 由来の表示） ---- */
 .anabar{display:flex;align-items:center;gap:9px;margin-bottom:10px}
@@ -3237,14 +3240,17 @@ function viewBrief(){
     h+="<div class='smallnote' style='text-align:center'>最終更新 "+fmtWhen(saved.updatedAt||saved.createdAt)+"</div>";
   }
 
-  // 過去分
+  // 過去分（その日のトレードの結果と、朝の見方と合っていたかを添える）
   if(DB.briefs.length){
-    h+="<div class='sect-title'>これまでの環境認識</div>";
+    h+="<div class='sect-title'>これまでの Morning Brief</div>";
     h+="<div class='card blist'>";
     DB.briefs.slice().sort(function(a,b){ return String(b.date).localeCompare(String(a.date)); }).slice(0,14).forEach(function(b){
-      h+="<div class='bl' onclick=\"gotoBriefDate('"+esc(b.date)+"')\">"+
-         "<span class='bld'>"+esc(b.date)+(b.date===UI.briefDate?" ・編集中":"")+"</span>"+
+      var d=briefDaySummary(b);
+      h+="<div class='bl bl2' onclick=\"gotoBriefDate('"+esc(b.date)+"')\">";
+      h+="<div class='blrow'><span class='bld'>"+esc(briefTitle(b))+(b.date===UI.briefDate?" <span class='muted'>・編集中</span>":"")+"</span>"+
          "<span class='blt'>"+briefTrendText(b)+"</span></div>";
+      h+="<div class='blrow bls'>"+briefDaySummaryHtml(b,d)+"</div>";
+      h+="</div>";
     });
     h+="</div>";
   }
@@ -4771,6 +4777,44 @@ window.computeExcursionBatch=function(){
   };
   step();
 };
+
+/* ---------- Morning Brief 一覧の日次サマリ ---------- */
+// 「9/8 Morning Brief」の形の見出し
+function briefTitle(b){
+  var m=/^(\d{4})-(\d{2})-(\d{2})$/.exec(String(b&&b.date||""));
+  if(!m) return String(b&&b.date||"")+" Morning Brief";
+  return Number(m[2])+"/"+Number(m[3])+" Morning Brief";
+}
+// その Brief に紐付く決済済みトレードのまとめ。朝の見方と同方向／逆方向の件数も数える
+function briefDaySummary(b){
+  var o={n:0,pl:0,wins:0,losses:0,be:0,withN:0,againstN:0,waitN:0,open:0};
+  if(!b) return o;
+  DB.trades.forEach(function(t){
+    if(t.status!=="closed"&&t.status!=="open") return;
+    if(briefOfTrade(t)!==b) return;
+    if(t.status==="open"){ o.open++; return; }
+    o.n++;
+    var pl=toNum(t.realizedPL); if(isNum(pl)) o.pl+=pl;
+    var res=t.result||(isNum(pl)?(pl>0?"win":pl<0?"lose":"be"):null);
+    if(res==="win") o.wins++; else if(res==="lose") o.losses++; else if(res==="be") o.be++;
+    var ag=briefAgree(t);
+    if(ag==="with") o.withN++; else if(ag==="against") o.againstN++; else if(ag==="wait") o.waitN++;
+  });
+  o.pl=Math.round(o.pl*100)/100;
+  return o;
+}
+function briefDaySummaryHtml(b,d){
+  var nb=normalizeBrief(b);
+  var bias=nb.bias?"<span class='"+clsBias(nb.bias)+"'>"+esc(labelBias(nb.bias))+"</span>":"<span class='muted'>見方なし</span>";
+  if(!d.n&&!d.open) return bias+"<span class='muted'>取引なし</span>";
+  var parts=[bias, d.n+"件"];
+  if(d.n) parts.push("<span class='"+clsSign(d.pl)+"'>"+fmtSigned(d.pl)+"</span>", d.wins+"勝"+d.losses+"敗"+(d.be?d.be+"分":""));
+  if(nb.bias&&nb.bias!=="wait"&&(d.withN||d.againstN))
+    parts.push("朝と同方向 "+d.withN+" / 逆 "+d.againstN);
+  else if(nb.bias==="wait"&&d.waitN) parts.push("様子見の日に "+d.waitN+"件");
+  if(d.open) parts.push("保有中 "+d.open);
+  return parts.join("<span class='muted'> ・ </span>");
+}
 
 /* ---------- 環境認識とトレードの突き合わせ ----------
    朝どう見ていたかと、実際にどちらへ取ったか。
