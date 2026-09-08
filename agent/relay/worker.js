@@ -5,6 +5,7 @@
  *   1. VPS のエージェントから約定を受け取って貯める          POST /api/deals
  *   2. ぼぶる（iPhone / PC）へ約定を渡す                     GET  /api/deals
  *   3. 市場データ業者の素の足を、キーを隠したまま中継する      GET  /api/ohlc
+ *   4. 区間を指定して細かい足を返す（MAE / MFE 用）            GET  /api/bars
  *
  * ここが持つ秘密は「エージェントとの共有鍵」と「業者のAPIキー」だけ。
  * MT5 のログイン情報はここには来ないし、置く場所も無い。
@@ -35,6 +36,8 @@ export default {
         return cors(await getDeals(request, env, url), env);
       if (url.pathname === "/api/ohlc" && request.method === "GET")
         return cors(await getOhlc(request, env, url), env);
+      if (url.pathname === "/api/bars" && request.method === "GET")
+        return cors(await getBars(request, env, url), env);
       return cors(json({ error: "not found" }, 404), env);
     } catch (e) {
       return cors(json({ error: String(e && e.message || e) }, 500), env);
@@ -186,5 +189,56 @@ async function getOhlc(request, env, url) {
     asOf: new Date().toISOString(),
     series: { [symbol]: series },
     quotes, notes,
+  });
+}
+
+/* ---------- 4. 区間指定の足（MAE / MFE 用） ----------
+ * ぼぶるはまず 1min を取りに来て、取れなければ 15min に落とす。
+ * 1分足が安定して取れるかは業者と契約で変わるので、デプロイ後に
+ *   /api/bars?symbol=XAUUSD&interval=1min&start=<ISO>&end=<ISO>
+ * を叩いて確かめること。返せなかったときは bars を空にして notes に理由を書く。
+ */
+const BAR_INTERVALS = { "1min": "1min", "5min": "5min", "15min": "15min", "1h": "1h" };
+function vendorTime(iso) {
+  // Twelve Data の start_date / end_date は "YYYY-MM-DD HH:MM:SS"（timezone=UTC を付ける）
+  const d = new Date(iso);
+  if (isNaN(d)) return null;
+  return d.toISOString().slice(0, 19).replace("T", " ");
+}
+async function getBars(request, env, url) {
+  const bad = requireRead(request, env);
+  if (bad) return bad;
+  if (!env.MARKET_API_KEY) return json({ error: "MARKET_API_KEY が設定されていません" }, 500);
+
+  const symbol = (url.searchParams.get("symbol") || "XAUUSD").toUpperCase();
+  const interval = BAR_INTERVALS[url.searchParams.get("interval") || "1min"];
+  const start = vendorTime(url.searchParams.get("start"));
+  const end = vendorTime(url.searchParams.get("end"));
+  if (!interval || !start || !end) return json({ error: "interval / start / end を指定して下さい" }, 400);
+
+  const base = env.MARKET_BASE || "https://api.twelvedata.com";
+  const vendor = symbol === "XAUUSD" ? "XAU/USD" : symbol;
+  const notes = [];
+  let bars = [];
+  try {
+    const r = await fetch(`${base}/time_series?symbol=${encodeURIComponent(vendor)}&interval=${interval}` +
+      `&start_date=${encodeURIComponent(start)}&end_date=${encodeURIComponent(end)}` +
+      `&outputsize=5000&timezone=UTC&apikey=${env.MARKET_API_KEY}`);
+    const j = await r.json();
+    if (j && Array.isArray(j.values)) {
+      bars = j.values.slice().reverse().map((v) => ({
+        t: String(v.datetime).replace(" ", "T") + "Z",
+        o: Number(v.open), h: Number(v.high), l: Number(v.low), c: Number(v.close),
+      })).filter((b) => Number.isFinite(b.h) && Number.isFinite(b.l));
+    } else {
+      notes.push(`${interval} は取得できませんでした${j && j.message ? "：" + j.message : "。"}`);
+    }
+  } catch (e) {
+    notes.push(`${interval} の取得で失敗しました: ${String(e && e.message || e)}`);
+  }
+  return json({
+    source: "中継（" + new URL(base).host + "）",
+    symbol, interval, start: url.searchParams.get("start"), end: url.searchParams.get("end"),
+    bars, notes,
   });
 }

@@ -236,6 +236,7 @@ html[data-theme="light"] .btn.primary{color:#fff}
 .mt5area{width:100%;min-height:88px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:11.5px}
 .mt5tag{display:inline-block;font-size:10px;font-weight:700;padding:1px 6px;border-radius:20px;
   border:1px solid var(--line2);color:var(--txt3);margin-left:6px;vertical-align:middle}
+.mt5tag.est{color:var(--gold);border-color:color-mix(in srgb,var(--gold) 50%,var(--line2))}
 
 /* ---- 口座の状態（MT5 由来） ---- */
 .acctgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:7px;margin-top:11px}
@@ -4117,6 +4118,8 @@ function tradeCard(t,tab){
 
   // 紐付けた計画との比較
   h+=planVsActualHtml(t);
+  // 最大逆行・最大順行
+  if(t.status==="closed") h+=excursionHtml(t);
   if(t.source==="mt5"&&!t.plan&&planCandidatesFor(t).length&&tab!=="review")
     h+="<div class='smallnote' style='margin:8px 0 0'>この取引に紐付けられそうな計画があります（一覧の上に候補が出ています）。</div>";
 
@@ -4156,6 +4159,7 @@ function tradeCard(t,tab){
     h+="<button class='btn ghost sm' onclick=\"editClose('"+t.id+"')\">決済内容を編集</button>";
   }else if(tab==="closed"){
     if(t.source==="mt5") h+="<button class='btn "+(needsReview(t)?"primary":"ghost")+" sm' onclick=\"openReviewModal('"+t.id+"')\">振り返る</button>";
+    if(!t.excursion&&t.createdAt&&t.closedAt&&barsEndpoint()) h+="<button class='btn ghost sm' onclick=\"computeExcursionFor('"+t.id+"')\">MAE/MFE</button>";
     h+="<button class='btn ghost sm' onclick=\"editClose('"+t.id+"')\">決済内容を編集</button>";
     h+="<button class='btn ghost sm' onclick=\"reopenTrade('"+t.id+"')\">保有中に戻す</button>";
     h+="<button class='btn danger sm' onclick=\"deleteTrade('"+t.id+"')\">削除</button>";
@@ -4513,6 +4517,8 @@ function viewGrowth(){
   ]);
   h+="</div>";
   h+=timeAxisTables(list);
+  h+="<div class='sect-title'>値動きに対して</div>";
+  h+=excursionSummaryCard(list);
   return h;
 }
 /* =========================================================================
@@ -4591,6 +4597,180 @@ function timeAxisTables(list){
   h+="</div>";
   return h;
 }
+
+/* =========================================================================
+   MAE / MFE（最大逆行・最大順行）
+   -------------------------------------------------------------------------
+   保有中に価格がどこまで逆行・順行したかを、中継の足から出す。
+   1分足が取れれば 1分足ベース。取れなければ 15分足に落とし、
+   「15分足ベース推定値」と明記する（15分足は足の中の順序が分からないので推定）。
+   ========================================================================= */
+var EXCURSION_POST_MS=4*3600*1000;     // 決済後にどこまで伸びたかを見る窓（4時間）
+var EXCURSION_MAX_1MIN_MS=3*86400000;  // 1分足で追う上限（業者の1回の上限 5000本 ≒ 3.5日）
+
+// 純粋な計算。足は {t,o,h,l,c} の昇順
+function excursionFromBars(t,bars,basis){
+  var entry=toNum(t.entry), exitP=toNum(t.closePrice);
+  if(!t||!t.createdAt||!t.closedAt||!isNum(entry)) return null;
+  var a=t.createdAt, b=t.closedAt;
+  var inHold=(bars||[]).filter(function(x){ return x.t>=a && x.t<=b; });
+  if(!inHold.length) return null;
+  var hl=highLowOf(inHold);
+  var long=t.dir==="long";
+  var mae=long?(entry-hl.low):(hl.high-entry);
+  var mfe=long?(hl.high-entry):(entry-hl.low);
+  mae=Math.max(0,mae); mfe=Math.max(0,mfe);
+  var sl=toNum(t.sl);
+  var slDist=isNum(sl)?Math.abs(entry-sl):null;
+  var post=null;
+  if(isNum(exitP)){
+    var bEnd=new Date(new Date(b).getTime()+EXCURSION_POST_MS).toISOString();
+    var after=(bars||[]).filter(function(x){ return x.t>b && x.t<=bEnd; });
+    if(after.length){
+      var hl2=highLowOf(after);
+      post=Math.max(0, long?(hl2.high-exitP):(exitP-hl2.low));
+    }
+  }
+  var r5=function(v){ return isNum(v)?Math.round(v*100000)/100000:null; };
+  return {
+    basis:basis, estimate:basis!=="1min",
+    mae:r5(mae), mfe:r5(mfe),
+    maeR:(slDist&&slDist>0)?r5(mae/slDist):null,
+    mfeR:(slDist&&slDist>0)?r5(mfe/slDist):null,
+    slDist:r5(slDist),
+    postExit:r5(post), postWindowH:EXCURSION_POST_MS/3600000,
+    bars:inHold.length, at:now()
+  };
+}
+// 中継の /api/bars を叩く。朝分析の取得URL（/api/ohlc）から導く
+function barsEndpoint(){
+  var m=(DB&&DB.settings&&DB.settings.marketRelay)||{};
+  var url=String(m.endpoint||"").trim();
+  if(!url) return null;
+  var b=url.replace(/\/api\/ohlc(\?.*)?$/,"/api/bars");
+  return b===url?null:b;
+}
+function fetchBars(symbol,interval,startISO,endISO){
+  var url=barsEndpoint();
+  if(!url) return Promise.reject(new Error("市場データの中継（/api/ohlc）が設定されていません"));
+  var m=DB.settings.marketRelay||{};
+  var full=url+"?symbol="+encodeURIComponent(symbol)+"&interval="+encodeURIComponent(interval)+
+           "&start="+encodeURIComponent(startISO)+"&end="+encodeURIComponent(endISO);
+  var head={"Accept":"application/json"};
+  if(m.token) head["Authorization"]="Bearer "+m.token;
+  return fetch(full,{method:"GET",headers:head,cache:"no-store"}).then(function(r){
+    if(!r.ok) throw new Error("中継が "+r.status+" を返しました");
+    return r.json();
+  }).then(function(j){
+    j=j||{};
+    return {bars:normalizeBars(j.bars), notes:Array.isArray(j.notes)?j.notes.map(String):[], source:j.source||""};
+  });
+}
+// 1分足 → 15分足 の順に試す。1分足が疎（保有時間の半分も無い）なら信用せず落とす
+function computeExcursion(t){
+  if(!t||t.status!=="closed"||!t.createdAt||!t.closedAt) return Promise.resolve({ok:false,note:"決済済みで時刻のある記録だけ計算できます"});
+  var start=new Date(new Date(t.createdAt).getTime()-60000).toISOString();
+  var end=new Date(new Date(t.closedAt).getTime()+EXCURSION_POST_MS+60000).toISOString();
+  var holdMs=new Date(t.closedAt)-new Date(t.createdAt);
+  var notes=[];
+  var tryInterval=function(iv){
+    return fetchBars(t.symbol||"XAUUSD",iv,start,end).then(function(res){
+      notes=notes.concat(res.notes||[]);
+      return res.bars;
+    });
+  };
+  var first = holdMs<=EXCURSION_MAX_1MIN_MS ? Promise.resolve("1min") : Promise.resolve("15min");
+  return first.then(function(iv){
+    if(iv==="15min") notes.push("保有が3日を超えるので 15分足で計算します。");
+    return tryInterval(iv).then(function(bars){
+      var expected=holdMs/60000;
+      var inHold=bars.filter(function(x){ return x.t>=t.createdAt&&x.t<=t.closedAt; }).length;
+      if(iv==="1min" && inHold<Math.max(1,expected*0.5)){
+        notes.push("1分足が "+inHold+"本しか無く（保有 "+Math.round(expected)+"分）、信用できないので 15分足に落とします。");
+        return tryInterval("15min").then(function(b2){ return {iv:"15min",bars:b2}; });
+      }
+      return {iv:iv,bars:bars};
+    });
+  }).then(function(r){
+    var ex=excursionFromBars(t,r.bars,r.iv);
+    if(!ex) return {ok:false,note:"保有中の足が取れませんでした。"+(notes.join(" ")||"")};
+    ex.notes=notes;
+    t.excursion=ex; t.updatedAt=now(); saveData();
+    return {ok:true,excursion:ex};
+  },function(e){
+    return {ok:false,note:(e&&e.message)||String(e)};
+  });
+}
+function excursionBasisLabel(ex){
+  if(!ex) return "";
+  if(ex.basis==="1min") return "1分足ベース";
+  return ({"15min":"15分足","5min":"5分足","1h":"1時間足"}[ex.basis]||ex.basis)+"ベース推定値";
+}
+function excursionHtml(t){
+  var ex=t&&t.excursion;
+  if(!ex) return "";
+  var tag="<span class='mt5tag"+(ex.estimate?" est":"")+"'>"+esc(excursionBasisLabel(ex))+"</span>";
+  var h="<div class='cmp'><div class='cmph'><span>MAE / MFE "+tag+"</span><span class='muted'>"+ex.bars+"本</span></div>";
+  h+="<div class='tgrid' style='margin:6px 0 0'>";
+  h+=ti("最大逆行（MAE）", "<span class='neg'>-"+num2(ex.mae)+"</span>"+(isNum(ex.maeR)?" <span class='muted'>"+fmtR(-ex.maeR).replace("-","")+" of SL</span>":""));
+  h+=ti("最大順行（MFE）", "<span class='pos'>+"+num2(ex.mfe)+"</span>"+(isNum(ex.mfeR)?" <span class='muted'>"+num2(ex.mfeR)+"R</span>":""));
+  h+=ti("決済後"+ex.postWindowH+"hの順行", isNum(ex.postExit)?("+"+num2(ex.postExit)):"—");
+  h+="</div>";
+  if(ex.estimate) h+="<div class='smallnote' style='margin:6px 0 0'>15分足は足の中の順序が分からないので、正式な値ではなく推定値です。</div>";
+  h+="</div>";
+  return h;
+}
+var _excBusy=false;
+window.computeExcursionFor=function(id){
+  var t=findTrade(id); if(!t||_excBusy) return;
+  _excBusy=true; toast("足を取りに行っています…");
+  computeExcursion(t).then(function(r){
+    _excBusy=false;
+    toast(r.ok?("MAE/MFE を計算しました（"+excursionBasisLabel(r.excursion)+"）"):("計算できませんでした："+r.note));
+    render();
+  });
+};
+// 成長タブ：計算済みの平均と、未計算をまとめて計算するボタン
+function excursionSummaryCard(list){
+  var done=list.filter(function(t){ return t.excursion; });
+  var todo=list.filter(function(t){ return !t.excursion&&t.createdAt&&t.closedAt; });
+  var h="<div class='card'><h2>MAE / MFE</h2>";
+  h+="<div class='smallnote' style='margin:0 0 9px'>保有中にどこまで逆行・順行したか。SL までの距離を 1 として比べます。1分足が取れたものは正式、15分足に落ちたものは推定値です。</div>";
+  if(done.length){
+    var avg=function(arr,k){ var v=arr.map(function(t){return t.excursion[k];}).filter(isNum); return v.length?v.reduce(function(a,b){return a+b;},0)/v.length:null; };
+    var wins=done.filter(function(t){ var pl=toNum(t.realizedPL); return t.result==="win"||(isNum(pl)&&pl>0); });
+    var loses=done.filter(function(t){ var pl=toNum(t.realizedPL); return t.result==="lose"||(isNum(pl)&&pl<0); });
+    var est=done.filter(function(t){ return t.excursion.estimate; }).length;
+    h+="<div class='tablewrap'><table class='atable'><thead><tr><th>分類</th><th>数</th><th>平均MAE</th><th>平均MFE</th><th>決済後"+EXCURSION_POST_MS/3600000+"h</th></tr></thead><tbody>";
+    [["勝ち",wins],["負け",loses],["全体",done]].forEach(function(g){
+      h+="<tr><td>"+g[0]+"</td><td>"+g[1].length+"</td>"+
+         "<td>"+(isNum(avg(g[1],"maeR"))?num2(avg(g[1],"maeR"))+"R":"—")+"</td>"+
+         "<td>"+(isNum(avg(g[1],"mfeR"))?num2(avg(g[1],"mfeR"))+"R":"—")+"</td>"+
+         "<td>"+(isNum(avg(g[1],"postExit"))?"+"+num2(avg(g[1],"postExit")):"—")+"</td></tr>";
+    });
+    h+="</tbody></table></div>";
+    if(est) h+="<div class='smallnote'>うち "+est+" 件は 15分足ベースの推定値です。</div>";
+  }
+  if(todo.length){
+    h+="<div class='smallnote'>未計算 "+todo.length+" 件"+(barsEndpoint()?"":"（設定の「朝分析の中継」を入れると計算できます）")+"</div>";
+    if(barsEndpoint()) h+="<button class='btn ghost sm' onclick='computeExcursionBatch()'>未計算を計算（5件ずつ）</button>";
+  }
+  h+="</div>";
+  return h;
+}
+window.computeExcursionBatch=function(){
+  if(_excBusy) return;
+  var list=DB.trades.filter(function(t){ return t.status==="closed"&&!t.excursion&&t.createdAt&&t.closedAt&&inPeriod(t,UI.growthPeriod,UI.growthCustom); })
+    .sort(function(a,b){ return new Date(b.closedAt)-new Date(a.closedAt); }).slice(0,5);
+  if(!list.length) return;
+  _excBusy=true; toast(list.length+" 件を順に計算します（業者の制限があるので間を空けます）");
+  var i=0, okN=0;
+  var step=function(){
+    if(i>=list.length){ _excBusy=false; toast("MAE/MFE："+okN+"/"+list.length+" 件を計算しました"); render(); return; }
+    computeExcursion(list[i++]).then(function(r){ if(r.ok) okN++; setTimeout(step, 8000); });
+  };
+  step();
+};
 
 /* ---------- 環境認識とトレードの突き合わせ ----------
    朝どう見ていたかと、実際にどちらへ取ったか。

@@ -1676,6 +1676,117 @@ group("22. 時間軸の分析");
   await page.close();
 }
 
+/* =======================================================================
+   23. MAE / MFE（C）
+   ======================================================================= */
+group("23. MAE / MFE");
+{
+  const page = await open();
+  // ロング：3300 で入り 3310 で決済。保有中の安値 3294（逆行 6）、高値 3318（順行 18）。SL 3290（幅 10）
+  const T = {
+    id: "x1", status: "closed", symbol: "XAUUSD", dir: "long", entry: 3300, sl: 3290, tp: 3330, lot: 1,
+    contractSize: 100, realizedPL: 1000, closePrice: 3310,
+    createdAt: "2026-09-01T10:00:00.000Z", closedAt: "2026-09-01T10:30:00.000Z", tags: [] };
+  const mk1 = () => {
+    const out = [];
+    for (let i = -2; i <= 30 + 240; i++) {
+      const t = new Date(Date.UTC(2026, 8, 1, 10, i)).toISOString();
+      let h = 3305, l = 3298;
+      if (i === 10) l = 3294;           // 保有中の最安値
+      if (i === 20) h = 3318;           // 保有中の最高値
+      if (i === 45) h = 3325;           // 決済後 15 分で +15
+      if (i === -2) { h = 3400; l = 3200; }   // エントリー前の足は無視される
+      out.push({ t, o: 3300, h, l, c: 3300 });
+    }
+    return out;
+  };
+  const pure = await page.evaluate(({ t, bars }) => excursionFromBars(t, normalizeBars(bars), "1min"), { t: T, bars: mk1() });
+  ok("MAE/MFE を足から出す", pure.mae === 6 && pure.mfe === 18 && pure.bars === 31);
+  ok("SL 幅を 1 とした比率", pure.maeR === 0.6 && pure.mfeR === 1.8);
+  ok("決済後 4 時間の順行", pure.postExit === 15 && pure.postWindowH === 4);
+  ok("1分足は正式（推定ではない）", pure.basis === "1min" && pure.estimate === false);
+  ok("エントリー前の足は使わない", pure.mae !== 100);
+
+  // --- 中継を通す：1分足が取れれば 1分足ベース ---
+  const r1 = await page.evaluate(async ({ t, bars }) => {
+    DB.trades = [t]; DB.settings.marketRelay = { endpoint: "https://example.test/api/ohlc", token: "MK" }; saveData();
+    const orig = window.fetch; const calls = [];
+    window.fetch = (url) => { calls.push(url);
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ bars, notes: [] }) }); };
+    const r = await computeExcursion(DB.trades[0]);
+    window.fetch = orig;
+    return { r, calls, ex: DB.trades[0].excursion };
+  }, { t: T, bars: mk1() });
+  ok("/api/bars を 1分足で叩く", r1.calls.length === 1 && r1.calls[0].includes("/api/bars") && r1.calls[0].includes("interval=1min"));
+  ok("トークンは付いて、朝分析の URL から導く", r1.calls[0].startsWith("https://example.test/api/bars?"));
+  ok("1分足ベースで記録に残る", r1.r.ok && r1.ex.basis === "1min" && r1.ex.mae === 6);
+
+  // --- 1分足が空なら 15分足に落ちて「推定値」と明記 ---
+  const bars15 = [
+    { t: "2026-09-01T09:45:00.000Z", o: 3300, h: 3500, l: 3100, c: 3300 },   // エントリー前
+    { t: "2026-09-01T10:00:00.000Z", o: 3300, h: 3312, l: 3293, c: 3305 },
+    { t: "2026-09-01T10:15:00.000Z", o: 3305, h: 3320, l: 3299, c: 3310 },
+    { t: "2026-09-01T10:30:00.000Z", o: 3310, h: 3316, l: 3305, c: 3310 },
+    { t: "2026-09-01T11:00:00.000Z", o: 3310, h: 3330, l: 3300, c: 3320 },
+  ];
+  const r2 = await page.evaluate(async ({ t, b15 }) => {
+    DB.trades = [Object.assign({}, t, { id: "x2", excursion: undefined })]; saveData();
+    const orig = window.fetch; const calls = [];
+    window.fetch = (url) => { calls.push(url);
+      const iv = /interval=([^&]+)/.exec(url)[1];
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(
+        iv === "1min" ? { bars: [], notes: ["1min は取得できませんでした"] } : { bars: b15, notes: [] }) }); };
+    const r = await computeExcursion(DB.trades[0]);
+    window.fetch = orig;
+    return { r, calls: calls.map(u => /interval=([^&]+)/.exec(u)[1]), ex: DB.trades[0].excursion };
+  }, { t: T, b15: bars15 });
+  ok("1分足が空なら 15分足を取りに行く", r2.calls.join(",") === "1min,15min");
+  ok("15分足は推定値として明記", r2.r.ok && r2.ex.basis === "15min" && r2.ex.estimate === true);
+  ok("15分足でも数字は出る（正式とは言わない）", r2.ex.mae === 7 && r2.ex.mfe === 20 && r2.ex.postExit === 20);
+  ok("落とした理由が残る", r2.ex.notes.length > 0);
+  ok("表示の札が違う", await page.evaluate(() => excursionBasisLabel(DB.trades[0].excursion)) === "15分足ベース推定値");
+
+  // --- 1分足が疎なら信用せず落とす ---
+  const r3 = await page.evaluate(async ({ t, b15 }) => {
+    DB.trades = [Object.assign({}, t, { id: "x3" })]; saveData();
+    const sparse = [{ t: "2026-09-01T10:05:00.000Z", o: 3300, h: 3301, l: 3299, c: 3300 }];   // 30分保有で1本
+    const orig = window.fetch; const calls = [];
+    window.fetch = (url) => { calls.push(url);
+      const iv = /interval=([^&]+)/.exec(url)[1];
+      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(
+        iv === "1min" ? { bars: sparse, notes: [] } : { bars: b15, notes: [] }) }); };
+    const r = await computeExcursion(DB.trades[0]);
+    window.fetch = orig;
+    return { calls: calls.map(u => /interval=([^&]+)/.exec(u)[1]), basis: DB.trades[0].excursion.basis };
+  }, { t: T, b15: bars15 });
+  ok("1分足が疎なら 15分足に落とす", r3.calls.join(",") === "1min,15min" && r3.basis === "15min");
+
+  // --- 中継が無ければ計算しない（推測しない） ---
+  ok("中継が無ければ計算できないと言う",
+     await page.evaluate(async (t) => {
+       DB.settings.marketRelay = { endpoint: "", token: "" }; DB.trades = [Object.assign({}, t, { id: "x4" })]; saveData();
+       const r = await computeExcursion(DB.trades[0]);
+       return r.ok === false && !DB.trades[0].excursion;
+     }, T));
+
+  // --- 画面 ---
+  await page.evaluate((t) => {
+    DB.settings.marketRelay = { endpoint: "https://example.test/api/ohlc", token: "MK" };
+    DB.trades = [Object.assign({}, t, { id: "s1", excursion: { basis: "15min", estimate: true, mae: 7, mfe: 20, maeR: 0.7, mfeR: 2, postExit: 20, postWindowH: 4, bars: 3, notes: [] } }),
+                 Object.assign({}, t, { id: "s2" })];
+    saveData(); TAB = "trades"; UI.tradeTab = "closed"; render();
+  }, T);
+  await page.waitForTimeout(80);
+  const cards = await page.$eval("#app", e => e.innerText);
+  ok("カードに MAE/MFE と推定の札が出る", cards.includes("最大逆行") && cards.includes("15分足ベース推定値"));
+  ok("未計算の記録には計算ボタンが出る", cards.includes("MAE/MFE") && (await page.$$("button:has-text('MAE/MFE')")).length === 1);
+  await page.evaluate(() => { UI.growthPeriod = "all"; TAB = "growth"; render(); });
+  await page.waitForTimeout(80);
+  const growth = await page.$eval("#app", e => e.innerText);
+  ok("成長タブにまとめが出る", growth.includes("平均MAE") && growth.includes("未計算 1 件"));
+  await page.close();
+}
+
 /* ---------- 後始末 ---------- */
 await browser.close();
 server.close();
