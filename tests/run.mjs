@@ -328,7 +328,7 @@ for (const [w, h] of [[375, 812], [1024, 768], [1440, 900]]) {
   }, side));
 
   const order = await page.$eval("#app", e => e.innerText);
-  const seq = ["本日の損益", "直近30日 勝率", "環境認識", "FINTOKEI 状況"].map(k => order.indexOf(k));
+  const seq = ["口座", "本日の損益", "直近30日 勝率", "環境認識"].map(k => order.indexOf(k));
   ok(`${w}px: ホームの並び順が同じ`, seq.every(i => i >= 0) && seq.every((v, i, a) => i === 0 || a[i-1] < v));
 
   await page.evaluate(() => { TAB = "growth"; UI.growthPeriod = "all"; render(); });
@@ -422,7 +422,10 @@ group("9. 朝分析と marketDataProvider");
      (await page.inputValue("#b_ph")) === "3333.3" && (await page.inputValue("#b_memo")) === "手で書いたメモ");
 
   // --- デモ: 取れた項目だけがフォームに入る ---
-  await page.selectOption("#b_provider", "demo");
+  await page.evaluate(() => { DB.settings.marketProvider = "demo"; saveData(); render(); });
+  ok("デモは製品版の一覧に出ない（選ばれているときだけ出る）",
+     await page.evaluate(() => marketDataProvider.list().filter(p => p.hidden).map(p => p.name).join(",")) === "demo" &&
+     (await page.$$eval("#b_provider option", os => os.map(o => o.value))).includes("demo"));
   await page.waitForTimeout(150);
   answer(page, true);
   await page.click("#b_run");
@@ -1006,9 +1009,9 @@ group("14. MT5 取引同期");
 }
 
 /* =======================================================================
-   14b. MT5 の口座情報と Fintokei の残り許容額
+   14b. MT5 の口座情報（事実だけ。ルール判定はしない）
    ======================================================================= */
-group("14b. 口座情報と残り許容額");
+group("14b. 口座情報");
 {
   const page = await open();
   const ACC = {
@@ -1028,89 +1031,86 @@ group("14b. 口座情報と残り許容額");
       { ticket: 704, positionId: 602, time: Date.now() / 1000 - 600, type: 0, entry: 1,
         symbol: "XAUUSD", volume: 1, price: 3318, profit: -800, commission: -7, swap: 0,
         contractSize: 100 },
+      // 保有中（SL あり）。合計予定損失の材料
+      { ticket: 705, positionId: 603, time: Date.now() / 1000 - 300, type: 0, entry: 0,
+        symbol: "XAUUSD", volume: 2, price: 3300, profit: 0, commission: -14, sl: 3290,
+        contractSize: 100 },
     ],
   };
 
-  const fs = await page.evaluate(async (acc) => {
+  const r0 = await page.evaluate(async (acc) => {
     DB.settings.initialBalance = 100000;
     DB.settings.currency = "USD";
-    DB.settings.fin.dailyLossPct = 5;
-    DB.settings.fin.maxLossPct = 10;
-    DB.settings.fin.step1TargetPct = 8;
-    DB.settings.fin.dailyBasis = "dayStart";
-    DB.settings.fin.lossBasis = "initial";
-    DB.settings.fin.useEquity = true;
     saveData();
     const r = await tradeSyncProvider.fetch("paste", { text: JSON.stringify(acc) });
     const rep = importDealBatch(r.batch);
-    return { rep, fs: finState(), bal: currentBalance() };
+    return { rep, fs: accountState(), bal: currentBalance() };
   }, ACC);
 
-  ok("口座情報が保存される", fs.rep.accountUpdated === true);
-  ok("残高は MT5 の値になる（人が入れ直さない）", fs.bal === 102000 && fs.fs.source === "mt5");
+  ok("口座情報が保存される", r0.rep.accountUpdated === true);
+  ok("残高は MT5 の値になる（人が入れ直さない）", r0.bal === 102000 && r0.fs.source === "mt5");
   ok("有効証拠金・含み損益・証拠金が入る",
-     fs.fs.equity === 101300 && fs.fs.floating === -700 &&
-     fs.fs.margin === 3300 && fs.fs.marginFree === 98000);
-  // 当日実現 = (0−7) + (1500−7−1) + (0−7) + (−800−7) = 671（手数料・スワップ込み）
-  const DAY = 671, START = 102000 - DAY;      // 前日終わりの残高 = 101329
-  ok("当日実現損益を約定から出す", Math.abs(fs.fs.todayRealized - DAY) < 1e-9);
-  ok("前日終わりの残高は残高から当日ぶんを戻したもの", Math.abs(fs.fs.dayStart - START) < 1e-9);
-  ok("前日比は含み損益込み", Math.abs(fs.fs.todayChange - (101300 - START)) < 1e-9);
+     r0.fs.equity === 101300 && r0.fs.floating === -700 &&
+     r0.fs.margin === 3300 && r0.fs.marginFree === 98000);
+  // 当日実現 = (0−7) + (1500−7−1) + (0−7) + (−800−7) + (0−14) = 657（手数料・スワップ込み）
+  const DAY = 657, START = 102000 - DAY;
+  ok("当日実現損益を約定から出す", Math.abs(r0.fs.todayRealized - DAY) < 1e-9);
+  ok("前日終わりの残高は残高から当日ぶんを戻したもの", Math.abs(r0.fs.dayStart - START) < 1e-9);
+  ok("前日比は含み損益込み", Math.abs(r0.fs.todayChange - (101300 - START)) < 1e-9);
+  // 保有中の合計予定損失 = |3300−3290| × 2 lot × 100 = 2000（残高の 1.96%）。判定はしない
+  ok("保有中の合計予定損失を SL から出す",
+     r0.fs.openLossN === 1 && r0.fs.openLoss === 2000 &&
+     Math.abs(r0.fs.openLossPct - 2000 / 102000 * 100) < 1e-9);
+  ok("Fintokei のルール判定は持たない",
+     await page.evaluate(() => typeof finState === "undefined" && DB.settings.fin === undefined));
 
-  // 日次: 上限 = 101329 × 5% = 5066.45 / 下限 = 96262.55 / 残り = 101300 − 96262.55
-  ok("1日損失の残り許容額",
-     Math.abs(fs.fs.dailyLimit - START * 0.05) < 1e-6 &&
-     Math.abs(fs.fs.dailyRemain - (101300 - (START - START * 0.05))) < 1e-6);
-  ok("含み損で下がったぶんが日次の損失に入る", Math.abs(fs.fs.dailyLoss - (START - 101300)) < 1e-6);
-  // 全体: 上限 = 初期 100000 × 10% = 10000 / 下限 = 90000 / 残り = 101300 − 90000
-  ok("最大DDまでの残り許容額",
-     fs.fs.maxLimit === 10000 && fs.fs.ddFloor === 90000 &&
-     Math.abs(fs.fs.ddRemain - 11300) < 1e-9);
-  ok("含み益が出ている間はドローダウン 0", fs.fs.ddNow === 0);
-  ok("ステップ1目標は初期残高から",
-     fs.fs.stepTarget === 8000 && Math.abs(fs.fs.stepProgress - 1300) < 1e-9);
-
-  // --- 基準を変えると数字が変わる ---
-  const alt = await page.evaluate(() => {
-    DB.settings.fin.dailyBasis = "initial";
-    DB.settings.fin.useEquity = false;
-    DB.settings.fin.lossBasis = "peak";
-    saveData();
-    return finState();
-  });
-  ok("日次の基準を初期残高にできる", Math.abs(alt.dailyLimit - 5000) < 1e-9);
-  ok("含み損益を外して判定できる", alt.judge === 102000);
-  ok("トレーリングのDDに切り替えられる", alt.ddRef >= 102000 && alt.ddFloor === alt.ddRef - 10000);
-
-  // --- 画面に出る ---
-  await page.evaluate(() => {
-    DB.settings.fin.dailyBasis = "dayStart"; DB.settings.fin.useEquity = true;
-    DB.settings.fin.lossBasis = "initial"; saveData(); TAB = "home"; render();
-  });
+  await page.evaluate(() => { TAB = "home"; render(); });
   await page.waitForTimeout(80);
   const home = await page.$eval("#app", e => e.innerText);
   ok("ホームに口座の状態が出る",
      home.includes("有効証拠金") && home.includes("含み損益") && home.includes("余剰証拠金"));
-  ok("ホームに残り許容額が出る", home.includes("今日あと負けられる") && home.includes("最大DDまで"));
+  ok("ホームに合計予定損失が出る", home.includes("保有中の合計予定損失"));
+  ok("残り許容額やメーターは出ない",
+     !home.includes("今日あと負けられる") && !home.includes("最大DD") && !home.includes("日次損失上限"));
   ok("MT5 由来だと分かる", home.includes("MT5"));
 
   await page.click('#nav button[data-tab="brief"]');
   await page.waitForTimeout(80);
   const brief = await page.$eval("#app", e => e.innerText);
-  ok("環境認識にも口座の状態が出る",
-     brief.includes("口座の状態") && brief.includes("今日あと負けられる") && brief.includes("最大DDまで"));
+  ok("環境認識にも口座の状態が出る", brief.includes("口座の状態") && brief.includes("当日実現損益"));
+
+  await page.click('#nav button[data-tab="plan"]');
+  await page.waitForTimeout(80);
+  const plan = await page.$eval("#app", e => e.innerText);
+  ok("計画画面に Fintokei の残り枠は出ない", !plan.includes("日次残り") && !plan.includes("全体残り"));
+  ok("計画画面の内部リスク率と推奨ロットは残る", plan.includes("予定リスク率") && plan.includes("推奨ロット"));
+
+  await page.click('#nav button[data-tab="settings"]');
+  await page.waitForTimeout(80);
+  const st = await page.$eval("#app", e => e.innerText);
+  ok("設定から公式ルールと口座タイプの条件が消えている",
+     !st.includes("Fintokei 公式ルール") && !st.includes("口座タイプの条件"));
+  ok("残高モードは2択", (await page.$$("#s_balmode option")).length === 2);
+  ok("設定に MT5 の口座情報が読み取り専用で出る", st.includes("MT5 の口座情報") && st.includes("Free Margin"));
+
+  // --- 古い保存データの fin は捨てる ---
+  ok("古い fin 設定は読み込み時に捨てる",
+     await page.evaluate(() => {
+       const m = migrate({ settings: { fin: { dailyLossPct: 5 }, finProfiles: [{ id: "x" }], balanceMode: "manual" }, trades: [] });
+       return m.settings.fin === undefined && m.settings.finProfiles === undefined;
+     }));
 
   // --- リロードしても残る ---
   await page.reload();
   await page.waitForSelector("#app .topbar");
   ok("口座情報がリロード後も残る",
-     await page.evaluate(() => DB.account && DB.account.balance === 102000 && finState().source === "mt5"));
+     await page.evaluate(() => DB.account && DB.account.balance === 102000 && accountState().source === "mt5"));
 
   // --- MT5 が無ければ従来どおり ---
   ok("MT5 が無ければ初期残高＋決済損益に戻る",
      await page.evaluate(() => {
        DB.account = null; DB.deals = []; DB.trades = []; saveData();
-       const f = finState();
+       const f = accountState();
        return f.source === "local" && f.balance === 100000 && f.equity === 100000;
      }));
   await page.close();

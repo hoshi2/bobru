@@ -247,18 +247,6 @@ html[data-theme="light"] .btn.primary{color:#fff}
   border:1px solid var(--line2);color:var(--txt3);margin-left:6px;vertical-align:middle}
 .srctag.mt5{color:var(--green);border-color:color-mix(in srgb,var(--green) 45%,var(--line2))}
 .srctag.stale{color:var(--gold);border-color:color-mix(in srgb,var(--gold) 50%,var(--line2))}
-.room{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:11px}
-.room .rm{background:var(--card2);border:1px solid var(--line);border-radius:var(--radius-s);padding:10px}
-.room .rm .k{font-size:11px;color:var(--txt3);font-weight:600;margin-bottom:3px}
-.room .rm .v{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
-.room .rm .s{font-size:10.5px;color:var(--txt3);margin-top:2px;font-variant-numeric:tabular-nums}
-.profrow{display:grid;grid-template-columns:1fr auto auto;gap:6px;align-items:center;
-  padding:8px 0;border-bottom:1px solid var(--line);font-size:13px}
-.profrow:last-of-type{border-bottom:0}
-.profrow .pn{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.profrow button{background:none;border:1px solid var(--line2);border-radius:7px;
-  padding:4px 10px;font-size:11.5px;color:var(--txt2)}
-
 /* live calc panel */
 .calc{background:var(--card2);border:1px solid var(--line);border-radius:var(--radius-s);padding:13px;margin-bottom:13px}
 .calc .cline{display:flex;justify-content:space-between;align-items:baseline;padding:6px 0;border-bottom:1px solid var(--line);font-size:13.5px}
@@ -269,13 +257,6 @@ html[data-theme="light"] .btn.primary{color:#fff}
 .calc .cbig .cb{flex:1;background:var(--card);border:1px solid var(--line);border-radius:9px;padding:9px 10px}
 .calc .cbig .cb .ck{font-size:11px;color:var(--txt3);margin-bottom:3px}
 .calc .cbig .cb .cv{font-size:17px;font-weight:700;font-variant-numeric:tabular-nums}
-.calc .budget{background:var(--card);border:1px solid var(--line);border-radius:9px;padding:8px 10px;margin:2px 0 10px}
-.calc .budget .bline{display:flex;justify-content:space-between;align-items:baseline;padding:5px 0;font-size:13px;gap:8px}
-.calc .budget .bline+.bline{border-top:1px dashed var(--line)}
-.calc .budget .bk{color:var(--txt2);flex-shrink:0}
-.calc .budget .bv{font-weight:700;font-variant-numeric:tabular-nums;text-align:right}
-.calc .budget .barrow{color:var(--txt3);font-weight:400;margin:0 2px}
-.calc .budget .bpct{color:var(--txt3);font-weight:400;font-size:11.5px}
 
 /* trade cards */
 .tcard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:11px}
@@ -495,8 +476,7 @@ function defaultSettings(){
     accountName:"Fintokei",
     accountType:"Fintokei Challenge Swing",
     initialBalance:100000,
-    balanceMode:"auto",      // auto = MT5があればMT5 / local = 初期残高+決済損益 / manual = 手入力
-    manualBalance:null,
+    balanceMode:"auto",      // auto = MT5があればMT5 / local = 初期残高+決済損益
     contractSize:100,        // XAUUSD 既定
     internalRiskPct:1,       // 内部: 1トレード許容損失率
     baseLot:1.00,            // 内部: 基本ロット目安
@@ -523,19 +503,6 @@ function defaultSettings(){
       rateAt:null,           // 提供元がそのレートを出した時刻（日次更新なので古い）
       source:""
     },
-    fin:{                    // Fintokei 公式ルール
-      dailyLossPct:5,
-      maxLossPct:10,
-      openRiskPct:3,
-      step1TargetPct:8,
-      step2TargetPct:6,
-      minTradingDays:3,
-      // 何を基準に測るか。口座タイプで変わるので設定値にしてある
-      dailyBasis:"dayStart",   // "dayStart"（その日の開始残高）| "initial"（初期残高）
-      lossBasis:"initial",     // "initial"（初期残高から固定）| "peak"（最高残高からトレーリング）
-      useEquity:true           // 判定に含み損益を含めるか
-    },
-    finProfiles:[],          // 口座タイプごとの条件（名前を付けて保存し、選んで適用する）
 
     theme:"dark"
   };
@@ -703,8 +670,8 @@ function migrate(p){
 function mergeSettings(def,s){
   if(!s||typeof s!=="object") return def;
   var out=JSON.parse(JSON.stringify(def));
-  for(var k in s){ if(k==="fin"||k==="fx"||k==="mt5"||k==="marketRelay") continue; if(s[k]!==undefined&&s[k]!==null) out[k]=s[k]; }
-  if(s.fin&&typeof s.fin==="object"){ for(var f in def.fin){ if(s.fin[f]!==undefined&&s.fin[f]!==null) out.fin[f]=s.fin[f]; } }
+  // fin / finProfiles は Fintokei のルール判定を持っていた頃の名残。判定は Fintokei 側が正本なので捨てる
+  for(var k in s){ if(k==="fin"||k==="finProfiles"||k==="fx"||k==="mt5"||k==="marketRelay") continue; if(s[k]!==undefined&&s[k]!==null) out[k]=s[k]; }
   if(s.fx&&typeof s.fx==="object"){ for(var x in def.fx){ if(s.fx[x]!==undefined&&s.fx[x]!==null) out.fx[x]=s.fx[x]; } }
   // 深いマージにしておかないと、版を上げて増やしたキーが古い保存データで欠けたままになる
   if(s.mt5&&typeof s.mt5==="object"){ for(var m in def.mt5){ if(s.mt5[m]!==undefined&&s.mt5[m]!==null) out.mt5[m]=s.mt5[m]; } }
@@ -799,7 +766,6 @@ function round2(v){ return isNum(v)?Math.round(v*100)/100:v; }
 /* ---------- コア計算 ---------- */
 function currentBalance(){
   var s=DB.settings;
-  if(s.balanceMode==="manual" && isNum(toNum(s.manualBalance))) return toNum(s.manualBalance);
   // MT5 の残高があればそれが正。人が入れ直さなくてよいようにする
   // （従来どおり「初期残高＋決済損益」で出したいときは balanceMode を local にする）
   if(s.balanceMode!=="local"){
@@ -1038,22 +1004,21 @@ function dealsPLOn(dateStr){
   });
   return seen?Math.round(pl*100)/100:0;
 }
-// 決済済みトレードから残高の山（最高到達点）を出す。トレーリング方式のDDで使う
-function peakBalance(){
-  var init=toNum(DB.settings.initialBalance)||0;
-  var run=init, peak=init;
-  closedTradesSorted().forEach(function(t){
-    var p=toNum(t.realizedPL);
-    if(isNum(p)){ run+=p; if(run>peak) peak=run; }
+// 保有中の建玉の、SL までの合計予定損失（口座通貨）。
+// ルール判定はしない。SL が無い建玉は数えられないので、その件数を添える
+function openPlannedLoss(){
+  var total=0, n=0, noSl=0;
+  DB.trades.forEach(function(t){
+    if(t.status!=="open") return;
+    var c=calcTrade(t);
+    if(isNum(c.plannedLoss)){ total+=c.plannedLoss; n++; } else noSl++;
   });
-  var a=mt5Account();
-  if(a&&toNum(a.balance)>peak) peak=toNum(a.balance);
-  return peak;
+  return {total:Math.round(total*100)/100, n:n, noSl:noSl};
 }
-/* 口座の状態とルールの残り枠を一箇所で出す。
-   ホーム・環境認識・設定は、すべてここを見る（数字が画面ごとにずれないように）。 */
-function finState(){
-  var s=DB.settings, f=s.fin||{};
+/* 口座の状態を一箇所で出す。ホーム・環境認識・設定は、すべてここを見る。
+   MT5 から取れる事実と、その足し引きだけ。Fintokei のルール判定はしない（正本は Fintokei）。 */
+function accountState(){
+  var s=DB.settings;
   var a=mt5Account();
   var initial=toNum(s.initialBalance)||0;
 
@@ -1067,7 +1032,7 @@ function finState(){
   }else{
     balance=currentBalance();
     equity=balance; floating=null; margin=null; marginFree=null; marginLevel=null;
-    source=(s.balanceMode==="manual")?"manual":"local";
+    source="local";
   }
 
   // 当日実現損益と前日比。MT5 があれば約定から、無ければぼぶるの記録から
@@ -1076,32 +1041,7 @@ function finState(){
   var dayStart=balance-(isNum(todayRealized)?todayRealized:0);   // 前日終わりの残高
   var todayChange=equity-dayStart;                               // 前日比（含み損益込み）
 
-  // 判定に含み損益を含めるか。プロップの日次・全体損失は普通は含める
-  var useEquity=(f.useEquity!==false);
-  var judge=useEquity?equity:balance;
-
-  // 1日の損失上限
-  var dailyBase=(f.dailyBasis==="initial")?initial:dayStart;
-  var dailyLimit=dailyBase*(toNum(f.dailyLossPct)||0)/100;
-  var dailyFloor=dayStart-dailyLimit;
-  var dailyLoss=Math.max(0,dayStart-judge);
-  var dailyRemain=judge-dailyFloor;
-  var dailyUsedPct=dailyLimit>0?Math.min(100,dailyLoss/dailyLimit*100):0;
-
-  // 全体の損失上限（最大ドローダウン）
-  //   initial … 初期残高から固定    peak … 最高到達残高からのトレーリング
-  var ddRef=(f.lossBasis==="peak")?Math.max(initial,peakBalance()):initial;
-  var maxLimit=initial*(toNum(f.maxLossPct)||0)/100;
-  var ddFloor=ddRef-maxLimit;
-  var ddNow=Math.max(0,ddRef-judge);
-  var ddRemain=judge-ddFloor;
-  var ddUsedPct=maxLimit>0?Math.min(100,ddNow/maxLimit*100):0;
-
-  // ステップ目標
-  var stepPct=toNum(f.step1TargetPct)||0;
-  var stepTarget=initial*stepPct/100;
-  var stepProgress=judge-initial;
-  var stepRemain=stepTarget-stepProgress;
+  var opl=openPlannedLoss();
 
   return {
     source:source, at:(a&&a.at)||null, ageMin:accountAgeMin(),
@@ -1109,21 +1049,17 @@ function finState(){
     login:(a&&a.login)||null, server:(a&&a.server)||"", leverage:(a&&toNum(a.leverage))||null,
     balance:balance, equity:equity, floating:floating,
     margin:margin, marginFree:marginFree, marginLevel:marginLevel,
-    initial:initial, dayStart:dayStart,
-    todayRealized:todayRealized, todayChange:todayChange,
-    useEquity:useEquity, judge:judge,
-    dailyLimit:dailyLimit, dailyFloor:dailyFloor, dailyLoss:dailyLoss,
-    dailyRemain:dailyRemain, dailyUsedPct:dailyUsedPct,
-    maxLimit:maxLimit, ddRef:ddRef, ddFloor:ddFloor, ddNow:ddNow,
-    ddRemain:ddRemain, ddUsedPct:ddUsedPct,
-    stepTarget:stepTarget, stepProgress:stepProgress, stepRemain:stepRemain
+    initial:initial, netAll:balance-initial,
+    dayStart:dayStart, todayRealized:todayRealized, todayChange:todayChange,
+    openLoss:opl.total, openLossN:opl.n, openLossNoSl:opl.noSl,
+    openLossPct:(balance>0&&opl.n)?opl.total/balance*100:null
   };
 }
 function labelBalanceSource(v){
-  return {mt5:"MT5 から自動",local:"初期残高＋決済損益",manual:"手入力"}[v]||v;
+  return {mt5:"MT5 から自動",local:"初期残高＋決済損益"}[v]||v;
 }
 // MT5 の最初の入金らしきもの。口座開始残高の候補として「提案」するだけで、
-// 勝手には入れない（ここを間違えると最大DDの床がずれるため）
+// 勝手には入れない（通算損益と残高推移の起点になるため）
 function initialDepositCandidate(){
   var ds=(DB.deals||[]).filter(function(d){ return d&&d.type==="balance"; });
   if(!ds.length) return null;
@@ -1150,20 +1086,17 @@ function money(v,dec){ return isNum(v)?fmtMoney(v,dec===undefined?0:dec):"—"; 
 function signed(v,dec){
   return isNum(v)?("<span class='"+clsSign(v)+"'>"+fmtSigned(v,dec===undefined?0:dec)+"</span>"):"—";
 }
-// 「あといくら負けられるか」だけを大きく出す小さなカード（朝いちばんに見るもの）
-function roomHtml(fs){
-  var h="<div class='room'>";
-  h+="<div class='rm'><div class='k'>今日あと負けられる</div><div class='v "+
-     (fs.dailyRemain<=0?"neg":fs.dailyUsedPct>70?"gold":"pos")+"'>"+money(fs.dailyRemain)+"</div>"+
-     "<div class='s'>上限 "+money(fs.dailyLimit)+" ・ 使用 "+fmtPct(fs.dailyUsedPct,0)+"</div></div>";
-  h+="<div class='rm'><div class='k'>最大DDまで</div><div class='v "+
-     (fs.ddRemain<=0?"neg":fs.ddUsedPct>70?"gold":"pos")+"'>"+money(fs.ddRemain)+"</div>"+
-     "<div class='s'>下限 "+money(fs.ddFloor)+" ・ 使用 "+fmtPct(fs.ddUsedPct,0)+"</div></div>";
-  h+="</div>";
+// 保有中の合計予定損失（判定なし。金額と、残高に対する割合だけ）
+function openLossHtml(fs){
+  if(!fs.openLossN&&!fs.openLossNoSl) return "";
+  var v=fs.openLossN?("<span class='neg'>-"+fmtMoney(fs.openLoss)+"</span>"+
+        (isNum(fs.openLossPct)?" <span class='muted' style='font-size:12px'>（残高の "+fmtPct(fs.openLossPct,2)+"）</span>":"")):"—";
+  var h="<div class='acctgrid' style='margin-top:7px'>"+acctCell("保有中の合計予定損失（SL まで）",v,true)+"</div>";
+  if(fs.openLossNoSl) h+="<div class='smallnote'>SL の無い建玉 "+fs.openLossNoSl+" 件は含んでいません。</div>";
   return h;
 }
 function accountCard(){
-  var fs=finState();
+  var fs=accountState();
   var h="<div class='card'>";
   h+="<div class='bhead'><div class='bk'>口座"+acctSourceTag(fs)+"</div><div class='bdate'>"+
      esc(fs.currency)+(fs.login?" ・ "+esc(fs.login):"")+"</div></div>";
@@ -1178,12 +1111,9 @@ function accountCard(){
   h+=acctCell("余剰証拠金", money(fs.marginFree));
   h+=acctCell("当日実現損益", signed(fs.todayRealized));
   h+=acctCell("前日終わりの残高", money(fs.dayStart));
-  h+=acctCell("口座開始残高", money(fs.initial));
-  h+=acctCell("現在のドローダウン", fs.ddNow>0?("<span class='neg'>-"+fmtMoney(fs.ddNow)+"</span>"):"0");
   if(isNum(fs.marginLevel)) h+=acctCell("証拠金維持率", fmtPct(fs.marginLevel,0), true);
   h+="</div>";
-
-  h+=roomHtml(fs);
+  h+=openLossHtml(fs);
 
   if(fs.source!=="mt5"){
     h+="<div class='smallnote'>MT5 の口座情報がまだ届いていません。設定の「MT5 取引同期」を繋ぐと、"+
@@ -1196,29 +1126,32 @@ function accountCard(){
       h+="<div class='smallnote' style='color:var(--gold)'>口座情報が "+
          Math.round(fs.ageMin/60)+" 時間前のままです。VPS のエージェントが止まっていないか確認して下さい。</div>";
   }
+  h+="<div class='smallnote'>資金管理ルールの判定（日次損失・最大損失・失格ライン）は Fintokei 側で確認して下さい。ぼぶるは事実だけを持ちます。</div>";
   h+="</div>";
   return h;
 }
-// 環境認識に置く縮めた版（朝いちばんに見たい3つだけ）
+// 環境認識に置く縮めた版（朝いちばんに見たいものだけ）
 function briefAccountCard(){
-  var fs=finState();
+  var fs=accountState();
   var h="<div class='card'><h2>口座の状態"+acctSourceTag(fs)+"</h2>";
   h+="<div class='acctgrid' style='margin-top:0'>";
   h+=acctCell("現在残高", money(fs.balance));
   h+=acctCell("有効証拠金", money(fs.equity));
+  h+=acctCell("含み損益", signed(fs.floating));
+  h+=acctCell("当日実現損益", signed(fs.todayRealized));
   h+="</div>";
-  h+=roomHtml(fs);
+  h+=openLossHtml(fs);
   if(fs.source!=="mt5")
     h+="<div class='smallnote'>MT5 を繋いでいないので、初期残高と決済損益から出しています。</div>";
   h+="</div>";
   return h;
 }
 
+/* ---------- ホーム ---------- */
 function viewHome(){
   var s=DB.settings;
   var bal=currentBalance();
-  var init=toNum(s.initialBalance)||0;
-  var netAll=bal-init;
+  var netAll=bal-(toNum(s.initialBalance)||0);
   var tp=todayPL();
   var st=currentStreak();
   var openN=DB.trades.filter(function(t){return t.status==="open";}).length;
@@ -1259,39 +1192,8 @@ function viewHome(){
   h+="</div>";
   h+="</div>";
 
-  // 環境認識 と Fintokei（PCの広い画面では左右に並ぶ）
-  h+="<div class='pair'>";
-
-  h+="<div>";
   h+="<div class='sect-title'>環境認識</div>";
   h+=homeBriefCard();
-  h+="</div>";
-
-  h+="<div>";
-  h+="<div class='sect-title'>Fintokei 状況</div>";
-  h+="<div class='card'>";
-  var fs=finState();
-  // ステップ1目標
-  var stepPct=fs.stepTarget>0?Math.max(0,Math.min(100,fs.stepProgress/fs.stepTarget*100)):0;
-  h+=meter("ステップ1目標（+"+fmtPct(toNum(s.fin.step1TargetPct)||0,0)+" / "+fmtMoney(fs.stepTarget)+"）",
-      (fs.stepProgress>=fs.stepTarget? "達成" : "残り "+fmtMoney(Math.max(0,fs.stepRemain))),
-      stepPct, "var(--gold)");
-  // 日次損失余力（その日の開始残高から測る。含み損益も入れる）
-  h+=meter("日次損失上限（"+fmtPct(toNum(s.fin.dailyLossPct)||0,0)+" / "+fmtMoney(fs.dailyLimit)+"）",
-      "残り "+fmtMoney(Math.max(0,fs.dailyRemain)), fs.dailyUsedPct,
-      fs.dailyUsedPct>70?"var(--red)":"var(--green)");
-  // 全体損失余力（最大ドローダウン）
-  h+=meter("全体損失上限（"+fmtPct(toNum(s.fin.maxLossPct)||0,0)+" / "+fmtMoney(fs.maxLimit)+"）",
-      "残り "+fmtMoney(Math.max(0,fs.ddRemain)), fs.ddUsedPct,
-      fs.ddUsedPct>70?"var(--red)":"var(--green)");
-  h+="<div class='smallnote'>"+
-     (fs.useEquity?"含み損益を入れて":"決済ぶんだけで")+"判定しています。"+
-     "日次は"+(s.fin.dailyBasis==="initial"?"初期残高":"その日の開始残高（"+fmtMoney(fs.dayStart)+"）")+"基準、"+
-     "全体は"+(s.fin.lossBasis==="peak"?"最高残高からのトレーリング":"初期残高から固定")+"。"+
-     "数値と基準は口座タイプの規約に合わせて設定で直せます。</div>";
-  h+="</div>";
-  h+="</div>";
-  h+="</div>";
 
   if(DB.trades.length===0){
     h+="<div class='card'><div class='empty'><div class='big'>まだ記録がありません</div>計画タブから最初のトレードを組み立ててみて</div></div>";
@@ -1684,7 +1586,7 @@ var marketDataProvider=(function(){
     has:function(name){ return !!reg[name]; },
     list:function(){
       return order.map(function(n){
-        return {name:n, label:reg[n].label||n, note:reg[n].note||"", demo:!!reg[n].demo};
+        return {name:n, label:reg[n].label||n, note:reg[n].note||"", demo:!!reg[n].demo, hidden:!!reg[n].hidden};
       });
     },
     info:function(name){
@@ -2013,6 +1915,7 @@ marketDataProvider.register("demo",{
   label:"デモ（サンプル値・実データではありません）",
   note:"配線の確認用のダミーです。実際の相場とは無関係なので、記録として残さないで下さい。",
   demo:true,
+  hidden:true,      // 製品版の取得先一覧には出さない（テストと開発用に残している）
   fetch:function(req){
     var snap=emptyMarketSnapshot(req);
     snap.source="デモ（サンプル値）";
@@ -3204,6 +3107,7 @@ function briefAnalysisCard(){
   }
   h+="<div class='field'><label>データ取得先</label><select id='b_provider' onchange='setBriefProvider()'>";
   marketDataProvider.list().forEach(function(o){
+    if(o.hidden&&o.name!==pname) return;        // 隠しの取得先は、いま選ばれているときだけ出す
     h+="<option value='"+esc(o.name)+"'"+(o.name===pname?" selected":"")+">"+esc(o.label)+"</option>";
   });
   h+="</select></div>";
@@ -3703,23 +3607,11 @@ function renderPlanCalc(){
   // インラインエラー表示
   setErr("p_sl_err","p_sl",c.errSL); setErr("p_tp_err","p_tp",c.errTP);
   var s=DB.settings;
-  var init=toNum(s.initialBalance)||0;
-  var dailyLimit=init*(toNum(s.fin.dailyLossPct)||5)/100;
-  var tp=todayPL(); var dailyRemain=dailyLimit-Math.max(0,-tp.pl);
-  var maxLimit=init*(toNum(s.fin.maxLossPct)||10)/100;
-  var bal=currentBalance(); var totalRemain=maxLimit-Math.max(0,init-bal);
-  var pl=isNum(c.plannedLoss)?c.plannedLoss:null;
 
   var html="<div class='calc'>";
   html+="<div class='cbig'>";
   html+="<div class='cb'><div class='ck'>予定損失</div><div class='cv neg'>"+(isNum(c.plannedLoss)?"-"+fmtMoney(c.plannedLoss,0):"—")+"</div></div>";
   html+="<div class='cb'><div class='ck'>予定利益</div><div class='cv pos'>"+(isNum(c.plannedProfit)?"+"+fmtMoney(c.plannedProfit,0):"—")+"</div></div>";
-  html+="</div>";
-
-  // ── この損切りを食らったら（Fintokei 残り枠）──
-  html+="<div class='budget'>";
-  html+=budgetRow("この損切りで 日次残り", dailyRemain, pl, dailyLimit);
-  html+=budgetRow("この損切りで 全体残り", totalRemain, pl, maxLimit);
   html+="</div>";
 
   html+=cline("SLまでの価格差", isNum(c.slDist)?c.slDist.toFixed(2):"—");
@@ -3730,18 +3622,6 @@ function renderPlanCalc(){
   html+=cline("現ロットとの差", isNum(c.lotDiff)?((c.lotDiff>0?"+":"")+c.lotDiff.toFixed(2)):"—");
   html+="</div>";
   box.innerHTML=html;
-}
-// 残り枠を「今 → この損切り後」で見せる（静かに、色だけ変える）
-function budgetRow(label, remainNow, plannedLoss, limit){
-  var now=Math.max(0,remainNow);
-  if(plannedLoss===null){
-    return "<div class='bline'><span class='bk'>"+esc(label)+"</span><span class='bv'>"+fmtMoney(now,0)+"</span></div>";
-  }
-  var after=remainNow-plannedLoss;
-  var cls = after<0 ? "neg" : (limit>0 && after < limit*0.25 ? "gold" : "");
-  var pctTxt = limit>0 ? "（残 "+fmtPct(Math.max(0,after)/limit*100,0)+"）" : "";
-  return "<div class='bline'><span class='bk'>"+esc(label)+"</span>"+
-    "<span class='bv'>"+fmtMoney(now,0)+" <span class='barrow'>→</span> <span class='"+cls+"'>"+fmtMoney(after,0)+"</span> <span class='bpct'>"+pctTxt+"</span></span></div>";
 }
 function cline(k,v){ return "<div class='cline'><span class='ck'>"+esc(k)+"</span><span class='cv'>"+v+"</span></div>"; }
 function setErr(errId,inputId,msg){
@@ -4490,17 +4370,15 @@ function viewSettings(){
      field("契約サイズ","<input type='number' inputmode='decimal' step='any' id='s_cs' value='"+esc(s.contractSize)+"'>")+"</div>";
   h+=field("現在残高の出どころ","<select id='s_balmode'>"+
      "<option value='auto' "+(s.balanceMode==="auto"?"selected":"")+">自動（MT5 があれば MT5、無ければ 初期残高＋決済損益）</option>"+
-     "<option value='local' "+(s.balanceMode==="local"?"selected":"")+">初期残高＋決済損益（MT5 を使わない）</option>"+
-     "<option value='manual' "+(s.balanceMode==="manual"?"selected":"")+">手入力</option></select>");
-  h+=field("手入力残高（手入力時のみ）","<input type='number' inputmode='decimal' step='any' id='s_manual' value='"+esc(s.manualBalance)+"' placeholder='"+Math.round(currentBalance())+"'>");
-  var fs0=finState();
+     "<option value='local' "+(s.balanceMode==="local"?"selected":"")+">初期残高＋決済損益（MT5 を使わない）</option></select>");
+  var fs0=accountState();
   h+="<div class='smallnote'>いま使っている残高 <b>"+fmtMoney(fs0.balance)+" "+esc(fs0.currency)+
      "</b>（"+esc(labelBalanceSource(fs0.source))+"）</div>";
   var dep=initialDepositCandidate();
   if(isNum(dep)&&Math.abs(dep-(toNum(s.initialBalance)||0))>0.005){
     h+="<button class='btn ghost sm' style='margin-top:9px' onclick='useDepositAsInitial("+dep+")'>"+
        "MT5 の最初の入金（"+fmtMoney(dep)+"）を初期残高にする</button>";
-    h+="<div class='smallnote'>最大ドローダウンの下限を決める値なので、自動では入れません。合っていれば押して下さい。</div>";
+    h+="<div class='smallnote'>通算損益と残高推移の起点になる値なので、自動では入れません。合っていれば押して下さい。</div>";
   }
   h+="</div>";
 
@@ -4579,53 +4457,7 @@ function viewSettings(){
   h+="<div class='row2'>"+field("1トレード内部リスク率(%)","<input type='number' inputmode='decimal' step='any' id='s_irisk' value='"+esc(s.internalRiskPct)+"'>")+
      field("基本ロット","<input type='number' inputmode='decimal' step='any' id='s_blot' value='"+esc(s.baseLot)+"'>")+"</div>";
   h+=field("連敗注意ライン","<input type='number' inputmode='numeric' step='1' id='s_streak' value='"+esc(s.lossStreakWarn)+"'>");
-  h+="<div class='smallnote'>これらは自分で決めた内部基準です。Fintokei公式ルールとは別管理です。</div>";
-  h+="</div>";
-
-  h+="<div class='sect-title'>Fintokei 公式ルール</div><div class='card'>";
-  h+="<div class='smallnote' style='margin:0 0 11px'>ここに入れた数値と基準から、残り許容額を MT5 の残高で自動計算します。"+
-     "<b>数値は自分の口座タイプの規約で確認して下さい。</b>既定値は保証しません。</div>";
-  h+="<div class='row2'>"+field("1日の最大損失率(%)","<input type='number' inputmode='decimal' step='any' id='s_dl' value='"+esc(s.fin.dailyLossPct)+"'>")+
-     field("全体の最大損失率(%)","<input type='number' inputmode='decimal' step='any' id='s_ml' value='"+esc(s.fin.maxLossPct)+"'>")+"</div>";
-  h+="<div class='row2'>"+field("オープン最大リスク(%)","<input type='number' inputmode='decimal' step='any' id='s_or' value='"+esc(s.fin.openRiskPct)+"'>")+
-     field("最低取引日数","<input type='number' inputmode='numeric' step='1' id='s_mtd' value='"+esc(s.fin.minTradingDays)+"'>")+"</div>";
-  h+="<div class='row2'>"+field("ステップ1目標(%)","<input type='number' inputmode='decimal' step='any' id='s_s1' value='"+esc(s.fin.step1TargetPct)+"'>")+
-     field("ステップ2目標(%)","<input type='number' inputmode='decimal' step='any' id='s_s2' value='"+esc(s.fin.step2TargetPct)+"'>")+"</div>";
-  h+=field("1日損失の基準","<select id='s_dbasis'>"+
-     "<option value='dayStart' "+(s.fin.dailyBasis!=="initial"?"selected":"")+">その日の開始残高から測る</option>"+
-     "<option value='initial' "+(s.fin.dailyBasis==="initial"?"selected":"")+">初期残高から測る</option></select>");
-  h+=field("全体損失の基準","<select id='s_lbasis'>"+
-     "<option value='initial' "+(s.fin.lossBasis!=="peak"?"selected":"")+">初期残高から固定</option>"+
-     "<option value='peak' "+(s.fin.lossBasis==="peak"?"selected":"")+">最高残高からトレーリング</option></select>");
-  h+="<div class='field'><label>判定の対象</label><label class='chk'><input type='checkbox' id='s_useeq'"+
-     (s.fin.useEquity!==false?" checked":"")+"><span>含み損益を入れて判定する（有効証拠金で見る）</span></label></div>";
-  var fsr=finState();
-  h+="<div class='room'>";
-  h+="<div class='rm'><div class='k'>今日あと負けられる</div><div class='v'>"+money(fsr.dailyRemain)+"</div>"+
-     "<div class='s'>下限 "+money(fsr.dailyFloor)+"</div></div>";
-  h+="<div class='rm'><div class='k'>最大DDまで</div><div class='v'>"+money(fsr.ddRemain)+"</div>"+
-     "<div class='s'>下限 "+money(fsr.ddFloor)+"</div></div>";
-  h+="</div>";
-  h+="</div>";
-
-  // 口座タイプごとの条件を、名前を付けて保存しておく
-  h+="<div class='sect-title'>口座タイプの条件</div><div class='card'>";
-  h+="<div class='smallnote' style='margin:0 0 11px'>いま入っている数値と基準に名前を付けて保存できます。"+
-     "口座タイプを変えたら選び直すだけで済みます。</div>";
-  var profs=Array.isArray(s.finProfiles)?s.finProfiles:[];
-  if(!profs.length){
-    h+="<div class='smallnote' style='margin:0 0 11px'>まだ保存されていません。</div>";
-  }else{
-    profs.forEach(function(p){
-      h+="<div class='profrow'><span class='pn'>"+esc(p.name)+
-         "<span class='s' style='color:var(--txt3);font-weight:400'> ・日次"+esc(p.dailyLossPct)+
-         "% / 全体"+esc(p.maxLossPct)+"%</span></span>"+
-         "<button type='button' onclick=\"applyFinProfile('"+esc(p.id)+"')\">適用</button>"+
-         "<button type='button' onclick=\"delFinProfile('"+esc(p.id)+"')\">削除</button></div>";
-    });
-  }
-  h+="<div class='addrow' style='margin-top:11px'><input type='text' id='s_profname' placeholder='例）Challenge Swing 1ステップ' autocomplete='off'>"+
-     "<button class='btn ghost sm' onclick='saveFinProfile()'>この条件を保存</button></div>";
+  h+="<div class='smallnote'>これらは自分で決めた内部基準です。Fintokei の資金管理ルール（日次損失・最大損失・失格ライン）の判定は Fintokei 側で行い、ぼぶるでは持ちません。</div>";
   h+="</div>";
 
   h+="<div class='sect-title'>表示</div><div class='card'>";
@@ -4671,13 +4503,8 @@ window.saveSettings=function(){
   }
   s.accountName=g("s_accName"); s.accountType=g("s_accType");
   s.initialBalance=toNum(g("s_init")); s.contractSize=toNum(g("s_cs"))||100;
-  s.balanceMode=g("s_balmode"); s.manualBalance=g("s_manual")===""?null:toNum(g("s_manual"));
+  s.balanceMode=(g("s_balmode")==="local")?"local":"auto";
   s.internalRiskPct=toNum(g("s_irisk"))||1; s.baseLot=toNum(g("s_blot")); s.lossStreakWarn=toNum(g("s_streak"))||4;
-  s.fin.dailyLossPct=toNum(g("s_dl")); s.fin.maxLossPct=toNum(g("s_ml")); s.fin.openRiskPct=toNum(g("s_or"));
-  s.fin.minTradingDays=toNum(g("s_mtd")); s.fin.step1TargetPct=toNum(g("s_s1")); s.fin.step2TargetPct=toNum(g("s_s2"));
-  var db2=document.getElementById("s_dbasis"); if(db2) s.fin.dailyBasis=db2.value;
-  var lb=document.getElementById("s_lbasis"); if(lb) s.fin.lossBasis=lb.value;
-  var ue=document.getElementById("s_useeq"); if(ue) s.fin.useEquity=ue.checked;
   var th=g("s_theme"); s.theme=th; applyTheme();
   // MT5 同期（要素が無い画面から呼ばれても壊さないよう1つずつ確認する）
   var mp=document.getElementById("s_mt5prov");
@@ -4689,35 +4516,9 @@ window.saveSettings=function(){
   var kt=document.getElementById("s_mktok"); if(kt) s.marketRelay.token=kt.value.trim();
   saveData(); toast("設定を保存しました"); render();
 };
-var FIN_KEYS=["dailyLossPct","maxLossPct","openRiskPct","step1TargetPct","step2TargetPct",
-              "minTradingDays","dailyBasis","lossBasis","useEquity"];
-window.saveFinProfile=function(){
-  var el=document.getElementById("s_profname");
-  var name=(el?el.value:"").trim();
-  if(!name){ toast("名前を入れて下さい"); return; }
-  saveSettings();                                  // いま画面に出ている値を先に確定させる
-  var p={id:uid(),name:name};
-  FIN_KEYS.forEach(function(k){ p[k]=DB.settings.fin[k]; });
-  if(!Array.isArray(DB.settings.finProfiles)) DB.settings.finProfiles=[];
-  DB.settings.finProfiles.push(p);
-  saveData(); toast("「"+name+"」として保存しました"); render();
-};
-window.applyFinProfile=function(id){
-  var p=(DB.settings.finProfiles||[]).filter(function(x){ return x.id===id; })[0];
-  if(!p) return;
-  if(!confirm("「"+p.name+"」の条件を適用しますか？\nいまの数値は上書きされます。")) return;
-  FIN_KEYS.forEach(function(k){ if(p[k]!==undefined) DB.settings.fin[k]=p[k]; });
-  saveData(); toast("「"+p.name+"」を適用しました"); render();
-};
-window.delFinProfile=function(id){
-  var p=(DB.settings.finProfiles||[]).filter(function(x){ return x.id===id; })[0];
-  if(!p||!confirm("「"+p.name+"」を削除しますか？")) return;
-  DB.settings.finProfiles=DB.settings.finProfiles.filter(function(x){ return x.id!==id; });
-  saveData(); toast("削除しました"); render();
-};
 window.useDepositAsInitial=function(v){
   if(!isNum(v)) return;
-  if(!confirm("口座開始残高を "+fmtMoney(v)+" にしますか？\n最大ドローダウンの下限が変わります。")) return;
+  if(!confirm("口座開始残高を "+fmtMoney(v)+" にしますか？\n通算損益と残高推移の起点が変わります。")) return;
   DB.settings.initialBalance=v;
   saveData(); toast("口座開始残高を更新しました"); render();
 };
