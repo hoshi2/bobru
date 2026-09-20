@@ -58,6 +58,10 @@ button{cursor:pointer}
 .topbar h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.02em;display:flex;align-items:center;gap:9px}
 .logo{width:26px;height:26px;border-radius:7px;flex:0 0 auto}
 .topbar .sub{font-size:11px;color:var(--txt3);font-weight:500}
+.topbar .tbright{display:flex;align-items:center;gap:8px}
+.iconbtn{background:none;border:0;padding:5px;margin:0;color:var(--txt3);display:flex;align-items:center;border-radius:8px}
+.iconbtn .ic{width:20px;height:20px;display:block}
+.iconbtn:active{background:var(--card2)}
 
 /* ---- bottom nav ---- */
 nav#nav{
@@ -419,13 +423,10 @@ html[data-theme="light"] .filterbar button.on{color:#fff}
 <div id="app"></div>
 
 <nav id="nav"><div class="navwrap">
-  <button data-tab="home"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>ホーム</button>
-  <button data-tab="brief"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 18h18"/><path d="M7 18a5 5 0 0110 0"/><path d="M12 3v3M4.6 8.6l2.1 2.1M19.4 8.6l-2.1 2.1"/></svg>環境</button>
+  <button data-tab="home"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>今日</button>
   <button data-tab="plan"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 5v14M5 12h14"/></svg>計画</button>
-  <button data-tab="trades"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg>トレード</button>
-  <button data-tab="growth"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V5M4 19h16M8 15l3-4 3 3 4-6"/></svg>成長</button>
-  <button data-tab="rules"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5a2 2 0 012-2h8l6 6v10a2 2 0 01-2 2H6a2 2 0 01-2-2z"/><path d="M14 3v6h6"/></svg>ルール</button>
-  <button data-tab="settings"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="12" r="3"/><path d="M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1"/></svg>設定</button>
+  <button data-tab="trades"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg>記録</button>
+  <button data-tab="growth"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V5M4 19h16M8 15l3-4 3 3 4-6"/></svg>分析</button>
 </div></nav>
 
 <div id="toast" class="toast"></div>
@@ -602,6 +603,8 @@ function clsSign(v){ if(!isNum(v)||v===0) return ""; return v>0?"pos":"neg"; }
 var DB=null;      // 本体
 var IMG={};       // {tradeId_entry:dataURL, tradeId_exit:dataURL}
 var TAB="home";
+// 4つのタブに畳んだあとの所属。ここに無いタブ（設定）はどのタブにも属さない
+var NAV_PARENT={home:"home",brief:"home",plan:"plan",rules:"plan",trades:"trades",growth:"growth"};
 var UI={ tradeTab:"open", growthPeriod:"30d", growthCustom:{from:"",to:""}, briefDate:"" };
 var _saving=false;
 
@@ -906,9 +909,10 @@ function render(){
   else if(TAB==="settings") html=viewSettings();
   app.innerHTML=html;
   app.className="tab-"+TAB;
-  // nav状態
+  // nav状態。畳んだ画面（環境・ルール）は親タブを光らせる。設定はどれも光らせない
+  var navOn=NAV_PARENT[TAB]||"";
   Array.prototype.forEach.call(document.querySelectorAll("#nav button"),function(b){
-    b.classList.toggle("on", b.getAttribute("data-tab")===TAB);
+    b.classList.toggle("on", b.getAttribute("data-tab")===navOn);
   });
   _renderedTab=TAB;
   window.scrollTo(0,keepY);
@@ -927,7 +931,8 @@ function render(){
 
 function topbar(sub){
   var logo="<svg class='logo' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='#1b1c1e'/><path d='M44 128 L80 96 L104 112 L140 62' fill='none' stroke='#34527f' stroke-width='7' stroke-linecap='round' stroke-linejoin='round'/><text x='90' y='104' font-family='Georgia,serif' font-size='96' font-weight='700' fill='#faf9f6' text-anchor='middle'>B</text></svg>";
-  return "<div class='topbar'><h1>"+logo+esc(DB.settings.appName||"ぼぶる")+"</h1><div class='sub'>"+esc(sub||"")+"</div></div>";
+  var gear="<button class='iconbtn' aria-label='設定' onclick='gotoTab(\"settings\")'><svg class='ic' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7'><circle cx='12' cy='12' r='3'/><path d='M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1'/></svg></button>";
+  return "<div class='topbar'><h1>"+logo+esc(DB.settings.appName||"ぼぶる")+"</h1><div class='tbright'><span class='sub'>"+esc(sub||"")+"</span>"+gear+"</div></div>";
 }
 
 /* ---------- ホーム ---------- */
@@ -1960,6 +1965,7 @@ window.setBriefDate=function(){
   if(!switchBriefDate(d)) el.value=UI.briefDate;
 };
 window.gotoBriefDate=function(d){ switchBriefDate(d); };
+window.gotoTab=function(t){ TAB=t; render(); };
 window.gotoBriefToday=function(){
   if(UI.briefDate===today() && TAB==="brief") return;
   if(TAB==="brief"){ switchBriefDate(today()); return; }
@@ -2229,6 +2235,7 @@ function viewPlan(){
   h+="<div class='btnrow'><button class='btn ghost' onclick='savePlanDraft()'>下書き保存</button>"+
      "<button class='btn primary' onclick='savePlanEntry()'>エントリーとして保存</button></div>";
   h+="<button class='btn ghost' style='margin-top:9px' onclick='clearPlan()'>入力クリア</button>";
+  h+="<button class='btn ghost' style='margin-top:9px' onclick='gotoTab(\"rules\")'>ルールブックをひらく</button>";
   return h;
 }
 function field(label,inner,errId){
