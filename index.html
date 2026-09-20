@@ -2918,6 +2918,12 @@ function viewGrowth(){
     ["下降",function(t){return t.h4env==="down";}],
     ["レンジ",function(t){return t.h4env==="range";}]
   ]);
+  h+=classTable("15分足 紫ライン", list, [
+    ["収束中",function(t){return t.m15purple==="conv";}],
+    ["拡散開始",function(t){return t.m15purple==="start";}],
+    ["拡散中",function(t){return t.m15purple==="expand";}],
+    ["拡散終了気味",function(t){return t.m15purple==="end";}]
+  ]);
   h+=classTable("トリガー", list, [
     ["白水色クロス",function(t){return t.trigger==="cross";}],
     ["赤ライン",function(t){return t.trigger==="red";}]
