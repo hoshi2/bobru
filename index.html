@@ -108,6 +108,11 @@ nav#nav button.on .ic{stroke:var(--accent)}
 .balrow{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:6px}
 .balrow .bal{font-size:32px;font-weight:700;letter-spacing:-.02em}
 .balrow .cur{font-size:14px;color:var(--txt3);font-weight:600}
+.oprow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0}
+.oprow.sep{border-top:1px solid var(--line)}
+.oprow .opsym{font-size:14px;font-weight:700;display:flex;align-items:center;gap:7px}
+.oprow .opsub{font-size:11px;color:var(--txt3);margin-top:3px}
+.oprow .opright{text-align:right;font-weight:700;white-space:nowrap}
 
 /* meter */
 .meter{margin-top:9px}
@@ -936,33 +941,72 @@ function topbar(sub){
 }
 
 /* ---------- ホーム ---------- */
+// 配置の比較用スイッチ（一時的）。A/B どちらにするか決めたら、選ばれなかった方ごと消す
+var HOME_LAYOUT=(function(){ try{ return localStorage.getItem("bob_home_layout_tmp")||"A"; }catch(e){ return "A"; } })();
+window.setHomeLayout=function(v){ HOME_LAYOUT=v; try{ localStorage.setItem("bob_home_layout_tmp",v); }catch(e){} render(); };
+
 function viewHome(){
   var s=DB.settings;
-  var bal=currentBalance();
-  var init=toNum(s.initialBalance)||0;
-  var netAll=bal-init;
-  var tp=todayPL();
   var st=currentStreak();
-  var openN=DB.trades.filter(function(t){return t.status==="open";}).length;
-  // 直近30日
-  var d30=DB.trades.filter(function(t){return t.status==="closed"&&inPeriod(t,"30d");});
-  var st30=computeStats(d30);
 
   var h=topbar("今日の状態");
+
+  // 比較用スイッチ（一時的）
+  h+="<div class='tabs'>"+
+     "<button class='"+(HOME_LAYOUT==="A"?"on":"")+"' onclick=\"setHomeLayout('A')\">配置A 制約が上</button>"+
+     "<button class='"+(HOME_LAYOUT==="B"?"on":"")+"' onclick=\"setHomeLayout('B')\">配置B 数字が上</button>"+
+     "</div>";
 
   // 4連敗注意（静かに）
   if(st.type==="lose" && st.losses>=(toNum(s.lossStreakWarn)||4)){
     h+="<div class='notice'><span class='dot'></span>現在"+st.losses+"連敗</div>";
   }
 
-  // 残高カード
-  h+="<div class='card'>";
+  h+=homeBalanceCard();
+
+  if(HOME_LAYOUT==="A"){
+    h+="<div class='sect-title'>Fintokei 状況</div>"+homeFintokeiCard();
+    h+="<div class='pair'>";
+    h+="<div><div class='sect-title'>保有中</div>"+homeOpenCard()+"</div>";
+    h+="<div><div class='sect-title'>環境認識</div>"+homeBriefCard()+"</div>";
+    h+="</div>";
+    h+=homeTodayStats();
+  }else{
+    h+=homeTodayStats();
+    h+="<div class='pair'>";
+    h+="<div><div class='sect-title'>環境認識</div>"+homeBriefCard()+"</div>";
+    h+="<div><div class='sect-title'>保有中</div>"+homeOpenCard()+"</div>";
+    h+="</div>";
+    h+="<div class='sect-title'>Fintokei 状況</div>"+homeFintokeiCard();
+  }
+
+  if(DB.trades.length===0){
+    h+="<div class='card'><div class='empty'><div class='big'>まだ記録がありません</div>計画タブから最初のトレードを組み立ててみて</div></div>";
+  }
+  return h;
+}
+
+// 口座残高と、開始からの通算
+function homeBalanceCard(){
+  var s=DB.settings;
+  var bal=currentBalance();
+  var netAll=bal-(toNum(s.initialBalance)||0);
+  var h="<div class='card'>";
   h+="<div class='balrow'><span class='bal tabular'>"+fmtMoney(bal)+" <span class='cur'>"+esc(s.currency)+"</span></span>";
   h+="<span class='"+clsSign(netAll)+" tabular' style='font-weight:700'>"+fmtSigned(netAll)+"</span></div>";
   h+="</div>";
+  return h;
+}
 
-  // 本日
-  h+="<div class='statwrap'>";
+// 本日の損益・R・回数と、連勝連敗・保有中・直近30日勝率
+function homeTodayStats(){
+  var s=DB.settings;
+  var tp=todayPL();
+  var st=currentStreak();
+  var openN=DB.trades.filter(function(t){return t.status==="open";}).length;
+  var st30=computeStats(DB.trades.filter(function(t){return t.status==="closed"&&inPeriod(t,"30d");}));
+
+  var h="<div class='statwrap'>";
   h+="<div class='grid3'>";
   h+=stat("本日の損益", (tp.n?("<span class='"+clsSign(tp.pl)+"'>"+fmtSigned(tp.pl)+"</span>"):"<span class='muted'>—</span>"), true);
   h+=stat("本日のR", tp.r!==null?("<span class='"+clsSign(tp.r)+"'>"+fmtR(tp.r)+"</span>"):"<span class='muted'>—</span>", true);
@@ -976,18 +1020,37 @@ function viewHome(){
   h+=stat("直近30日 勝率", st30.winRate!==null?("<span class='tabular'>"+fmtPct(st30.winRate,0)+"</span>"):"<span class='muted'>—</span>", true);
   h+="</div>";
   h+="</div>";
+  return h;
+}
 
-  // 環境認識 と Fintokei（PCの広い画面では左右に並ぶ）
-  h+="<div class='pair'>";
-
-  h+="<div>";
-  h+="<div class='sect-title'>環境認識</div>";
-  h+=homeBriefCard();
+// 保有中のポジション。いずれ cTrader から自動で入ってくる場所
+function homeOpenCard(){
+  var list=DB.trades.filter(function(t){return t.status==="open";});
+  if(!list.length) return "<div class='card'><div class='empty'>保有中のトレードはありません</div></div>";
+  list.sort(function(a,b){ return new Date(b.createdAt)-new Date(a.createdAt); });
+  var h="<div class='card'>";
+  list.forEach(function(t,i){
+    var c=calcTrade(t);
+    h+="<div class='oprow"+(i?" sep":"")+"' onclick='gotoOpenTrades()'>";
+    h+="<div><div class='opsym'>"+esc(t.symbol)+" "+dirTag(t.dir)+"</div>";
+    h+="<div class='opsub tabular'>"+(isNum(t.lot)?t.lot.toFixed(2)+" ロット":"")+
+       (isNum(t.entry)?" ・ "+fmtMoney(t.entry,2):"")+"</div></div>";
+    h+="<div class='opright'><div class='opsub'>予定損失</div>";
+    h+="<div class='neg tabular'>"+(isNum(c.plannedLoss)?("-"+fmtMoney(c.plannedLoss)):"—")+"</div></div>";
+    h+="</div>";
+  });
   h+="</div>";
+  return h;
+}
+window.gotoOpenTrades=function(){ UI.tradeTab="open"; TAB="trades"; render(); };
 
-  h+="<div>";
-  h+="<div class='sect-title'>Fintokei 状況</div>";
-  h+="<div class='card'>";
+// ステップ1目標と、日次・全体の損失余力
+function homeFintokeiCard(){
+  var s=DB.settings;
+  var bal=currentBalance();
+  var init=toNum(s.initialBalance)||0;
+  var tp=todayPL();
+  var h="<div class='card'>";
   // ステップ1目標
   var step1Amt=init*(toNum(s.fin.step1TargetPct)||8)/100;
   var progAmt=bal-init;
@@ -1011,12 +1074,6 @@ function viewHome(){
   h+=meter("全体損失上限（"+fmtPct(toNum(s.fin.maxLossPct)||10,0)+" / "+fmtMoney(maxLimit)+"）",
       "残り "+fmtMoney(Math.max(0,totalRemain)), totalUsedPct, totalUsedPct>70?"var(--red)":"var(--green)");
   h+="</div>";
-  h+="</div>";
-  h+="</div>";
-
-  if(DB.trades.length===0){
-    h+="<div class='card'><div class='empty'><div class='big'>まだ記録がありません</div>計画タブから最初のトレードを組み立ててみて</div></div>";
-  }
   return h;
 }
 function stat(k,v,sm){ return "<div class='stat'><div class='k'>"+esc(k)+"</div><div class='v"+(sm?" sm":"")+"'>"+v+"</div></div>"; }
