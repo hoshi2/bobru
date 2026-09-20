@@ -2239,7 +2239,7 @@ function freshPlan(){
   return {
     id:null, editId:null,
     datetime:nowLocalInput(), symbol:"XAUUSD", dir:"long",
-    h4env:"", m15purple:"", trigger:"", pattern:"",
+    h4env:"", m15purple:"", trigger:"", pattern:"", emaPos:"", crossB:"",
     entry:"", sl:"", tp:"", lot:(s.baseLot!=null?String(s.baseLot):"1.00"),
     balance:String(Math.round(currentBalance())), contractSize:String(s.contractSize),
     sawLower:"", memo:"", tags:[], entryShot:null
@@ -2277,8 +2277,10 @@ function viewPlan(){
   // 環境
   h+="<div class='card'>";
   h+=chipField("4時間足環境","p_h4",[["up","上昇"],["down","下降"],["range","レンジ"],["na","判断不能"]],PLAN.h4env);
+  h+=chipField("EMA75/200 と価格","p_ema",[["above_both","75・200の上"],["above200","200の上・75の下"],["above75","75の上・200の下"],["below_both","両方の下"],["na","判断不能"]],PLAN.emaPos);
   h+=chipField("15分足 紫ライン","p_m15",[["conv","収束中"],["start","拡散開始"],["expand","拡散中"],["end","拡散終了気味"],["na","判断不能"]],PLAN.m15purple);
   h+=chipField("エントリートリガー","p_trig",[["cross","白・水色クロス"],["red","赤ライン"],["other","その他"]],PLAN.trigger);
+  h+=field("クロス時の水色の値（0〜100・任意）","<input type='number' inputmode='decimal' step='any' id='p_crossb' value='"+esc(PLAN.crossB)+"' placeholder='例）25'>");
   h+=chipField("パターン","p_pat",[["A","A：収束→拡散＋白水色"],["B","B：紫拡散中＋赤ライン"],["range","レンジ戦略"],["other","その他"]],PLAN.pattern);
   h+=chipField("1分・5分足を見たか","p_saw",[["no","見ていない"],["yes","見た"]],PLAN.sawLower);
   h+="</div>";
@@ -2330,6 +2332,7 @@ function syncPlanFromDOM(){
   PLAN.entry=g("p_entry"); PLAN.sl=g("p_sl"); PLAN.tp=g("p_tp");
   PLAN.lot=g("p_lot");
   PLAN.balance=String(Math.round(currentBalance())); PLAN.contractSize=String(DB.settings.contractSize);
+  PLAN.crossB=g("p_crossb");
   var m=document.getElementById("p_memo"); if(m) PLAN.memo=m.value;
   var tg=document.getElementById("p_tags"); if(tg) PLAN.tags=tg.value.split(",").map(function(x){return x.trim();}).filter(Boolean);
 }
@@ -2411,7 +2414,7 @@ window.segPick=function(group,val){
   if(group==="p_dir"){ PLAN.dir=val; render(); }
 };
 window.chipPick=function(group,val){
-  var map={p_h4:"h4env",p_m15:"m15purple",p_trig:"trigger",p_pat:"pattern",p_saw:"sawLower"};
+  var map={p_h4:"h4env",p_m15:"m15purple",p_trig:"trigger",p_pat:"pattern",p_saw:"sawLower",p_ema:"emaPos"};
   var k=map[group]; if(!k) return;
   syncPlanFromDOM();
   PLAN[k]=(PLAN[k]===val?"":val);
@@ -2452,6 +2455,7 @@ function planToRecord(status){
     updatedAt:now(), savedAt:now(),
     symbol:symbol, dir:PLAN.dir,
     h4env:PLAN.h4env, m15purple:PLAN.m15purple, trigger:PLAN.trigger, pattern:PLAN.pattern,
+    emaPos:PLAN.emaPos, crossB:toNum(PLAN.crossB),
     entry:toNum(PLAN.entry), sl:toNum(PLAN.sl), tp:toNum(PLAN.tp),
     lot:toNum(PLAN.lot), balanceAtEntry:toNum(PLAN.balance), contractSize:toNum(PLAN.contractSize),
     // 残高と同じで、あとでレートが動いても当時のリスク率・R が揺れないよう焼き込む
@@ -2528,6 +2532,7 @@ function dirTag(dir){ return "<span class='tag-ls "+(dir==="long"?"long":"short"
 function labelH4(v){ return {up:"4H上昇",down:"4H下降",range:"4Hレンジ",na:"4H判断不能"}[v]||""; }
 function labelM15(v){ return {conv:"紫収束",start:"拡散開始",expand:"拡散中",end:"拡散終了気味",na:"—"}[v]||""; }
 function labelTrig(v){ return {cross:"白水色クロス",red:"赤ライン",other:"その他"}[v]||""; }
+function labelEma(v){ return {above_both:"75・200の上",above200:"200の上・75の下",above75:"75の上・200の下",below_both:"両方の下",na:"判断不能"}[v]||""; }
 function labelPat(v){ return {A:"パターンA",B:"パターンB",range:"レンジ戦略",other:"その他"}[v]||""; }
 function labelSaw(v){ return {yes:"1分5分：見た",no:"1分5分：見てない"}[v]||""; }
 function labelEmotion(v){ return {calm:"冷静",rush:"焦り",anger:"怒り",fear:"恐怖",greed:"欲",tired:"疲労",other:"その他"}[v]||""; }
@@ -2568,6 +2573,8 @@ function tradeCard(t,tab){
   if(t.h4env) pills.push(labelH4(t.h4env));
   if(t.m15purple&&t.m15purple!=="na") pills.push(labelM15(t.m15purple));
   if(t.trigger) pills.push(labelTrig(t.trigger));
+  if(t.emaPos&&t.emaPos!=="na") pills.push("EMA "+labelEma(t.emaPos));
+  if(isNum(t.crossB)) pills.push("クロス "+t.crossB);
   if(t.sawLower) pills.push(labelSaw(t.sawLower));
   if(t.status==="closed"&&t.ruleOk) pills.push(labelRule(t.ruleOk));
   if(t.status==="closed"&&t.emotion) pills.push(labelEmotion(t.emotion));
@@ -2617,7 +2624,7 @@ window.promoteDraft=function(id){ var t=findDraft(id); if(!t) return; t.status="
 /* ---------- 編集モーダル（保有中/下書き 内容編集） ---------- */
 var EDIT={};
 function editForm(t,isDraft){
-  EDIT={id:t.id,isDraft:isDraft,dir:t.dir,h4env:t.h4env,m15purple:t.m15purple,trigger:t.trigger,pattern:t.pattern,sawLower:t.sawLower,
+  EDIT={id:t.id,isDraft:isDraft,dir:t.dir,h4env:t.h4env,m15purple:t.m15purple,trigger:t.trigger,pattern:t.pattern,sawLower:t.sawLower,emaPos:t.emaPos||"",
         fxRate:isNum(toNum(t.fxRate))?toNum(t.fxRate):1};
   var dtLocal = t.createdAt ? toLocalInput(t.createdAt) : nowLocalInput();
   var h="<h3>"+(isDraft?"下書きを編集":"トレードを編集")+"</h3>";
@@ -2631,10 +2638,12 @@ function editForm(t,isDraft){
      field("口座残高","<input type='number' inputmode='decimal' step='any' id='e_bal' value='"+esc(t.balanceAtEntry)+"'>")+
      field("契約サイズ","<input type='number' inputmode='decimal' step='any' id='e_cs' value='"+esc(t.contractSize)+"'>")+"</div>";
   h+=editChip("4時間足環境","h4env",[["up","上昇"],["down","下降"],["range","レンジ"],["na","判断不能"]]);
+  h+=editChip("EMA75/200 と価格","emaPos",[["above_both","75・200の上"],["above200","200の上・75の下"],["above75","75の上・200の下"],["below_both","両方の下"],["na","判断不能"]]);
   h+=editChip("15分足 紫ライン","m15purple",[["conv","収束中"],["start","拡散開始"],["expand","拡散中"],["end","拡散終了気味"],["na","判断不能"]]);
   h+=editChip("トリガー","trigger",[["cross","白水色クロス"],["red","赤ライン"],["other","その他"]]);
   h+=editChip("パターン","pattern",[["A","A"],["B","B"],["range","レンジ"],["other","その他"]]);
   h+=editChip("1分・5分足","sawLower",[["no","見てない"],["yes","見た"]]);
+  h+=field("クロス時の水色の値（0〜100・任意）","<input type='number' inputmode='decimal' step='any' id='e_crossb' value='"+esc(isNum(t.crossB)?t.crossB:"")+"'>");
   h+=field("メモ","<textarea id='e_memo'>"+esc(t.memo||"")+"</textarea>");
   h+=field("タグ（カンマ区切り）","<input type='text' id='e_tags' value='"+esc((t.tags||[]).join(", "))+"'>");
   h+="<button class='btn primary' onclick='saveEdit()'>保存</button>";
@@ -2679,6 +2688,7 @@ window.saveEdit=function(){
   t.entry=entry; t.sl=sl; t.tp=tp;
   t.lot=toNum(g("e_lot")); t.balanceAtEntry=toNum(g("e_bal")); t.contractSize=toNum(g("e_cs"));
   t.h4env=EDIT.h4env; t.m15purple=EDIT.m15purple; t.trigger=EDIT.trigger; t.pattern=EDIT.pattern; t.sawLower=EDIT.sawLower;
+  t.emaPos=EDIT.emaPos; t.crossB=toNum(g("e_crossb"));
   t.memo=g("e_memo"); t.tags=g("e_tags").split(",").map(function(x){return x.trim();}).filter(Boolean);
   t.updatedAt=now(); collectTags(t.tags);
   saveData(); closeModal(); toast("更新しました"); render();
@@ -2923,6 +2933,19 @@ function viewGrowth(){
     ["拡散開始",function(t){return t.m15purple==="start";}],
     ["拡散中",function(t){return t.m15purple==="expand";}],
     ["拡散終了気味",function(t){return t.m15purple==="end";}]
+  ]);
+  h+=classTable("EMA75/200 と価格", list, [
+    ["75・200の上",function(t){return t.emaPos==="above_both";}],
+    ["200の上・75の下",function(t){return t.emaPos==="above200";}],
+    ["75の上・200の下",function(t){return t.emaPos==="above75";}],
+    ["両方の下",function(t){return t.emaPos==="below_both";}]
+  ]);
+  h+=classTable("クロス時の水色の値", list, [
+    ["20以下",function(t){return isNum(t.crossB)&&t.crossB<=20;}],
+    ["20〜35",function(t){return isNum(t.crossB)&&t.crossB>20&&t.crossB<=35;}],
+    ["35〜65",function(t){return isNum(t.crossB)&&t.crossB>35&&t.crossB<65;}],
+    ["65〜80",function(t){return isNum(t.crossB)&&t.crossB>=65&&t.crossB<80;}],
+    ["80以上",function(t){return isNum(t.crossB)&&t.crossB>=80;}]
   ]);
   h+=classTable("トリガー", list, [
     ["白水色クロス",function(t){return t.trigger==="cross";}],
