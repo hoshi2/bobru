@@ -40,6 +40,8 @@ body{
   background:var(--bg); color:var(--txt);
   font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Segoe UI",Roboto,sans-serif;
   font-size:15px; line-height:1.5;
+  /* redesign: every digit the same width, so columns of numbers line up */
+  font-variant-numeric:tabular-nums; font-feature-settings:"tnum";
   -webkit-font-smoothing:antialiased;
   padding-bottom:calc(var(--nav-h) + var(--sab));
   overscroll-behavior-y:none;
