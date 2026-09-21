@@ -708,6 +708,33 @@ function tradingDaysOf(acc){
   return Object.keys(seen).length;
 }
 function closedCountOf(acc){ return tradesOfAccount(acc.id).filter(function(t){ return t.status==="closed"; }).length; }
+// 記録・分析で見ている口座。未選択なら記録先の口座。"all" は記録タブだけ（通貨が混ざる集計はしない）
+function viewAcctId(allowAll){
+  var v=UI.acct;
+  if(v==="all") return allowAll?"all":currentAccountId();
+  if(v && findAccount(v)) return v;
+  return currentAccountId();
+}
+function inViewAcct(t,allowAll){
+  var id=viewAcctId(allowAll);
+  if(id==="all") return true;
+  if(id===currentAccountId()) return !t.accountId || t.accountId===id;
+  return t.accountId===id;
+}
+function acctFilterBar(allowAll){
+  var sel=viewAcctId(allowAll), cur=currentAccountId();
+  var list=(Array.isArray(DB.accounts)?DB.accounts:[]);
+  if(list.length<2 && !allowAll) return "";
+  var h="<div class='filterbar'>";
+  list.forEach(function(a){
+    var lab=a.name+(a.id===cur?" ・記録先":"")+(a.closedReason?"（終了）":"");
+    h+="<button class='"+(sel===a.id?"on":"")+"' onclick=\"setViewAcct('"+a.id+"')\">"+esc(lab)+"</button>";
+  });
+  if(allowAll && list.length>1) h+="<button class='"+(sel==="all"?"on":"")+"' onclick=\"setViewAcct('all')\">全口座</button>";
+  h+="</div>";
+  return h;
+}
+window.setViewAcct=function(v){ UI.acct=v; render(); };
 function labelCloseReason(v){
   for(var i=0;i<ACCOUNT_CLOSE_REASONS.length;i++){ if(ACCOUNT_CLOSE_REASONS[i][0]===v) return ACCOUNT_CLOSE_REASONS[i][1]; }
   return "";
@@ -760,7 +787,7 @@ var IMG={};       // {tradeId_entry:dataURL, tradeId_exit:dataURL}
 var TAB="home";
 // 4つのタブに畳んだあとの所属。ここに無いタブ（設定）はどのタブにも属さない
 var NAV_PARENT={home:"home",brief:"home",plan:"plan",rules:"plan",trades:"trades",growth:"growth"};
-var UI={ tradeTab:"open", growthPeriod:"30d", growthCustom:{from:"",to:""}, briefDate:"" };
+var UI={ tradeTab:"open", growthPeriod:"30d", growthCustom:{from:"",to:""}, briefDate:"", acct:"" };
 var _saving=false;
 
 /* ---------- ロード/セーブ ---------- */
@@ -2670,10 +2697,13 @@ function collectTags(tags){
 /* ---------- トレード ---------- */
 function viewTrades(){
   var h=topbar("トレード一覧");
-  var openN=DB.trades.filter(function(t){return t.status==="open";}).length;
-  var planN=DB.tradePlans.length;
-  var closedN=DB.trades.filter(function(t){return t.status==="closed";}).length;
-  var cancN=DB.trades.filter(function(t){return t.status==="cancelled";}).length;
+  h+=acctFilterBar(true);
+  var mine=DB.trades.filter(function(t){ return inViewAcct(t,true); });
+  var plans=DB.tradePlans.filter(function(t){ return inViewAcct(t,true); });
+  var openN=mine.filter(function(t){return t.status==="open";}).length;
+  var planN=plans.length;
+  var closedN=mine.filter(function(t){return t.status==="closed";}).length;
+  var cancN=mine.filter(function(t){return t.status==="cancelled";}).length;
   h+="<div class='tabs'>";
   h+=tradeTabBtn("open","保有中",openN);
   h+=tradeTabBtn("draft","計画中",planN);
@@ -2682,8 +2712,8 @@ function viewTrades(){
   h+="</div>";
 
   var list;
-  if(UI.tradeTab==="draft") list=DB.tradePlans.slice();
-  else list=DB.trades.filter(function(t){return t.status===UI.tradeTab;});
+  if(UI.tradeTab==="draft") list=plans.slice();
+  else list=mine.filter(function(t){return t.status===UI.tradeTab;});
   list.sort(function(a,b){ return new Date(b.closedAt||b.createdAt)-new Date(a.closedAt||a.createdAt); });
 
   if(list.length===0){
@@ -3028,6 +3058,7 @@ window.saveClose=function(id){
 /* ---------- 成長 ---------- */
 function viewGrowth(){
   var h=topbar("成長");
+  h+=acctFilterBar(false);
   // 期間フィルタ
   h+="<div class='filterbar'>";
   [["today","今日"],["7d","7日"],["30d","30日"],["month","今月"],["all","全期間"],["custom","期間指定"]].forEach(function(p){
@@ -3040,7 +3071,7 @@ function viewGrowth(){
        field("終了","<input type='date' id='g_to' value='"+esc(UI.growthCustom.to)+"' onchange='setGrowthCustom()'>")+
        "</div></div>";
   }
-  var list=DB.trades.filter(function(t){return t.status==="closed"&&inPeriod(t,UI.growthPeriod,UI.growthCustom);});
+  var list=DB.trades.filter(function(t){return t.status==="closed"&&inViewAcct(t,false)&&inPeriod(t,UI.growthPeriod,UI.growthCustom);});
   var s=computeStats(list);
 
   if(s.n===0){
@@ -3710,7 +3741,7 @@ function hexA(c,a){
 function abbr(v){ var a=Math.abs(v); if(a>=1000000) return (v/1000000).toFixed(1)+"M"; if(a>=1000) return Math.round(v/1000)+"k"; return Math.round(v).toString(); }
 
 function drawGrowthCharts(){
-  var list=DB.trades.filter(function(t){return t.status==="closed"&&inPeriod(t,UI.growthPeriod,UI.growthCustom);})
+  var list=DB.trades.filter(function(t){return t.status==="closed"&&inViewAcct(t,false)&&inPeriod(t,UI.growthPeriod,UI.growthCustom);})
     .sort(function(a,b){return new Date(a.closedAt||a.createdAt)-new Date(b.closedAt||b.createdAt);});
   if(!list.length) return;
   // 累積損益
@@ -3721,7 +3752,7 @@ function drawGrowthCharts(){
   if(cr){ var cumR=0; var ptsR=[{x:0,y:0}]; list.forEach(function(t,i){ var c=calcTrade(t); if(isNum(c.realizedR)) cumR+=c.realizedR; ptsR.push({x:i+1,y:cumR}); }); drawLineChart(cr,chartH(150),ptsR,cssVar("--blue"),{fmt:function(v){return v.toFixed(1)+"R";}}); }
   // 口座残高推移
   var ce=document.getElementById("c_equity");
-  if(ce){ var init=toNum(DB.settings.initialBalance)||0; var eq=init; var ptsE=[{x:0,y:init}]; list.forEach(function(t,i){ var pl=toNum(t.realizedPL); if(isNum(pl)) eq+=pl; ptsE.push({x:i+1,y:eq}); }); drawLineChart(ce,chartH(150),ptsE,cssVar("--green"),{baseline0:false,fmt:function(v){return abbr(v);}}); }
+  if(ce){ var va=findAccount(viewAcctId(false)); var init=va?(toNum(va.initialBalance)||0):(toNum(DB.settings.initialBalance)||0); var eq=init; var ptsE=[{x:0,y:init}]; list.forEach(function(t,i){ var pl=toNum(t.realizedPL); if(isNum(pl)) eq+=pl; ptsE.push({x:i+1,y:eq}); }); drawLineChart(ce,chartH(150),ptsE,cssVar("--green"),{baseline0:false,fmt:function(v){return abbr(v);}}); }
   // パターン別平均R
   var cpr=document.getElementById("c_patr");
   if(cpr){
