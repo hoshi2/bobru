@@ -604,6 +604,33 @@ function currentAccountId(){
   return (Array.isArray(DB.accounts)&&DB.accounts[0])?DB.accounts[0].id:null;
 }
 function currentAccount(){ return findAccount(currentAccountId()); }
+// 印の無い古い記録は「いまの口座のもの」として扱う（移行で付くので通常は発生しない）
+function isOfCurrentAccount(t){
+  var cur=currentAccountId();
+  if(!cur) return true;
+  return !t.accountId || t.accountId===cur;
+}
+function accountTrades(){ return Array.isArray(DB.trades)?DB.trades.filter(isOfCurrentAccount):[]; }
+function tradesOfAccount(id){ return Array.isArray(DB.trades)?DB.trades.filter(function(t){return t.accountId===id;}):[]; }
+// 口座の期間は入力させない。その口座の最初と最後のトレードから決まる。
+function accountPeriod(id){
+  var ds=tradesOfAccount(id).map(function(t){ return localDateOf(t.closedAt||t.createdAt); })
+                            .filter(function(d){ return !!d; }).sort();
+  return ds.length?{first:ds[0], last:ds[ds.length-1]}:null;
+}
+// いまの口座を、既存の画面が読んでいる settings にも写す（残高・メーターがその口座の数字になる）
+function applyAccountToSettings(acc){
+  if(!acc) return;
+  var st=DB.settings;
+  st.currentAccountId=acc.id;
+  st.accountName=acc.name;
+  st.accountType=acc.typeNote||labelAccountType(acc.type);
+  st.initialBalance=acc.initialBalance;
+}
+function labelCloseReason(v){
+  for(var i=0;i<ACCOUNT_CLOSE_REASONS.length;i++){ if(ACCOUNT_CLOSE_REASONS[i][0]===v) return ACCOUNT_CLOSE_REASONS[i][1]; }
+  return "";
+}
 
 function defaultDB(){
   var st=defaultSettings();
@@ -797,7 +824,7 @@ function currentBalance(){
   if(s.balanceMode==="manual" && isNum(toNum(s.manualBalance))) return toNum(s.manualBalance);
   var init=toNum(s.initialBalance)||0;
   var realized=0;
-  DB.trades.forEach(function(t){ if(t.status==="closed"){ var p=toNum(t.realizedPL); if(isNum(p)) realized+=p; } });
+  accountTrades().forEach(function(t){ if(t.status==="closed"){ var p=toNum(t.realizedPL); if(isNum(p)) realized+=p; } });
   return init+realized;
 }
 // 計画/トレード共通の損益計算（入力オブジェクトから）
@@ -919,7 +946,7 @@ function computeStats(list){
   return s;
 }
 function currentStreak(){
-  var sorted=closedTradesSorted();
+  var sorted=closedTradesSorted().filter(isOfCurrentAccount);
   var w=0,l=0,type=null;
   for(var i=sorted.length-1;i>=0;i--){
     var t=sorted[i]; var r=t.result;
@@ -933,7 +960,7 @@ function currentStreak(){
 }
 function todayPL(){
   var td=today(), pl=0, n=0, rr=0, rc=0;
-  DB.trades.forEach(function(t){
+  accountTrades().forEach(function(t){
     if(t.status!=="closed") return;
     if(localDateOf(t.closedAt||t.createdAt)!==td) return;
     var p=toNum(t.realizedPL); if(isNum(p)) pl+=p; n++;
@@ -1055,8 +1082,8 @@ function homeTodayStats(){
   var s=DB.settings;
   var tp=todayPL();
   var st=currentStreak();
-  var openN=DB.trades.filter(function(t){return t.status==="open";}).length;
-  var st30=computeStats(DB.trades.filter(function(t){return t.status==="closed"&&inPeriod(t,"30d");}));
+  var openN=accountTrades().filter(function(t){return t.status==="open";}).length;
+  var st30=computeStats(accountTrades().filter(function(t){return t.status==="closed"&&inPeriod(t,"30d");}));
 
   var h="<div class='statwrap'>";
   h+="<div class='grid3'>";
@@ -1077,7 +1104,7 @@ function homeTodayStats(){
 
 // 保有中のポジション。いずれ cTrader から自動で入ってくる場所
 function homeOpenCard(){
-  var list=DB.trades.filter(function(t){return t.status==="open";});
+  var list=accountTrades().filter(function(t){return t.status==="open";});
   if(!list.length) return "<div class='card'><div class='empty'>保有中のトレードはありません</div></div>";
   list.sort(function(a,b){ return new Date(b.createdAt)-new Date(a.createdAt); });
   var h="<div class='card'>";
@@ -3172,6 +3199,84 @@ window.saveResearch=function(id){
 };
 
 /* ---------- 設定 ---------- */
+
+/* ---------- 口座（設定タブ） ---------- */
+function accountsCard(){
+  var cur=currentAccountId();
+  var list=Array.isArray(DB.accounts)?DB.accounts:[];
+  var h="<div class='sect-title'>口座</div><div class='card'>";
+  h+="<div class='smallnote' style='margin:0 0 4px'>ホームの残高・本日の損益・連勝連敗は、いまの口座の記録だけで計算します。口座は消せません。終わったときは理由を選んで終了にすると、記録はそのまま残ります。</div>";
+
+  list.forEach(function(a){
+    var on=(a.id===cur), per=accountPeriod(a.id), n=tradesOfAccount(a.id).length;
+    var meta=[];
+    meta.push(a.type?labelAccountType(a.type):(a.typeNote||"種別未設定"));
+    meta.push("初期 "+fmtMoney(toNum(a.initialBalance)));
+    meta.push(n+"件");
+    if(per) meta.push(per.first+" 〜 "+per.last);
+    meta.push(a.closedReason?("終了："+labelCloseReason(a.closedReason)):"稼働中");
+
+    h+="<div style='padding:11px 0;border-top:1px solid var(--line)'>";
+    h+="<div style='display:flex;align-items:center;gap:8px'><b>"+esc(a.name)+"</b>"+
+       (on?"<span style='font-size:11px;color:var(--accent)'>いまの口座</span>":"")+"</div>";
+    h+="<div class='smallnote' style='margin:4px 0 8px'>"+esc(meta.join(" ／ "))+"</div>";
+
+    if(!a.closedReason && !on){
+      h+="<button class='btn sm' onclick=\"switchAccount('"+a.id+"')\">この口座にする</button>";
+    }
+    if(!a.closedReason && on){
+      h+=field("終了の理由","<select id='ac_reason_"+a.id+"'><option value=''>選ぶ</option>"+
+           ACCOUNT_CLOSE_REASONS.map(function(o){ return "<option value='"+o[0]+"'>"+esc(o[1])+"</option>"; }).join("")+
+           "</select>");
+      h+="<button class='btn sm' onclick=\"closeAccount('"+a.id+"')\">この口座を終了する</button>";
+    }
+    if(a.closedReason && !on){
+      h+="<button class='btn sm' onclick=\"switchAccount('"+a.id+"')\">この口座の記録を見る</button>";
+    }
+    h+="</div>";
+  });
+
+  h+="<div style='padding:11px 0 0;border-top:1px solid var(--line)'>";
+  h+="<div class='smallnote' style='margin:0 0 8px'>新しい口座を作る</div>";
+  h+="<div class='row2'>"+
+     field("口座名","<input type='text' id='a_name' placeholder='Fintokei ステップ1'>")+
+     field("種別","<select id='a_type'><option value=''>選ぶ</option>"+
+       ACCOUNT_TYPES.map(function(o){ return "<option value='"+o[0]+"'>"+esc(o[1])+"</option>"; }).join("")+
+       "</select>")+"</div>";
+  h+=field("初期残高","<input type='number' inputmode='decimal' step='any' id='a_init' placeholder='100000'>");
+  h+="<button class='btn blue sm' onclick='addAccount()'>口座を追加して切り替える</button>";
+  h+="</div>";
+
+  h+="</div>";
+  return h;
+}
+window.switchAccount=function(id){
+  var a=findAccount(id); if(!a) return;
+  applyAccountToSettings(a); saveData();
+  toast("「"+a.name+"」に切り替えました"); render();
+};
+window.addAccount=function(){
+  var g=function(x){var e=document.getElementById(x);return e?e.value:"";};
+  var name=(g("a_name")||"").trim(), type=g("a_type"), init=toNum(g("a_init"));
+  if(!name){ toast("口座名を入れて下さい"); return; }
+  if(!isAccountType(type)){ toast("種別を選んで下さい"); return; }
+  if(!isNum(init)){ toast("初期残高を入れて下さい"); return; }
+  var acc=makeAccount({name:name,type:type,initialBalance:init});
+  DB.accounts.push(acc);
+  applyAccountToSettings(acc);
+  saveData(); toast("口座「"+name+"」を作って切り替えました"); render();
+};
+window.closeAccount=function(id){
+  var a=findAccount(id); if(!a) return;
+  var e=document.getElementById("ac_reason_"+id);
+  var reason=e?e.value:"";
+  if(!reason){ toast("終了の理由を選んで下さい"); return; }
+  a.closedReason=reason;
+  var per=accountPeriod(id);
+  a.closedAt=per?per.last:today();
+  saveData(); toast("「"+a.name+"」を終了にしました"); render();
+};
+
 function viewSettings(){
   var s=DB.settings;
   var h=topbar("設定");
@@ -3185,12 +3290,20 @@ function viewSettings(){
        return "<option value='"+esc(o)+"'"+(acctCurrency()===o?" selected":"")+">"+esc(o)+"</option>";
      }).join("")+"</select>")+
      field("口座名","<input type='text' id='s_accName' value='"+esc(s.accountName)+"'>")+"</div>";
-  h+=field("口座タイプ","<input type='text' id='s_accType' value='"+esc(s.accountType)+"'>");
+  var curAcc=currentAccount();
+  var curType=curAcc?curAcc.type:"";
+  h+=field("口座タイプ","<select id='s_accType'>"+
+     "<option value=''"+(isAccountType(curType)?"":" selected")+">未設定</option>"+
+     ACCOUNT_TYPES.map(function(o){
+       return "<option value='"+o[0]+"'"+(curType===o[0]?" selected":"")+">"+esc(o[1])+"</option>";
+     }).join("")+"</select>");
   h+="<div class='row2'>"+field("初期残高","<input type='number' inputmode='decimal' step='any' id='s_init' value='"+esc(s.initialBalance)+"'>")+
      field("契約サイズ","<input type='number' inputmode='decimal' step='any' id='s_cs' value='"+esc(s.contractSize)+"'>")+"</div>";
   h+=field("現在残高の計算方法","<select id='s_balmode'><option value='auto' "+(s.balanceMode==="auto"?"selected":"")+">自動（初期残高＋決済損益）</option><option value='manual' "+(s.balanceMode==="manual"?"selected":"")+">手入力</option></select>");
   h+=field("手入力残高（手入力時のみ）","<input type='number' inputmode='decimal' step='any' id='s_manual' value='"+esc(s.manualBalance)+"' placeholder='"+Math.round(currentBalance())+"'>");
   h+="</div>";
+
+  h+=accountsCard();
 
   h+="<div class='sect-title'>為替レート</div><div class='card'>";
   if(acctCurrency()==="USD"){
@@ -3266,8 +3379,20 @@ window.saveSettings=function(){
   if(prevCur!==s.currency){
     s.fx.rate=null; s.fx.at=null; s.fx.rateAt=null; s.fx.quote=""; s.fx.source=""; FX.lastError="";
   }
-  s.accountName=g("s_accName"); s.accountType=g("s_accType");
+  s.accountName=g("s_accName");
   s.initialBalance=toNum(g("s_init")); s.contractSize=toNum(g("s_cs"))||100;
+  // 口座名・種別・初期残高は「いまの口座」そのものを編集している
+  var accNow=currentAccount();
+  if(accNow){
+    accNow.name=s.accountName||accNow.name;
+    var tsel=g("s_accType");
+    accNow.type=isAccountType(tsel)?tsel:"";
+    if(accNow.type) accNow.typeNote="";
+    accNow.initialBalance=isNum(s.initialBalance)?s.initialBalance:accNow.initialBalance;
+    applyAccountToSettings(accNow);
+  }else{
+    s.accountType=g("s_accType");
+  }
   s.balanceMode=g("s_balmode"); s.manualBalance=g("s_manual")===""?null:toNum(g("s_manual"));
   s.internalRiskPct=toNum(g("s_irisk"))||1; s.baseLot=toNum(g("s_blot")); s.lossStreakWarn=toNum(g("s_streak"))||4;
   s.fin.dailyLossPct=toNum(g("s_dl")); s.fin.maxLossPct=toNum(g("s_ml")); s.fin.openRiskPct=toNum(g("s_or"));
