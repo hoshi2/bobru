@@ -735,6 +735,32 @@ function acctFilterBar(allowAll){
   return h;
 }
 window.setViewAcct=function(v){ UI.acct=v; render(); };
+// 追加の文脈。同じ口座・銘柄・方向の保有があるとき、直前に建てたものと比べる。
+// 現在値は要らない：買いなら前より安く、売りなら前より高く建てるのが「逆行中の追加」。
+// Funded7 は逆行するたびロットを増やす追加を禁じているので、ロットの増減も残す。
+function addContextFor(accountId, symbol, dir, entry, lot, excludeId){
+  var e=toNum(entry), l=toNum(lot);
+  var grp=DB.trades.filter(function(t){
+    return t.status==="open" && t.id!==excludeId && (t.accountId||currentAccountId())===accountId &&
+           t.symbol===symbol && t.dir===dir;
+  }).sort(function(a,b){
+    // 建てた時刻は分単位で入ることが多いので、同じ分なら保存した順で並べる
+    return (new Date(a.createdAt)-new Date(b.createdAt)) || (new Date(a.savedAt||a.createdAt)-new Date(b.savedAt||b.createdAt));
+  });
+  var out={n:grp.length, against:false, lotUp:false, prevEntry:null, prevLot:null};
+  if(!grp.length || !isNum(e)) return out;
+  var prev=grp[grp.length-1];
+  out.prevEntry=toNum(prev.entry); out.prevLot=toNum(prev.lot);
+  if(isNum(out.prevEntry)) out.against = dir==="long" ? e<out.prevEntry : e>out.prevEntry;
+  if(out.against && isNum(l) && isNum(out.prevLot)) out.lotUp = l>out.prevLot;
+  return out;
+}
+function stampAddContext(rec){
+  var cx=addContextFor(rec.accountId||currentAccountId(), rec.symbol, rec.dir, rec.entry, rec.lot, rec.id);
+  rec.addGroupN=cx.n;
+  rec.addAgainst=cx.against;
+  rec.addLotUp=cx.lotUp;
+}
 function labelCloseReason(v){
   for(var i=0;i<ACCOUNT_CLOSE_REASONS.length;i++){ if(ACCOUNT_CLOSE_REASONS[i][0]===v) return ACCOUNT_CLOSE_REASONS[i][1]; }
   return "";
@@ -1267,6 +1293,8 @@ function accountStatusCard(acc){
   if(isNum(toNum(r.profitSplitPct))) notes.push("分配 "+fmtPct(toNum(r.profitSplitPct),0));
   if(notes.length) h+="<div class='smallnote' style='margin:10px 0 0'>"+esc(notes.join(" ・ "))+"</div>";
   if(orisk.noSL>0) h+="<div class='smallnote' style='margin:4px 0 0'>SLの無い保有 "+orisk.noSL+"件は、最大損失に入っていません。</div>";
+  var lotUpN=tradesOfAccount(acc.id).filter(function(t){ return t.status==="open"&&t.addLotUp; }).length;
+  if(lotUpN>0) h+="<div class='smallnote' style='margin:4px 0 0'>保有中のうち、逆行中にロットを増やした追加 "+lotUpN+"件。</div>";
   if(r.ddBasis==="equity") h+="<div class='smallnote' style='margin:4px 0 0'>含み損はぼぶるから見えないため、保有中は損切りまで行った場合で数えています。</div>";
   h+="</div>";
   return h;
@@ -2579,6 +2607,15 @@ function renderPlanCalc(){
   html+=budgetRow("この損切りで 全体残り", totalRemain, pl, maxLimit);
   html+="</div>";
 
+  // 同じ方向の保有があるときだけ、直前の建値・ロットと並べる（判断は本人）
+  var cx=acc?addContextFor(acc.id, PLAN.symbol||"XAUUSD", PLAN.dir, PLAN.entry, PLAN.lot):{n:0};
+  if(cx.n>0){
+    var parts=["同じ方向の保有 "+cx.n+"件"];
+    if(isNum(cx.prevEntry)) parts.push("直前の建値 "+cx.prevEntry+(cx.against?"（今回はそれより不利な価格）":""));
+    if(isNum(cx.prevLot)&&isNum(toNum(PLAN.lot))) parts.push("ロット "+cx.prevLot+" → "+toNum(PLAN.lot));
+    html+="<div class='smallnote' style='margin:8px 0 0'>"+esc(parts.join(" ・ "))+"</div>";
+  }
+
   html+=cline("SLまでの価格差", isNum(c.slDist)?c.slDist.toFixed(2):"—");
   html+=cline("TPまでの価格差", isNum(c.tpDist)?c.tpDist.toFixed(2):"—");
   html+=cline("予定リスク率", isNum(c.riskPct)?("<span class='"+(c.riskPct>(toNum(s.internalRiskPct)||1)?"gold":"")+"'>"+fmtPct(c.riskPct,2)+"</span>"):"—");
@@ -2685,6 +2722,7 @@ window.savePlanEntry=function(){
   _saving=true; setTimeout(function(){_saving=false;},600);
   var rec=planToRecord("open");
   var shot=rec._entryShot; delete rec._entryShot;
+  stampAddContext(rec);
   DB.trades.unshift(rec);
   if(shot){ IMG[rec.id+"_entry"]=shot; saveImg(); }
   collectTags(rec.tags);
@@ -2777,6 +2815,7 @@ function tradeCard(t,tab){
   if(t.emaPos&&t.emaPos!=="na") pills.push("EMA "+labelEma(t.emaPos));
   if(isNum(t.crossB)) pills.push("クロス "+t.crossB);
   if(t.sawLower) pills.push(labelSaw(t.sawLower));
+  if(t.addAgainst) pills.push("逆行中の追加"+(t.addLotUp?"・ロット増":""));
   if(t.status==="closed"&&t.ruleOk) pills.push(labelRule(t.ruleOk));
   if(t.status==="closed"&&t.emotion) pills.push(labelEmotion(t.emotion));
   if(pills.length){ h+="<div class='tmeta'>"+pills.map(function(p){return "<span class='pill'>"+esc(p)+"</span>";}).join("")+"</div>"; }
@@ -2820,7 +2859,7 @@ window.cancelTrade=function(id){ var t=findTrade(id); if(!t) return; if(!confirm
 window.reopenTrade=function(id){ var t=findTrade(id); if(!t) return; t.status="open"; t.closedAt=null; t.updatedAt=now(); saveData(); toast("保有中に戻しました"); UI.tradeTab="open"; render(); };
 window.deleteTrade=function(id){ if(!confirm("完全に削除しますか？")) return; DB.trades=DB.trades.filter(function(t){return t.id!==id;}); delete IMG[id+"_entry"]; delete IMG[id+"_exit"]; saveImg(); saveData(); toast("削除しました"); render(); };
 window.deleteDraft=function(id){ if(!confirm("下書きを削除しますか？")) return; DB.tradePlans=DB.tradePlans.filter(function(t){return t.id!==id;}); delete IMG[id+"_entry"]; saveImg(); saveData(); toast("削除しました"); render(); };
-window.promoteDraft=function(id){ var t=findDraft(id); if(!t) return; t.status="open"; t.savedAt=now(); t.updatedAt=now(); DB.tradePlans=DB.tradePlans.filter(function(x){return x.id!==id;}); DB.trades.unshift(t); saveData(); toast("エントリーにしました"); UI.tradeTab="open"; render(); };
+window.promoteDraft=function(id){ var t=findDraft(id); if(!t) return; stampAddContext(t); t.status="open"; t.savedAt=now(); t.updatedAt=now(); DB.tradePlans=DB.tradePlans.filter(function(x){return x.id!==id;}); DB.trades.unshift(t); saveData(); toast("エントリーにしました"); UI.tradeTab="open"; render(); };
 
 /* ---------- 編集モーダル（保有中/下書き 内容編集） ---------- */
 var EDIT={};
