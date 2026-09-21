@@ -465,6 +465,7 @@ function defaultSettings(){
     accountName:"Fintokei",
     accountType:"Fintokei Challenge Swing",
     initialBalance:100000,
+    currentAccountId:null,   // いまどの口座で記録しているか（accounts[].id）
     balanceMode:"auto",      // auto = 初期残高 + 決済損益合計 / manual = 手入力
     manualBalance:null,
     contractSize:100,        // XAUUSD 既定
@@ -566,11 +567,52 @@ function defaultResearch(){
     mk("白水色クロスの位置による成績差","クロス位置と勝率の関係を検証する")
   ];
 }
-function defaultDB(){
+/* ---------- 口座（アカウント） ----------
+   種別は3つだけ。旧データの自由文字列は typeNote に残し、type は未設定のままにする。
+   開始日・終了日は持たない（最初と最後のトレードから決まるため）。 */
+var ACCOUNT_TYPES=[["step1","ステップ1"],["step2","ステップ2"],["live","本番"]];
+var ACCOUNT_CLOSE_REASONS=[["pass","合格"],["fail","失格"],["expired","期限切れ"]];
+function isAccountType(v){ for(var i=0;i<ACCOUNT_TYPES.length;i++){ if(ACCOUNT_TYPES[i][0]===v) return true; } return false; }
+function labelAccountType(v){ for(var i=0;i<ACCOUNT_TYPES.length;i++){ if(ACCOUNT_TYPES[i][0]===v) return ACCOUNT_TYPES[i][1]; } return "未設定"; }
+function makeAccount(o){
+  o=o||{};
+  var t=o.type;
   return {
-    version:1,
-    settings:defaultSettings(),
-    accounts:[{id:uid(),name:"Fintokei",type:"Fintokei Challenge Swing",initialBalance:100000,created:now()}],
+    id:o.id||uid(),
+    name:o.name||"口座",
+    type:isAccountType(t)?t:"",
+    typeNote:o.typeNote||(isAccountType(t)?"":String(t||"")),
+    initialBalance:isNum(toNum(o.initialBalance))?toNum(o.initialBalance):0,
+    created:o.created||now(),
+    closedAt:o.closedAt||null,
+    closedReason:o.closedReason||null
+  };
+}
+function accountFromSettings(s){
+  return makeAccount({name:s.accountName, type:s.accountType, initialBalance:s.initialBalance});
+}
+function findAccountIn(list,id){
+  if(!Array.isArray(list)||!id) return null;
+  for(var i=0;i<list.length;i++){ if(list[i]&&list[i].id===id) return list[i]; }
+  return null;
+}
+function findAccount(id){ return DB?findAccountIn(DB.accounts,id):null; }
+function currentAccountId(){
+  if(!DB) return null;
+  var id=DB.settings&&DB.settings.currentAccountId;
+  if(findAccountIn(DB.accounts,id)) return id;
+  return (Array.isArray(DB.accounts)&&DB.accounts[0])?DB.accounts[0].id:null;
+}
+function currentAccount(){ return findAccount(currentAccountId()); }
+
+function defaultDB(){
+  var st=defaultSettings();
+  var acc=accountFromSettings(st);
+  st.currentAccountId=acc.id;
+  return {
+    version:2,
+    settings:st,
+    accounts:[acc],
     briefs:[],       // Morning Brief（1日1件・date をキーに扱う）
     tradePlans:[],   // 下書き（計画中）
     trades:[],       // status: open / closed / cancelled
@@ -637,9 +679,12 @@ function migrate(p){
   if(!p||typeof p!=="object") return base;
   // 各コレクションを安全にマージ（欠損はデフォルト、型不一致は無視）
   var db={};
-  db.version=1;
+  db.version=2;
   db.settings=mergeSettings(base.settings, p.settings);
-  db.accounts=Array.isArray(p.accounts)&&p.accounts.length?p.accounts:base.accounts;
+  // 口座：既存の並びと id はそのまま、形だけ揃える。無ければ設定から1件作る。
+  db.accounts=(Array.isArray(p.accounts)&&p.accounts.length)
+    ? p.accounts.map(function(a){ return makeAccount(a); })
+    : [accountFromSettings(db.settings)];
   db.briefs=Array.isArray(p.briefs)?p.briefs:[];
   db.tradePlans=Array.isArray(p.tradePlans)?p.tradePlans:[];
   db.trades=Array.isArray(p.trades)?p.trades:[];
@@ -648,6 +693,13 @@ function migrate(p){
   db.researchItems=Array.isArray(p.researchItems)?p.researchItems:[];
   db.tags=Array.isArray(p.tags)?p.tags:[];
   db.syncMetadata=(p.syncMetadata&&typeof p.syncMetadata==="object")?p.syncMetadata:base.syncMetadata;
+
+  // いまの口座を決め、どの口座のものか分からない記録にその印を付ける。
+  // 既存の記録は1件も消さず、値の書き換えもしない（accountId を足すだけ）。
+  var cur=db.settings.currentAccountId;
+  if(!findAccountIn(db.accounts,cur)){ cur=db.accounts[0].id; db.settings.currentAccountId=cur; }
+  db.trades.forEach(function(t){ if(t&&!t.accountId) t.accountId=cur; });
+  db.tradePlans.forEach(function(t){ if(t&&!t.accountId) t.accountId=cur; });
   return db;
 }
 function mergeSettings(def,s){
@@ -669,7 +721,7 @@ function saveImg(){ storageAdapter.saveImgRaw(JSON.stringify(IMG)); }
 function exportData(){
   DB.syncMetadata.lastExport=now();
   saveData();
-  return JSON.stringify({app:"boburu",version:1,exportedAt:now(),data:DB},null,2);
+  return JSON.stringify({app:"boburu",version:2,exportedAt:now(),data:DB},null,2);
 }
 // 取り込むデータに環境認識が1件も無く、この端末には有る場合は、
 // 旧版の端末が出したコードである可能性が高いので取り込みを止める。
@@ -2451,6 +2503,7 @@ function planToRecord(status){
   var brief = briefFor(localDateOf(createdAt), symbol);
   return {
     id:uid(), status:status,
+    accountId:currentAccountId(),
     createdAt:createdAt,
     updatedAt:now(), savedAt:now(),
     symbol:symbol, dir:PLAN.dir,
