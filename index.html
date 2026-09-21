@@ -429,7 +429,7 @@ html[data-theme="light"] .filterbar button.on{color:#fff}
 
 <nav id="nav"><div class="navwrap">
   <button data-tab="home"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>今日</button>
-  <button data-tab="plan"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 5v14M5 12h14"/></svg>計画</button>
+  <button data-tab="plan"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 5v14M5 12h14"/></svg>注文</button>
   <button data-tab="trades"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg>記録</button>
   <button data-tab="growth"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V5M4 19h16M8 15l3-4 3 3 4-6"/></svg>分析</button>
 </div></nav>
@@ -1192,7 +1192,7 @@ function viewHome(){
   acts.forEach(function(a){ h+=accountStatusCard(a); });
 
   if(DB.trades.length===0){
-    h+="<div class='card'><div class='empty'><div class='big'>まだ記録がありません</div>計画タブから最初のトレードを組み立ててみて</div></div>";
+    h+="<div class='card'><div class='empty'><div class='big'>まだ記録がありません</div>注文タブから最初のトレードを組み立ててみて</div></div>";
   }
   return h;
 }
@@ -1306,6 +1306,13 @@ function accountStatusCard(acc){
   var lotUpN=tradesOfAccount(acc.id).filter(function(t){ return t.status==="open"&&t.addLotUp; }).length;
   if(lotUpN>0) h+="<div class='smallnote' style='margin:4px 0 0'>保有中のうち、逆行中にロットを増やした追加 "+lotUpN+"件。</div>";
   if(r.ddBasis==="equity") h+="<div class='smallnote' style='margin:4px 0 0'>含み損はぼぶるから見えないため、保有中は損切りまで行った場合で数えています。</div>";
+  // 終了：一覧から外れるだけで、記録と分析には残る
+  h+="<details style='margin:12px 0 0'><summary class='smallnote' style='cursor:pointer'>この口座を終了する</summary>"+
+     "<div style='margin:8px 0 0'>"+
+     field("終了の理由","<select id='ac_reason_"+acc.id+"'><option value=''>選ぶ</option>"+
+       ACCOUNT_CLOSE_REASONS.map(function(o){ return "<option value='"+o[0]+"'>"+esc(o[1])+"</option>"; }).join("")+"</select>")+
+     "<button class='btn sm' onclick=\"closeAccount('"+acc.id+"')\">終了する（記録は残ります）</button>"+
+     "</div></details>";
   h+="</div>";
   return h;
 }
@@ -2478,12 +2485,35 @@ function freshPlan(){
     sawLower:"", memo:"", tags:[], entryShot:null
   };
 }
+// 注文するときに口座を選ぶ。選んだ口座が記録先になり、次に開いたときもそのまま。
+function planAccountBar(){
+  var acts=activeAccounts(), cur=currentAccountId();
+  if(!acts.length){
+    return "<div class='card'><div class='smallnote' style='margin:0'>稼働中の口座がありません。設定の「口座」から作れます。</div></div>";
+  }
+  var h="<div class='card'><div class='field' style='margin:0'><label>この注文の口座</label><div class='seg'>";
+  acts.forEach(function(a){
+    h+="<button class='"+(a.id===cur?"on":"")+"' onclick=\"pickPlanAccount('"+a.id+"')\">"+esc(a.name)+"</button>";
+  });
+  h+="</div></div></div>";
+  return h;
+}
+window.pickPlanAccount=function(id){
+  var a=findAccount(id); if(!a||a.closedReason) return;
+  syncPlanFromDOM();                 // 入力途中の値は残す
+  applyAccountToSettings(a); saveData();
+  render();                          // 残高・通貨・損失上限がこの口座のものに変わる
+};
 function viewPlan(){
   if(!PLAN.symbol) PLAN=freshPlan();
+  // 記録先が終了した口座のままなら、稼働中の口座へ移す（終了した口座に注文は入らない）
+  var ca=currentAccount(), acts0=activeAccounts();
+  if(ca && ca.closedReason && acts0.length){ applyAccountToSettings(acts0[0]); saveData(); }
   // 残高・契約サイズはフォームから外したので設定＋実残高から毎回同期
   PLAN.balance=String(Math.round(currentBalance()));
   PLAN.contractSize=String(DB.settings.contractSize);
   var h=topbar("トレード前の計画");
+  h+=planAccountBar();
   h+="<div class='card'>";
   h+=field("日時","<input type='datetime-local' id='p_dt' value='"+esc(PLAN.datetime)+"'>");
   h+=field("銘柄","<input type='text' id='p_sym' value='"+esc(PLAN.symbol)+"' autocomplete='off'>");
@@ -3481,6 +3511,7 @@ window.closeAccount=function(id){
   a.closedReason=reason;
   var per=accountPeriod(id);
   a.closedAt=per?per.last:today();
+  if(id===currentAccountId()){ var rest=activeAccounts(); if(rest.length) applyAccountToSettings(rest[0]); }
   saveData(); toast("「"+a.name+"」を終了にしました"); render();
 };
 
