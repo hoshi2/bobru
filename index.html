@@ -1020,21 +1020,13 @@ function topbar(sub){
 }
 
 /* ---------- ホーム ---------- */
-// 配置の比較用スイッチ（一時的）。A/B どちらにするか決めたら、選ばれなかった方ごと消す
-var HOME_LAYOUT=(function(){ try{ return localStorage.getItem("bob_home_layout_tmp")||"A"; }catch(e){ return "A"; } })();
-window.setHomeLayout=function(v){ HOME_LAYOUT=v; try{ localStorage.setItem("bob_home_layout_tmp",v); }catch(e){} render(); };
+// 数字が上：今日の数字 → 環境認識と保有中 → 口座の制約
 
 function viewHome(){
   var s=DB.settings;
   var st=currentStreak();
 
   var h=topbar("今日の状態");
-
-  // 比較用スイッチ（一時的）
-  h+="<div class='tabs'>"+
-     "<button class='"+(HOME_LAYOUT==="A"?"on":"")+"' onclick=\"setHomeLayout('A')\">配置A 制約が上</button>"+
-     "<button class='"+(HOME_LAYOUT==="B"?"on":"")+"' onclick=\"setHomeLayout('B')\">配置B 数字が上</button>"+
-     "</div>";
 
   // 4連敗注意（静かに）
   if(st.type==="lose" && st.losses>=(toNum(s.lossStreakWarn)||4)){
@@ -1043,21 +1035,12 @@ function viewHome(){
 
   h+=homeBalanceCard();
 
-  if(HOME_LAYOUT==="A"){
-    h+="<div class='sect-title'>Fintokei 状況</div>"+homeFintokeiCard();
-    h+="<div class='pair'>";
-    h+="<div><div class='sect-title'>保有中</div>"+homeOpenCard()+"</div>";
-    h+="<div><div class='sect-title'>環境認識</div>"+homeBriefCard()+"</div>";
-    h+="</div>";
-    h+=homeTodayStats();
-  }else{
-    h+=homeTodayStats();
-    h+="<div class='pair'>";
-    h+="<div><div class='sect-title'>環境認識</div>"+homeBriefCard()+"</div>";
-    h+="<div><div class='sect-title'>保有中</div>"+homeOpenCard()+"</div>";
-    h+="</div>";
-    h+="<div class='sect-title'>Fintokei 状況</div>"+homeFintokeiCard();
-  }
+  h+=homeTodayStats();
+  h+="<div class='pair'>";
+  h+="<div><div class='sect-title'>環境認識</div>"+homeBriefCard()+"</div>";
+  h+="<div><div class='sect-title'>保有中</div>"+homeOpenCard()+"</div>";
+  h+="</div>";
+  h+="<div class='sect-title'>Fintokei 状況</div>"+homeFintokeiCard();
 
   if(DB.trades.length===0){
     h+="<div class='card'><div class='empty'><div class='big'>まだ記録がありません</div>計画タブから最初のトレードを組み立ててみて</div></div>";
