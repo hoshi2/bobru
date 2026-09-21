@@ -482,7 +482,7 @@ function defaultSettings(){
       rateAt:null,           // 提供元がそのレートを出した時刻（日次更新なので古い）
       source:""
     },
-    fin:{                    // Fintokei 公式ルール
+    fin:{                    // 旧：全体で1組のルール。いまは口座ごと（accounts[].rules）。移行の元としてだけ使う
       dailyLossPct:5,
       maxLossPct:10,
       openRiskPct:3,
@@ -572,6 +572,41 @@ function defaultResearch(){
    開始日・終了日は持たない（最初と最後のトレードから決まるため）。 */
 var ACCOUNT_TYPES=[["step1","ステップ1"],["step2","ステップ2"],["live","本番"]];
 var ACCOUNT_CLOSE_REASONS=[["pass","合格"],["fail","失格"],["expired","期限切れ"]];
+// 口座のひな形。選ぶと数字が入るだけで、あとから口座ごとに変えられる。
+// 出典：各社の公開条件（2026-09-22 本人がChatGPTで確認）。分配率は口座ごとの実条件で上書きする。
+var ACCOUNT_TEMPLATES=[
+  {id:"fintokei", label:"Fintokei ProTrader", currency:"JPY",
+   targets:{step1:8, step2:6, live:null},
+   rules:{dailyLossPct:5, maxLossPct:10, ddBasis:"equity", openRiskPct:3, minTradingDays:3, minClosedTrades:0, profitSplitPct:90}},
+  {id:"funded7", label:"Funded7 PAYG", currency:"USD",
+   targets:{step1:8, step2:6, live:null},
+   rules:{dailyLossPct:5, maxLossPct:10, ddBasis:"static", openRiskPct:3, minTradingDays:3, minClosedTrades:10, profitSplitPct:80}}
+];
+var DD_BASIS=[["equity","有効証拠金ベース"],["static","初期資金で固定"]];
+function findTemplate(id){ for(var i=0;i<ACCOUNT_TEMPLATES.length;i++){ if(ACCOUNT_TEMPLATES[i].id===id) return ACCOUNT_TEMPLATES[i]; } return null; }
+function labelDdBasis(v){ for(var i=0;i<DD_BASIS.length;i++){ if(DD_BASIS[i][0]===v) return DD_BASIS[i][1]; } return ""; }
+function numOr(v,d){ var n=toNum(v); return isNum(n)?n:d; }
+// 口座のルールを揃える。欠けている値は、ひな形 → 旧設定(settings.fin) → 空 の順で埋める。
+function normalizeRules(r, type, templateId, fin){
+  r=r||{}; fin=fin||{};
+  var tpl=findTemplate(templateId);
+  var tr=tpl?tpl.rules:{};
+  var tgt=null;
+  if(r.targetPct!==undefined) tgt=(r.targetPct===null)?null:numOr(r.targetPct,null);
+  else if(tpl && type) tgt=tpl.targets[type];
+  else if(type==="step1") tgt=numOr(fin.step1TargetPct,null);
+  else if(type==="step2") tgt=numOr(fin.step2TargetPct,null);
+  return {
+    targetPct:tgt,
+    dailyLossPct:numOr(r.dailyLossPct, numOr(tr.dailyLossPct, numOr(fin.dailyLossPct,5))),
+    maxLossPct:numOr(r.maxLossPct, numOr(tr.maxLossPct, numOr(fin.maxLossPct,10))),
+    ddBasis:(r.ddBasis==="equity"||r.ddBasis==="static")?r.ddBasis:(tr.ddBasis||"equity"),
+    openRiskPct:numOr(r.openRiskPct, numOr(tr.openRiskPct, numOr(fin.openRiskPct,3))),
+    minTradingDays:numOr(r.minTradingDays, numOr(tr.minTradingDays, numOr(fin.minTradingDays,0))),
+    minClosedTrades:numOr(r.minClosedTrades, numOr(tr.minClosedTrades,0)),
+    profitSplitPct:numOr(r.profitSplitPct, numOr(tr.profitSplitPct,null))
+  };
+}
 function isAccountType(v){ for(var i=0;i<ACCOUNT_TYPES.length;i++){ if(ACCOUNT_TYPES[i][0]===v) return true; } return false; }
 function labelAccountType(v){ for(var i=0;i<ACCOUNT_TYPES.length;i++){ if(ACCOUNT_TYPES[i][0]===v) return ACCOUNT_TYPES[i][1]; } return "未設定"; }
 function makeAccount(o){
@@ -583,13 +618,16 @@ function makeAccount(o){
     type:isAccountType(t)?t:"",
     typeNote:o.typeNote||(isAccountType(t)?"":String(t||"")),
     initialBalance:isNum(toNum(o.initialBalance))?toNum(o.initialBalance):0,
+    currency:String(o.currency||(findTemplate(o.template)||{}).currency||o._cur||"USD").toUpperCase(),
     created:o.created||now(),
     closedAt:o.closedAt||null,
-    closedReason:o.closedReason||null
+    closedReason:o.closedReason||null,
+    template:findTemplate(o.template)?o.template:"",
+    rules:normalizeRules(o.rules, isAccountType(t)?t:"", o.template, o._fin)
   };
 }
 function accountFromSettings(s){
-  return makeAccount({name:s.accountName, type:s.accountType, initialBalance:s.initialBalance});
+  return makeAccount({name:s.accountName, type:s.accountType, initialBalance:s.initialBalance, _fin:s.fin, _cur:s.currency});
 }
 function findAccountIn(list,id){
   if(!Array.isArray(list)||!id) return null;
@@ -626,7 +664,50 @@ function applyAccountToSettings(acc){
   st.accountName=acc.name;
   st.accountType=acc.typeNote||labelAccountType(acc.type);
   st.initialBalance=acc.initialBalance;
+  if(acc.currency && st.currency!==acc.currency){
+    st.currency=acc.currency;
+    if(st.fx){ st.fx.rate=null; st.fx.at=null; st.fx.rateAt=null; st.fx.quote=""; st.fx.source=""; }
+    if(typeof FX!=="undefined") FX.lastError="";
+  }
 }
+function activeAccounts(){ return (Array.isArray(DB.accounts)?DB.accounts:[]).filter(function(a){ return !a.closedReason; }); }
+// 口座ごとの数字。いまの口座だけは「手入力残高」の設定を尊重する。
+function balanceOf(acc){
+  if(!acc) return 0;
+  if(acc.id===currentAccountId()) return currentBalance();
+  var b=toNum(acc.initialBalance)||0;
+  tradesOfAccount(acc.id).forEach(function(t){ if(t.status==="closed"){ var p=toNum(t.realizedPL); if(isNum(p)) b+=p; } });
+  return b;
+}
+function todayPLOf(acc){
+  var td=today(), pl=0;
+  tradesOfAccount(acc.id).forEach(function(t){
+    if(t.status!=="closed") return;
+    if(localDateOf(t.closedAt||t.createdAt)!==td) return;
+    var p=toNum(t.realizedPL); if(isNum(p)) pl+=p;
+  });
+  return pl;
+}
+// 保有中が全部SLにかかった場合の損失。ぼぶるは現在値を知らないので、含み損の代わりにこれで見る。
+function openRiskOf(acc){
+  var sum=0, noSL=0, n=0;
+  tradesOfAccount(acc.id).forEach(function(t){
+    if(t.status!=="open") return;
+    n++;
+    var c=calcTrade(t);
+    if(isNum(c.plannedLoss)&&c.plannedLoss>0) sum+=c.plannedLoss; else noSL++;
+  });
+  return {loss:sum, open:n, noSL:noSL};
+}
+function tradingDaysOf(acc){
+  var seen={};
+  tradesOfAccount(acc.id).forEach(function(t){
+    if(t.status==="cancelled") return;
+    var d=localDateOf(t.createdAt); if(d) seen[d]=1;
+  });
+  return Object.keys(seen).length;
+}
+function closedCountOf(acc){ return tradesOfAccount(acc.id).filter(function(t){ return t.status==="closed"; }).length; }
 function labelCloseReason(v){
   for(var i=0;i<ACCOUNT_CLOSE_REASONS.length;i++){ if(ACCOUNT_CLOSE_REASONS[i][0]===v) return ACCOUNT_CLOSE_REASONS[i][1]; }
   return "";
@@ -710,7 +791,7 @@ function migrate(p){
   db.settings=mergeSettings(base.settings, p.settings);
   // 口座：既存の並びと id はそのまま、形だけ揃える。無ければ設定から1件作る。
   db.accounts=(Array.isArray(p.accounts)&&p.accounts.length)
-    ? p.accounts.map(function(a){ return makeAccount(a); })
+    ? p.accounts.map(function(a){ var o={}; for(var k in a) o[k]=a[k]; o._fin=db.settings.fin; o._cur=db.settings.currency; return makeAccount(o); })
     : [accountFromSettings(db.settings)];
   db.briefs=Array.isArray(p.briefs)?p.briefs:[];
   db.tradePlans=Array.isArray(p.tradePlans)?p.tradePlans:[];
@@ -1040,7 +1121,12 @@ function viewHome(){
   h+="<div><div class='sect-title'>環境認識</div>"+homeBriefCard()+"</div>";
   h+="<div><div class='sect-title'>保有中</div>"+homeOpenCard()+"</div>";
   h+="</div>";
-  h+="<div class='sect-title'>Fintokei 状況</div>"+homeFintokeiCard();
+  // 稼働中の口座を全部並べる。記録先の口座を先頭に。
+  var curId=currentAccountId();
+  var acts=activeAccounts().slice().sort(function(a,b){ return (b.id===curId?1:0)-(a.id===curId?1:0); });
+  h+="<div class='sect-title'>口座の状況</div>";
+  if(!acts.length) h+="<div class='card'><div class='empty'>稼働中の口座はありません。設定の「口座」から作れます。</div></div>";
+  acts.forEach(function(a){ h+=accountStatusCard(a); });
 
   if(DB.trades.length===0){
     h+="<div class='card'><div class='empty'><div class='big'>まだ記録がありません</div>計画タブから最初のトレードを組み立ててみて</div></div>";
@@ -1107,34 +1193,54 @@ function homeOpenCard(){
 window.gotoOpenTrades=function(){ UI.tradeTab="open"; TAB="trades"; render(); };
 
 // ステップ1目標と、日次・全体の損失余力
-function homeFintokeiCard(){
-  var s=DB.settings;
-  var bal=currentBalance();
-  var init=toNum(s.initialBalance)||0;
-  var tp=todayPL();
+function accountStatusCard(acc){
+  var r=acc.rules||{}, init=toNum(acc.initialBalance)||0;
+  var bal=balanceOf(acc), prog=bal-init, tdl=todayPLOf(acc), orisk=openRiskOf(acc);
+  var on=(acc.id===currentAccountId());
+  var tpl=findTemplate(acc.template);
+  var tag=[]; if(tpl) tag.push(tpl.label); tag.push(acc.type?labelAccountType(acc.type):"種別未設定");
+  var worst=orisk.open>0?"（保有中が全部SLなら）":"";
+
   var h="<div class='card'>";
-  // ステップ1目標
-  var step1Amt=init*(toNum(s.fin.step1TargetPct)||8)/100;
-  var progAmt=bal-init;
-  var stepRemain=step1Amt-progAmt;
-  var stepPct=step1Amt>0?Math.max(0,Math.min(100,progAmt/step1Amt*100)):0;
-  h+=meter("ステップ1目標（+"+fmtPct(toNum(s.fin.step1TargetPct)||8,0)+" / "+fmtMoney(step1Amt)+")",
-      (progAmt>=step1Amt? "達成" : "残り "+fmtMoney(Math.max(0,stepRemain))),
-      stepPct, "var(--gold)");
-  // 日次損失余力
-  var dailyLimit=init*(toNum(s.fin.dailyLossPct)||5)/100;
-  var todayLoss=Math.max(0,-tp.pl);
-  var dailyRemain=dailyLimit-todayLoss;
-  var dailyUsedPct=dailyLimit>0?Math.min(100,todayLoss/dailyLimit*100):0;
-  h+=meter("日次損失上限（"+fmtPct(toNum(s.fin.dailyLossPct)||5,0)+" / "+fmtMoney(dailyLimit)+"）",
-      "残り "+fmtMoney(Math.max(0,dailyRemain)), dailyUsedPct, dailyUsedPct>70?"var(--red)":"var(--green)");
-  // 全体損失余力
-  var maxLimit=init*(toNum(s.fin.maxLossPct)||10)/100;
-  var totalLoss=Math.max(0,init-bal);
-  var totalRemain=maxLimit-totalLoss;
-  var totalUsedPct=maxLimit>0?Math.min(100,totalLoss/maxLimit*100):0;
-  h+=meter("全体損失上限（"+fmtPct(toNum(s.fin.maxLossPct)||10,0)+" / "+fmtMoney(maxLimit)+"）",
-      "残り "+fmtMoney(Math.max(0,totalRemain)), totalUsedPct, totalUsedPct>70?"var(--red)":"var(--green)");
+  h+="<div style='display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin:0 0 12px'>"+
+     "<div><b>"+esc(acc.name)+"</b>"+(on?" <span style='font-size:11px;color:var(--accent)'>記録先</span>":"")+
+     "<div class='smallnote' style='margin:2px 0 0'>"+esc(tag.join(" ／ "))+"</div></div>"+
+     "<div class='tabular' style='text-align:right;font-weight:700'>"+fmtMoney(bal)+" <span class='cur'>"+esc(acc.currency||"")+"</span>"+
+     "<div class='"+clsSign(prog)+"' style='font-size:12px;font-weight:600'>"+fmtSigned(prog)+"</div></div></div>";
+
+  // 目標（本番など目標の無い口座では出さない）
+  if(isNum(r.targetPct)){
+    var tAmt=init*r.targetPct/100;
+    h+=meter((acc.type?labelAccountType(acc.type):"")+"目標（+"+fmtPct(r.targetPct,0)+" / "+fmtMoney(tAmt)+"）",
+      prog>=tAmt?"達成":"残り "+fmtMoney(Math.max(0,tAmt-prog)),
+      tAmt>0?prog/tAmt*100:0, "var(--gold)");
+  }
+  // 日次損失：今日の確定損失＋保有中の最大損失
+  var dLim=init*numOr(r.dailyLossPct,0)/100, dUsed=Math.max(0,-tdl)+orisk.loss;
+  var dPct=dLim>0?dUsed/dLim*100:0;
+  h+=meter("日次損失上限（"+fmtPct(numOr(r.dailyLossPct,0),0)+" / "+fmtMoney(dLim)+"）",
+    "残り "+fmtMoney(Math.max(0,dLim-dUsed))+worst, dPct, dPct>70?"var(--red)":"var(--green)");
+  // 全体損失：初期資金からの減少＋保有中の最大損失
+  var mLim=init*numOr(r.maxLossPct,0)/100, mUsed=Math.max(0,init-bal)+orisk.loss;
+  var mPct=mLim>0?mUsed/mLim*100:0;
+  h+=meter("全体損失上限（"+fmtPct(numOr(r.maxLossPct,0),0)+" / "+fmtMoney(mLim)+"）",
+    "残り "+fmtMoney(Math.max(0,mLim-mUsed))+worst, mPct, mPct>70?"var(--red)":"var(--green)");
+  // オープンリスク
+  var oLim=init*numOr(r.openRiskPct,0)/100;
+  if(oLim>0){
+    var oPct=orisk.loss/oLim*100;
+    h+=meter("保有中の最大損失（"+fmtPct(numOr(r.openRiskPct,0),0)+" / "+fmtMoney(oLim)+"）",
+      "残り "+fmtMoney(Math.max(0,oLim-orisk.loss)), oPct, oPct>70?"var(--red)":"var(--green)");
+  }
+  // 条件と前提（事実だけ）
+  var notes=[];
+  if(numOr(r.minTradingDays,0)>0) notes.push("取引日 "+tradingDaysOf(acc)+" / "+r.minTradingDays);
+  if(numOr(r.minClosedTrades,0)>0) notes.push("決済 "+closedCountOf(acc)+" / "+r.minClosedTrades);
+  if(r.ddBasis) notes.push("損失の数え方："+labelDdBasis(r.ddBasis));
+  if(isNum(toNum(r.profitSplitPct))) notes.push("分配 "+fmtPct(toNum(r.profitSplitPct),0));
+  if(notes.length) h+="<div class='smallnote' style='margin:10px 0 0'>"+esc(notes.join(" ・ "))+"</div>";
+  if(orisk.noSL>0) h+="<div class='smallnote' style='margin:4px 0 0'>SLの無い保有 "+orisk.noSL+"件は、最大損失に入っていません。</div>";
+  if(r.ddBasis==="equity") h+="<div class='smallnote' style='margin:4px 0 0'>含み損はぼぶるから見えないため、保有中は損切りまで行った場合で数えています。</div>";
   h+="</div>";
   return h;
 }
@@ -2425,11 +2531,13 @@ function renderPlanCalc(){
   // インラインエラー表示
   setErr("p_sl_err","p_sl",c.errSL); setErr("p_tp_err","p_tp",c.errTP);
   var s=DB.settings;
-  var init=toNum(s.initialBalance)||0;
-  var dailyLimit=init*(toNum(s.fin.dailyLossPct)||5)/100;
-  var tp=todayPL(); var dailyRemain=dailyLimit-Math.max(0,-tp.pl);
-  var maxLimit=init*(toNum(s.fin.maxLossPct)||10)/100;
-  var bal=currentBalance(); var totalRemain=maxLimit-Math.max(0,init-bal);
+  var acc=currentAccount(), rr=(acc&&acc.rules)||{};
+  var init=acc?(toNum(acc.initialBalance)||0):(toNum(DB.settings.initialBalance)||0);
+  var orisk=acc?openRiskOf(acc).loss:0;   // 既に保有中のぶんは、損切りまで行った前提で先に引いておく
+  var dailyLimit=init*numOr(rr.dailyLossPct,5)/100;
+  var tp=todayPL(); var dailyRemain=dailyLimit-Math.max(0,-tp.pl)-orisk;
+  var maxLimit=init*numOr(rr.maxLossPct,10)/100;
+  var bal=currentBalance(); var totalRemain=maxLimit-Math.max(0,init-bal)-orisk;
   var pl=isNum(c.plannedLoss)?c.plannedLoss:null;
 
   var html="<div class='calc'>";
@@ -3194,7 +3302,7 @@ function accountsCard(){
     var on=(a.id===cur), per=accountPeriod(a.id), n=tradesOfAccount(a.id).length;
     var meta=[];
     meta.push(a.type?labelAccountType(a.type):(a.typeNote||"種別未設定"));
-    meta.push("初期 "+fmtMoney(toNum(a.initialBalance)));
+    meta.push("初期 "+fmtMoney(toNum(a.initialBalance))+" "+(a.currency||""));
     meta.push(n+"件");
     if(per) meta.push(per.first+" 〜 "+per.last);
     meta.push(a.closedReason?("終了："+labelCloseReason(a.closedReason)):"稼働中");
@@ -3208,6 +3316,7 @@ function accountsCard(){
       h+="<button class='btn sm' onclick=\"switchAccount('"+a.id+"')\">この口座にする</button>";
     }
     if(!a.closedReason && on){
+      h+=accountRulesForm(a);
       h+=field("終了の理由","<select id='ac_reason_"+a.id+"'><option value=''>選ぶ</option>"+
            ACCOUNT_CLOSE_REASONS.map(function(o){ return "<option value='"+o[0]+"'>"+esc(o[1])+"</option>"; }).join("")+
            "</select>");
@@ -3221,6 +3330,8 @@ function accountsCard(){
 
   h+="<div style='padding:11px 0 0;border-top:1px solid var(--line)'>";
   h+="<div class='smallnote' style='margin:0 0 8px'>新しい口座を作る</div>";
+  h+=field("ひな形（ルールの数字が入ります）","<select id='a_tpl'><option value=''>使わない</option>"+
+     ACCOUNT_TEMPLATES.map(function(t){ return "<option value='"+t.id+"'>"+esc(t.label)+"</option>"; }).join("")+"</select>");
   h+="<div class='row2'>"+
      field("口座名","<input type='text' id='a_name' placeholder='Fintokei ステップ1'>")+
      field("種別","<select id='a_type'><option value=''>選ぶ</option>"+
@@ -3233,6 +3344,39 @@ function accountsCard(){
   h+="</div>";
   return h;
 }
+function accountRulesForm(a){
+  var r=a.rules||{}, id=a.id;
+  var inp=function(key,label,val,step){
+    return field(label,"<input type='number' inputmode='decimal' step='"+(step||"any")+"' id='ar_"+key+"_"+id+"' value='"+esc(val===null||val===undefined?"":val)+"'>");
+  };
+  var h="<div class='smallnote' style='margin:4px 0 8px'>この口座のルール</div>";
+  h+="<div class='row2'>"+inp("target","目標(%)　空欄＝目標なし",r.targetPct)+inp("split","分配率(%)",r.profitSplitPct)+"</div>";
+  h+="<div class='row2'>"+inp("daily","1日の最大損失(%)",r.dailyLossPct)+inp("max","全体の最大損失(%)",r.maxLossPct)+"</div>";
+  h+="<div class='row2'>"+inp("open","保有中の最大リスク(%)",r.openRiskPct)+
+     field("損失の数え方","<select id='ar_dd_"+id+"'>"+DD_BASIS.map(function(o){
+       return "<option value='"+o[0]+"'"+(r.ddBasis===o[0]?" selected":"")+">"+esc(o[1])+"</option>"; }).join("")+"</select>")+"</div>";
+  h+="<div class='row2'>"+inp("days","最低取引日数",r.minTradingDays,"1")+inp("trades","最低決済数",r.minClosedTrades,"1")+"</div>";
+  h+="<button class='btn sm' onclick=\"saveAccountRules('"+id+"')\">この口座のルールを保存</button>";
+  h+="<div style='height:12px'></div>";
+  return h;
+}
+window.saveAccountRules=function(id){
+  var a=findAccount(id); if(!a) return;
+  var g=function(k){ var e=document.getElementById("ar_"+k+"_"+id); return e?e.value:""; };
+  var num=function(k,d){ var v=g(k); if(v==="") return d; var n=toNum(v); return isNum(n)?n:d; };
+  var dd=(document.getElementById("ar_dd_"+id)||{}).value;
+  a.rules={
+    targetPct:num("target",null),
+    dailyLossPct:num("daily",0),
+    maxLossPct:num("max",0),
+    ddBasis:(dd==="equity"||dd==="static")?dd:"equity",
+    openRiskPct:num("open",0),
+    minTradingDays:num("days",0),
+    minClosedTrades:num("trades",0),
+    profitSplitPct:num("split",null)
+  };
+  saveData(); toast("「"+a.name+"」のルールを保存しました"); render();
+};
 window.switchAccount=function(id){
   var a=findAccount(id); if(!a) return;
   applyAccountToSettings(a); saveData();
@@ -3240,11 +3384,11 @@ window.switchAccount=function(id){
 };
 window.addAccount=function(){
   var g=function(x){var e=document.getElementById(x);return e?e.value:"";};
-  var name=(g("a_name")||"").trim(), type=g("a_type"), init=toNum(g("a_init"));
+  var name=(g("a_name")||"").trim(), type=g("a_type"), init=toNum(g("a_init")), tpl=g("a_tpl");
   if(!name){ toast("口座名を入れて下さい"); return; }
   if(!isAccountType(type)){ toast("種別を選んで下さい"); return; }
   if(!isNum(init)){ toast("初期残高を入れて下さい"); return; }
-  var acc=makeAccount({name:name,type:type,initialBalance:init});
+  var acc=makeAccount({name:name,type:type,initialBalance:init,template:tpl,_fin:DB.settings.fin});
   DB.accounts.push(acc);
   applyAccountToSettings(acc);
   saveData(); toast("口座「"+name+"」を作って切り替えました"); render();
@@ -3312,15 +3456,6 @@ function viewSettings(){
   h+="<div class='smallnote'>これらは自分で決めた内部基準です。Fintokei公式ルールとは別管理です。</div>";
   h+="</div>";
 
-  h+="<div class='sect-title'>Fintokei 公式ルール</div><div class='card'>";
-  h+="<div class='row2'>"+field("1日の最大損失率(%)","<input type='number' inputmode='decimal' step='any' id='s_dl' value='"+esc(s.fin.dailyLossPct)+"'>")+
-     field("全体の最大損失率(%)","<input type='number' inputmode='decimal' step='any' id='s_ml' value='"+esc(s.fin.maxLossPct)+"'>")+"</div>";
-  h+="<div class='row2'>"+field("オープン最大リスク(%)","<input type='number' inputmode='decimal' step='any' id='s_or' value='"+esc(s.fin.openRiskPct)+"'>")+
-     field("最低取引日数","<input type='number' inputmode='numeric' step='1' id='s_mtd' value='"+esc(s.fin.minTradingDays)+"'>")+"</div>";
-  h+="<div class='row2'>"+field("ステップ1目標(%)","<input type='number' inputmode='decimal' step='any' id='s_s1' value='"+esc(s.fin.step1TargetPct)+"'>")+
-     field("ステップ2目標(%)","<input type='number' inputmode='decimal' step='any' id='s_s2' value='"+esc(s.fin.step2TargetPct)+"'>")+"</div>";
-  h+="</div>";
-
   h+="<div class='sect-title'>表示</div><div class='card'>";
   h+=field("テーマ","<select id='s_theme'><option value='dark' "+(s.theme==="dark"?"selected":"")+">ダーク</option><option value='light' "+(s.theme==="light"?"selected":"")+">ライト</option><option value='system' "+(s.theme==="system"?"selected":"")+">端末設定に合わせる</option></select>");
   h+="</div>";
@@ -3369,17 +3504,23 @@ window.saveSettings=function(){
   if(accNow){
     accNow.name=s.accountName||accNow.name;
     var tsel=g("s_accType");
+    var prevType=accNow.type;
     accNow.type=isAccountType(tsel)?tsel:"";
+    if(accNow.type!==prevType){
+      var tp0=findTemplate(accNow.template);
+      accNow.rules.targetPct = tp0 ? tp0.targets[accNow.type] :
+        (accNow.type==="step1"?numOr(s.fin.step1TargetPct,null):accNow.type==="step2"?numOr(s.fin.step2TargetPct,null):null);
+      if(accNow.rules.targetPct===undefined) accNow.rules.targetPct=null;
+    }
     if(accNow.type) accNow.typeNote="";
     accNow.initialBalance=isNum(s.initialBalance)?s.initialBalance:accNow.initialBalance;
+    accNow.currency=s.currency||accNow.currency;
     applyAccountToSettings(accNow);
   }else{
     s.accountType=g("s_accType");
   }
   s.balanceMode=g("s_balmode"); s.manualBalance=g("s_manual")===""?null:toNum(g("s_manual"));
   s.internalRiskPct=toNum(g("s_irisk"))||1; s.baseLot=toNum(g("s_blot")); s.lossStreakWarn=toNum(g("s_streak"))||4;
-  s.fin.dailyLossPct=toNum(g("s_dl")); s.fin.maxLossPct=toNum(g("s_ml")); s.fin.openRiskPct=toNum(g("s_or"));
-  s.fin.minTradingDays=toNum(g("s_mtd")); s.fin.step1TargetPct=toNum(g("s_s1")); s.fin.step2TargetPct=toNum(g("s_s2"));
   var th=g("s_theme"); s.theme=th; applyTheme();
   saveData(); toast("設定を保存しました"); render();
 };
