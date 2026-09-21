@@ -771,7 +771,7 @@ function defaultDB(){
   var acc=accountFromSettings(st);
   st.currentAccountId=acc.id;
   return {
-    version:2,
+    version:3,
     settings:st,
     accounts:[acc],
     briefs:[],       // Morning Brief（1日1件・date をキーに扱う）
@@ -840,12 +840,22 @@ function migrate(p){
   if(!p||typeof p!=="object") return base;
   // 各コレクションを安全にマージ（欠損はデフォルト、型不一致は無視）
   var db={};
-  db.version=2;
+  db.version=3;
   db.settings=mergeSettings(base.settings, p.settings);
   // 口座：既存の並びと id はそのまま、形だけ揃える。無ければ設定から1件作る。
   db.accounts=(Array.isArray(p.accounts)&&p.accounts.length)
     ? p.accounts.map(function(a){ var o={}; for(var k in a) o[k]=a[k]; o._fin=db.settings.fin; o._cur=db.settings.currency; return makeAccount(o); })
     : [accountFromSettings(db.settings)];
+  // 口座が1つだけだった頃（版3より前）の accounts[0] は、画面から一度も更新されない入れ物で、
+  // 初期値（100,000 など）のまま残っていることがある。その頃の本当の値は設定の側にある。
+  // id と、入っていればルールは残し、名前・種別・初期残高・通貨を設定から取り直す。
+  if(!(p.version>=3) && db.accounts.length===1){
+    var a0=db.accounts[0], st0=db.settings;
+    if(st0.accountName) a0.name=st0.accountName;
+    if(isNum(toNum(st0.initialBalance))) a0.initialBalance=toNum(st0.initialBalance);
+    if(st0.currency) a0.currency=String(st0.currency).toUpperCase();
+    if(!a0.type) a0.typeNote=st0.accountType||a0.typeNote;
+  }
   db.briefs=Array.isArray(p.briefs)?p.briefs:[];
   db.tradePlans=Array.isArray(p.tradePlans)?p.tradePlans:[];
   db.trades=Array.isArray(p.trades)?p.trades:[];
@@ -882,7 +892,7 @@ function saveImg(){ storageAdapter.saveImgRaw(JSON.stringify(IMG)); }
 function exportData(){
   DB.syncMetadata.lastExport=now();
   saveData();
-  return JSON.stringify({app:"boburu",version:2,exportedAt:now(),data:DB},null,2);
+  return JSON.stringify({app:"boburu",version:3,exportedAt:now(),data:DB},null,2);
 }
 // 取り込むデータに環境認識が1件も無く、この端末には有る場合は、
 // 旧版の端末が出したコードである可能性が高いので取り込みを止める。
