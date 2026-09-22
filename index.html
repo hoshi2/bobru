@@ -589,6 +589,9 @@ var ACCOUNT_CLOSE_REASONS=[["pass","合格"],["fail","失格"],["expired","期�
 var ACCOUNT_TEMPLATES=[
   {id:"fintokei", label:"Fintokei ProTrader", currency:"JPY",
    targets:{step1:8, step2:6, live:null},
+   // 1日の区切り（日次損失のリセット・取引日の数え方）。cTrader はサーバー時間0時＝ニューヨーク17時
+   // （日本時間で夏6時・冬7時）。出典：Fintokei 2025-04-30 のお知らせ。
+   dayReset:{tz:"America/New_York", hour:17},
    rules:{dailyLossPct:5, maxLossPct:10, ddBasis:"equity", openRiskPct:3, minTradingDays:3, minClosedTrades:0, profitSplitPct:90}},
   {id:"funded7", label:"Funded7 PAYG", currency:"USD",
    targets:{step1:8, step2:6, live:null}, consistencyMin:0.90,
@@ -727,6 +730,42 @@ function consistencyOf(acc){
   if(!wins.length) return null;
   return {value:((wins[1]||0)+(wins[2]||0))/wins[0], wins:wins.length};
 }
+// 次の「1日の区切り」までの時計。警告ではなく、ただの時刻。
+function tzOffsetMin(date,tz){
+  var o={}; new Intl.DateTimeFormat("en-US",{timeZone:tz,hourCycle:"h23",year:"numeric",month:"2-digit",day:"2-digit",
+    hour:"2-digit",minute:"2-digit",second:"2-digit"}).formatToParts(date).forEach(function(x){ o[x.type]=x.value; });
+  return Math.round((Date.UTC(+o.year,+o.month-1,+o.day,+o.hour,+o.minute,+o.second)-date.getTime())/60000);
+}
+function nextResetAt(now,tz,hour){
+  var off=tzOffsetMin(now,tz), w=new Date(now.getTime()+off*60000);
+  var at=Date.UTC(w.getUTCFullYear(),w.getUTCMonth(),w.getUTCDate(),hour)-off*60000;
+  if(at<=now.getTime()) at+=86400000;
+  at+=(off-tzOffsetMin(new Date(at),tz))*60000;   // 夏時間の切り替えをまたぐ日
+  return at;
+}
+function dayResetOf(t){
+  var acc=findAccount(t.accountId)||currentAccount(), tpl=acc&&findTemplate(acc.template);
+  return tpl&&tpl.dayReset?tpl.dayReset:null;
+}
+function fmtUntil(ms){ var m=Math.max(0,Math.floor(ms/60000)); return Math.floor(m/60)+":"+(m%60<10?"0":"")+(m%60); }
+function resetClock(t,withTime){
+  var r=dayResetOf(t); if(!r) return "";
+  var at=nextResetAt(new Date(),r.tz,r.hour), d=new Date(at);
+  var label=withTime?"次の区切り（"+d.getHours()+":"+(d.getMinutes()<10?"0":"")+d.getMinutes()+"）まで ":"区切りまで ";
+  return "<span data-reset='"+at+"' data-tz='"+esc(r.tz)+"' data-hour='"+r.hour+"' data-label='"+esc(label)+"'>"+esc(label+fmtUntil(at-Date.now()))+"</span>";
+}
+// 30秒ごとに文字だけ更新する（画面を描き直すと入力中のフォームが消えるため）
+setInterval(function(){
+  var els=document.querySelectorAll("[data-reset]");
+  for(var i=0;i<els.length;i++){
+    var e=els[i], at=+e.getAttribute("data-reset"), lab=e.getAttribute("data-label");
+    if(at<=Date.now()){
+      at=nextResetAt(new Date(),e.getAttribute("data-tz"),+e.getAttribute("data-hour")); e.setAttribute("data-reset",at);
+      if(lab.indexOf("（")>=0){ var d=new Date(at); lab="次の区切り（"+d.getHours()+":"+(d.getMinutes()<10?"0":"")+d.getMinutes()+"）まで "; e.setAttribute("data-label",lab); }
+    }
+    e.textContent=lab+fmtUntil(at-Date.now());
+  }
+},30000);
 function closedCountOf(acc){ return tradesOfAccount(acc.id).filter(function(t){ return t.status==="closed"; }).length; }
 // 記録・分析で見ている口座。未選択なら記録先の口座。"all" は記録タブだけ（通貨が混ざる集計はしない）
 function viewAcctId(allowAll){
@@ -1264,8 +1303,9 @@ function homeOpenCard(){
     var c=calcTrade(t);
     h+="<div class='oprow"+(i?" sep":"")+"' onclick='gotoOpenTrades()'>";
     h+="<div><div class='opsym'>"+esc(t.symbol)+" "+dirTag(t.dir)+"</div>";
+    var rc=resetClock(t,false);
     h+="<div class='opsub tabular'>"+(isNum(t.lot)?t.lot.toFixed(2)+" ロット":"")+
-       (isNum(t.entry)?" ・ "+fmtMoney(t.entry,2):"")+"</div></div>";
+       (isNum(t.entry)?" ・ "+fmtMoney(t.entry,2):"")+(rc?" ・ "+rc:"")+"</div></div>";
     h+="<div class='opright'><div class='opsub'>予定損失</div>";
     h+="<div class='neg tabular'>"+(isNum(c.plannedLoss)?("-"+fmtMoney(c.plannedLoss)):"—")+"</div></div>";
     h+="</div>";
@@ -2860,6 +2900,7 @@ function tradeCard(t,tab){
   h+=ti("予定損失", isNum(c.plannedLoss)?("<span class='neg'>-"+fmtMoney(c.plannedLoss)+"</span>"):"—");
   h+=ti("予定利益", isNum(c.plannedProfit)?("<span class='pos'>+"+fmtMoney(c.plannedProfit)+"</span>"):"—");
   h+="</div>";
+  if(t.status==="open"){ var rc=resetClock(t,true); if(rc) h+="<div class='smallnote tabular' style='margin:6px 0 0'>"+rc+"</div>"; }
 
   // 決済済みは実現も表示
   if(t.status==="closed"){
