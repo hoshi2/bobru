@@ -103,6 +103,18 @@ nav#nav button.on .ic{stroke:var(--accent)}
 .stat .v.sm{font-size:16px}
 .stat .v small{font-size:12px;color:var(--txt3);font-weight:600;margin-left:3px}
 .pos{color:var(--green)} .neg{color:var(--red)} .muted{color:var(--txt3)}
+/* 月ごとの日別損益 */
+.calnav{display:flex;align-items:center;justify-content:space-between;margin:0 0 6px}
+.calnav button{background:none;border:0;color:var(--txt2);font-size:20px;padding:4px 12px;cursor:pointer}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+.cal .wd{font-size:11px;color:var(--txt3);text-align:center;padding:2px 0}
+.cal .d{min-height:46px;border-radius:8px;padding:4px 3px;text-align:center;border:1px solid transparent;background:none;color:var(--txt);font:inherit}
+.cal .d .n{font-size:11px;color:var(--txt3)}
+.cal .d .p{font-size:12px;font-weight:700;margin-top:3px;white-space:nowrap}
+.cal .d.up{background:color-mix(in srgb,var(--green) 14%,transparent);cursor:pointer}
+.cal .d.down{background:color-mix(in srgb,var(--red) 14%,transparent);cursor:pointer}
+.cal .d.flat{background:var(--card2);cursor:pointer}
+.cal .d.sel{border-color:var(--txt2)}
 .gold{color:var(--gold)} .blue{color:var(--blue)}
 
 .balrow{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:6px}
@@ -821,7 +833,7 @@ var IMG={};       // {tradeId_entry:dataURL, tradeId_exit:dataURL}
 var TAB="home";
 // 4つのタブに畳んだあとの所属。ここに無いタブ（設定）はどのタブにも属さない
 var NAV_PARENT={home:"home",brief:"home",plan:"plan",rules:"plan",trades:"trades",growth:"growth"};
-var UI={ tradeTab:"open", growthPeriod:"30d", growthCustom:{from:"",to:""}, briefDate:"", acct:"" };
+var UI={ tradeTab:"open", growthPeriod:"30d", growthCustom:{from:"",to:""}, briefDate:"", acct:"", calMonth:"", calDay:"" };
 var _saving=false;
 
 /* ---------- ロード/セーブ ---------- */
@@ -3152,6 +3164,7 @@ window.saveClose=function(id){
 function viewGrowth(){
   var h=topbar("成長");
   h+=acctFilterBar(false);
+  h+=calendarCard();
   // 期間フィルタ
   h+="<div class='filterbar'>";
   [["today","今日"],["7d","7日"],["30d","30日"],["month","今月"],["all","全期間"],["custom","期間指定"]].forEach(function(p){
@@ -3257,6 +3270,73 @@ function viewGrowth(){
   h+="</div>";
   return h;
 }
+/* ---------- 月ごとの日別損益 ---------- */
+// 見ている口座の決済を決済日ごとにまとめる。％はその日の始まりの残高に対する増減。
+function dailyResults(){
+  var va=findAccount(viewAcctId(false));
+  var bal=va?(toNum(va.initialBalance)||0):(toNum(DB.settings.initialBalance)||0);
+  var list=DB.trades.filter(function(t){ return t.status==="closed"&&inViewAcct(t,false); })
+    .sort(function(a,b){ return new Date(a.closedAt||a.createdAt)-new Date(b.closedAt||b.createdAt); });
+  var days={}, order=[];
+  list.forEach(function(t){
+    var d=localDateOf(t.closedAt||t.createdAt); if(!d) return;
+    if(!days[d]){ days[d]={date:d, start:bal, pl:0, trades:[]}; order.push(d); }
+    var p=toNum(t.realizedPL); if(isNum(p)){ days[d].pl+=p; bal+=p; }
+    days[d].trades.push(t);
+  });
+  order.forEach(function(d){ var x=days[d]; x.pct=x.start>0?x.pl/x.start*100:null; });
+  return {days:days, order:order, currency:va?(va.currency||""):(DB.settings.currency||"")};
+}
+function calendarCard(){
+  var r=dailyResults(), month=UI.calMonth||today().slice(0,7);
+  var y=+month.slice(0,4), m=+month.slice(5,7);
+  var inMonth=r.order.filter(function(d){ return d.slice(0,7)===month; });
+  var h="<div class='card'>";
+  h+="<div class='calnav'><button onclick='moveCalMonth(-1)' aria-label='前の月'>‹</button>"+
+     "<b>"+y+"年"+m+"月の日別損益</b><button onclick='moveCalMonth(1)' aria-label='次の月'>›</button></div>";
+  if(inMonth.length){
+    var tot=0; inMonth.forEach(function(d){ tot+=r.days[d].pl; });
+    var st=r.days[inMonth[0]].start, tp=st>0?tot/st*100:null;
+    h+="<div class='smallnote' style='margin:0 0 10px;text-align:center'><span class='"+clsSign(tot)+" tabular' style='font-weight:700'>"+
+       esc(fmtSigned(tot)+" "+r.currency)+(isNum(tp)?"（"+fmtSigned(tp,2)+"%）":"")+"</span> ・ 取引した日 "+inMonth.length+"日</div>";
+  } else {
+    h+="<div class='smallnote' style='margin:0 0 10px;text-align:center'>この月の決済はありません</div>";
+  }
+  h+="<div class='cal'>";
+  ["月","火","水","木","金","土","日"].forEach(function(w){ h+="<div class='wd'>"+w+"</div>"; });
+  var first=new Date(y,m-1,1), lead=(first.getDay()+6)%7, last=new Date(y,m,0).getDate();
+  for(var i=0;i<lead;i++) h+="<div></div>";
+  for(var dd=1; dd<=last; dd++){
+    var key=month+"-"+(dd<10?"0":"")+dd, x=r.days[key];
+    if(!x){ h+="<div class='d'><div class='n'>"+dd+"</div></div>"; continue; }
+    var cls=x.pl>0?"up":x.pl<0?"down":"flat";
+    h+="<button class='d "+cls+(UI.calDay===key?" sel":"")+"' onclick=\"pickCalDay('"+key+"')\">"+
+       "<div class='n'>"+dd+"</div><div class='p "+clsSign(x.pl)+" tabular'>"+(isNum(x.pct)?fmtSigned(x.pct,1)+"%":"—")+"</div></button>";
+  }
+  h+="</div>";
+  var sel=UI.calDay&&UI.calDay.slice(0,7)===month?r.days[UI.calDay]:null;
+  if(sel){
+    h+="<div style='margin:12px 0 0;border-top:1px solid var(--line);padding-top:10px'>"+
+       "<div style='display:flex;justify-content:space-between;gap:8px'><b>"+(+sel.date.slice(5,7))+"月"+(+sel.date.slice(8,10))+"日</b>"+
+       "<span class='"+clsSign(sel.pl)+" tabular' style='font-weight:700'>"+esc(fmtSigned(sel.pl)+" "+r.currency)+
+       (isNum(sel.pct)?"（"+fmtSigned(sel.pct,2)+"%）":"")+"</span></div>"+
+       "<div class='smallnote' style='margin:2px 0 6px'>その日の始まりの残高 "+esc(fmtMoney(sel.start)+" "+r.currency)+"</div>";
+    sel.trades.forEach(function(t){
+      var p=toNum(t.realizedPL);
+      h+="<div style='display:flex;justify-content:space-between;gap:8px;font-size:13px;padding:3px 0'>"+
+         "<span>"+esc(t.symbol||"")+" "+esc(t.dir==="short"?"ショート":"ロング")+"</span>"+
+         "<span class='"+clsSign(p)+" tabular'>"+(isNum(p)?esc(fmtSigned(p)):"—")+"</span></div>";
+    });
+    h+="</div>";
+  }
+  h+="</div>";
+  return h;
+}
+window.moveCalMonth=function(k){
+  var mo=UI.calMonth||today().slice(0,7), d=new Date(+mo.slice(0,4), +mo.slice(5,7)-1+k, 1);
+  UI.calMonth=d.getFullYear()+"-"+(d.getMonth()<9?"0":"")+(d.getMonth()+1); UI.calDay=""; render();
+};
+window.pickCalDay=function(d){ UI.calDay=(UI.calDay===d)?"":d; render(); };
 window.setGrowthPeriod=function(p){ UI.growthPeriod=p; render(); };
 window.setGrowthCustom=function(){
   var f=document.getElementById("g_from"),t=document.getElementById("g_to");
