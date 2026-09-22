@@ -579,7 +579,7 @@ var ACCOUNT_TEMPLATES=[
    targets:{step1:8, step2:6, live:null},
    rules:{dailyLossPct:5, maxLossPct:10, ddBasis:"equity", openRiskPct:3, minTradingDays:3, minClosedTrades:0, profitSplitPct:90}},
   {id:"funded7", label:"Funded7 PAYG", currency:"USD",
-   targets:{step1:8, step2:6, live:null},
+   targets:{step1:8, step2:6, live:null}, consistencyMin:0.90,
    rules:{dailyLossPct:5, maxLossPct:10, ddBasis:"static", openRiskPct:3, minTradingDays:3, minClosedTrades:10, profitSplitPct:80}}
 ];
 var DD_BASIS=[["equity","有効証拠金ベース"],["static","初期資金で固定"]];
@@ -706,6 +706,14 @@ function tradingDaysOf(acc){
     var d=localDateOf(t.createdAt); if(d) seen[d]=1;
   });
   return Object.keys(seen).length;
+}
+// 一貫性（Funded7）：(2位の勝ち＋3位の勝ち) ÷ 1位の勝ち。勝ちは決済1回ごとの実現損益。
+function consistencyOf(acc){
+  var wins=tradesOfAccount(acc.id).filter(function(t){ return t.status==="closed"; })
+    .map(function(t){ return toNum(t.realizedPL); }).filter(function(p){ return isNum(p)&&p>0; })
+    .sort(function(a,b){ return b-a; });
+  if(!wins.length) return null;
+  return {value:((wins[1]||0)+(wins[2]||0))/wins[0], wins:wins.length};
 }
 function closedCountOf(acc){ return tradesOfAccount(acc.id).filter(function(t){ return t.status==="closed"; }).length; }
 // 記録・分析で見ている口座。未選択なら記録先の口座。"all" は記録タブだけ（通貨が混ざる集計はしない）
@@ -1301,6 +1309,10 @@ function accountStatusCard(acc){
   var notes=[];
   if(numOr(r.minTradingDays,0)>0) notes.push("取引日 "+tradingDaysOf(acc)+" / "+r.minTradingDays);
   if(numOr(r.minClosedTrades,0)>0) notes.push("決済 "+closedCountOf(acc)+" / "+r.minClosedTrades);
+  if(tpl&&tpl.consistencyMin){
+    var qc=consistencyOf(acc);
+    notes.push("一貫性 "+(qc?qc.value.toFixed(2):"—")+" / "+tpl.consistencyMin.toFixed(2)+(qc&&qc.wins<3?"（勝ち"+qc.wins+"回）":""));
+  }
   if(r.ddBasis) notes.push("損失の数え方："+labelDdBasis(r.ddBasis));
   if(isNum(toNum(r.profitSplitPct))) notes.push("分配 "+fmtPct(toNum(r.profitSplitPct),0));
   if(notes.length) h+="<div class='smallnote' style='margin:10px 0 0'>"+esc(notes.join(" ・ "))+"</div>";
