@@ -484,6 +484,7 @@ function defaultSettings(){
     internalRiskPct:1,       // 内部: 1トレード許容損失率
     baseLot:1.00,            // 内部: 基本ロット目安
     lossStreakWarn:4,        // 内部: 連敗注意ライン
+    ownDailyStopPct:2,       // 内部: 自分の日次停止ライン（規約の日次上限とは別に持つ）
     marketProvider:"none",   // 朝分析の取得先（marketDataProvider の登録名）
     fx:{                     // 口座通貨への換算（USD建ての損益を口座通貨に直す）
       auto:true,             // 自動取得する
@@ -702,6 +703,21 @@ function todayPLOf(acc){
     var p=toNum(t.realizedPL); if(isNum(p)) pl+=p;
   });
   return pl;
+}
+// 自分の日次停止ライン。規約の日次上限とは別の、自分で決めた線。基準は規約の表示と同じ初期残高。
+function ownStopPct(){ var v=toNum(DB.settings.ownDailyStopPct); return isNum(v)&&v>=0?v:2; }
+function ownStopOf(acc){
+  var init=toNum(acc&&acc.initialBalance)||0, lim=init*ownStopPct()/100;
+  var loss=Math.max(0,-todayPLOf(acc));
+  return {limit:lim, loss:loss, pct:init>0?loss/init*100:0, hit:lim>0&&loss>=lim, init:init};
+}
+// 入った時点の状態を焼き込む。あとで設定を変えても、当時の事実が残るように
+function stampOwnStop(rec){
+  var acc=findAccount(rec.accountId)||currentAccount(); if(!acc) return;
+  var os=ownStopOf(acc);
+  rec.ownStopPct=ownStopPct();
+  rec.dayLossPctAtEntry=Math.round(os.pct*100)/100;
+  rec.afterOwnStop=os.hit;
 }
 // 保有中が全部SLにかかった場合の損失。ぼぶるは現在値を知らないので、含み損の代わりにこれで見る。
 function openRiskOf(acc){
@@ -1339,6 +1355,14 @@ function accountStatusCard(acc){
     h+=meter((acc.type?labelAccountType(acc.type):"")+"目標（+"+fmtPct(r.targetPct,0)+" / "+fmtMoney(tAmt)+"）",
       prog>=tAmt?"達成":"残り "+fmtMoney(Math.max(0,tAmt-prog)),
       tAmt>0?prog/tAmt*100:0, "var(--gold)");
+  }
+  // 自分の日次停止：規約とは別の行。止めない、事実だけ出す
+  var os=ownStopOf(acc);
+  if(os.limit>0){
+    var oUsed=os.loss+orisk.loss, oUse=oUsed/os.limit*100, oLeft=Math.max(0,os.limit-oUsed);
+    h+=meter("自分の日次停止（"+ownStopPct()+"% / "+fmtMoney(os.limit)+"）",
+      os.hit?("本日 −"+fmtPct(os.pct,2)+" 到達"):("残り "+fmtMoney(oLeft)+"（"+fmtPct(os.init>0?oLeft/os.init*100:0,2)+"）"+worst),
+      oUse, oUse>70?"var(--red)":"var(--green)");
   }
   // 日次損失：今日の確定損失＋保有中の最大損失
   var dLim=init*numOr(r.dailyLossPct,0)/100, dUsed=Math.max(0,-tdl)+orisk.loss;
@@ -2709,7 +2733,9 @@ function renderPlanCalc(){
 
   // ── この損切りを食らったら（Fintokei 残り枠）──
   html+="<div class='budget'>";
-  html+=budgetRow("この損切りで 日次残り", dailyRemain, pl, dailyLimit);
+  var os=acc?ownStopOf(acc):null;
+  if(os&&os.limit>0) html+=budgetRow("この損切りで 自分ルール残り", os.limit-os.loss-orisk, pl, os.limit);
+  html+=budgetRow("この損切りで 規約の日次残り", dailyRemain, pl, dailyLimit);
   html+=budgetRow("この損切りで 全体残り", totalRemain, pl, maxLimit);
   html+="</div>";
 
@@ -2829,6 +2855,7 @@ window.savePlanEntry=function(){
   var rec=planToRecord("open");
   var shot=rec._entryShot; delete rec._entryShot;
   stampAddContext(rec);
+  stampOwnStop(rec);
   DB.trades.unshift(rec);
   if(shot){ IMG[rec.id+"_entry"]=shot; saveImg(); }
   collectTags(rec.tags);
@@ -2923,6 +2950,7 @@ function tradeCard(t,tab){
   if(isNum(t.crossB)) pills.push("クロス "+t.crossB);
   if(t.sawLower) pills.push(labelSaw(t.sawLower));
   if(t.addAgainst) pills.push("逆行中の追加"+(t.addLotUp?"・ロット増":""));
+  if(t.afterOwnStop) pills.push("自分の停止ライン到達後");
   if(t.status==="closed"&&t.ruleOk) pills.push(labelRule(t.ruleOk));
   if(t.status==="closed"&&t.emotion) pills.push(labelEmotion(t.emotion));
   if(pills.length){ h+="<div class='tmeta'>"+pills.map(function(p){return "<span class='pill'>"+esc(p)+"</span>";}).join("")+"</div>"; }
@@ -2966,7 +2994,7 @@ window.cancelTrade=function(id){ var t=findTrade(id); if(!t) return; if(!confirm
 window.reopenTrade=function(id){ var t=findTrade(id); if(!t) return; t.status="open"; t.closedAt=null; t.updatedAt=now(); saveData(); toast("保有中に戻しました"); UI.tradeTab="open"; render(); };
 window.deleteTrade=function(id){ if(!confirm("完全に削除しますか？")) return; DB.trades=DB.trades.filter(function(t){return t.id!==id;}); delete IMG[id+"_entry"]; delete IMG[id+"_exit"]; saveImg(); saveData(); toast("削除しました"); render(); };
 window.deleteDraft=function(id){ if(!confirm("下書きを削除しますか？")) return; DB.tradePlans=DB.tradePlans.filter(function(t){return t.id!==id;}); delete IMG[id+"_entry"]; saveImg(); saveData(); toast("削除しました"); render(); };
-window.promoteDraft=function(id){ var t=findDraft(id); if(!t) return; stampAddContext(t); t.status="open"; t.savedAt=now(); t.updatedAt=now(); DB.tradePlans=DB.tradePlans.filter(function(x){return x.id!==id;}); DB.trades.unshift(t); saveData(); toast("エントリーにしました"); UI.tradeTab="open"; render(); };
+window.promoteDraft=function(id){ var t=findDraft(id); if(!t) return; stampAddContext(t); stampOwnStop(t); t.status="open"; t.savedAt=now(); t.updatedAt=now(); DB.tradePlans=DB.tradePlans.filter(function(x){return x.id!==id;}); DB.trades.unshift(t); saveData(); toast("エントリーにしました"); UI.tradeTab="open"; render(); };
 
 /* ---------- 編集モーダル（保有中/下書き 内容編集） ---------- */
 var EDIT={};
@@ -3303,6 +3331,10 @@ function viewGrowth(){
   h+=classTable("1分・5分足", list, [
     ["見た",function(t){return (t.closeSawLower||t.sawLower)==="yes";}],
     ["見ていない",function(t){return (t.closeSawLower||t.sawLower)==="no";}]
+  ]);
+  h+=classTable("自分の日次停止", list, [
+    ["到達前に入った",function(t){return t.afterOwnStop===false;}],
+    ["到達後に入った",function(t){return t.afterOwnStop===true;}]
   ]);
   h+=classTable("ルール", list, [
     ["遵守",function(t){return t.ruleOk==="yes";}],
@@ -3698,7 +3730,8 @@ function viewSettings(){
   h+="<div class='sect-title'>内部ルール（自主設定）</div><div class='card'>";
   h+="<div class='row2'>"+field("1トレード内部リスク率(%)","<input type='number' inputmode='decimal' step='any' id='s_irisk' value='"+esc(s.internalRiskPct)+"'>")+
      field("基本ロット","<input type='number' inputmode='decimal' step='any' id='s_blot' value='"+esc(s.baseLot)+"'>")+"</div>";
-  h+=field("連敗注意ライン","<input type='number' inputmode='numeric' step='1' id='s_streak' value='"+esc(s.lossStreakWarn)+"'>");
+  h+="<div class='row2'>"+field("連敗注意ライン","<input type='number' inputmode='numeric' step='1' id='s_streak' value='"+esc(s.lossStreakWarn)+"'>")+
+     field("自分の日次停止ライン(%)","<input type='number' inputmode='decimal' step='any' id='s_ownstop' value='"+esc(ownStopPct())+"'>")+"</div>";
   h+="<div class='smallnote'>これらは自分で決めた内部基準です。Fintokei公式ルールとは別管理です。</div>";
   h+="</div>";
 
@@ -3767,6 +3800,7 @@ window.saveSettings=function(){
   }
   s.balanceMode=g("s_balmode"); s.manualBalance=g("s_manual")===""?null:toNum(g("s_manual"));
   s.internalRiskPct=toNum(g("s_irisk"))||1; s.baseLot=toNum(g("s_blot")); s.lossStreakWarn=toNum(g("s_streak"))||4;
+  var ostop=toNum(g("s_ownstop")); s.ownDailyStopPct=(isNum(ostop)&&ostop>=0)?ostop:2;
   var th=g("s_theme"); s.theme=th; applyTheme();
   saveData(); toast("設定を保存しました"); render();
 };
