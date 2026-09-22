@@ -429,7 +429,7 @@ html[data-theme="light"] .filterbar button.on{color:#fff}
 
 <nav id="nav"><div class="navwrap">
   <button data-tab="home"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>今日</button>
-  <button data-tab="plan"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 5v14M5 12h14"/></svg>注文</button>
+  <button data-tab="plan"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 5v14M5 12h14"/></svg>シナリオ</button>
   <button data-tab="trades"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg>記録</button>
   <button data-tab="growth"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 19V5M4 19h16M8 15l3-4 3 3 4-6"/></svg>分析</button>
 </div></nav>
@@ -1192,7 +1192,7 @@ function viewHome(){
   acts.forEach(function(a){ h+=accountStatusCard(a); });
 
   if(DB.trades.length===0){
-    h+="<div class='card'><div class='empty'><div class='big'>まだ記録がありません</div>注文タブから最初のトレードを組み立ててみて</div></div>";
+    h+="<div class='card'><div class='empty'><div class='big'>まだ記録がありません</div>シナリオタブから最初のトレードを組み立ててみて</div></div>";
   }
   return h;
 }
@@ -2491,7 +2491,7 @@ function planAccountBar(){
   if(!acts.length){
     return "<div class='card'><div class='smallnote' style='margin:0'>稼働中の口座がありません。設定の「口座」から作れます。</div></div>";
   }
-  var h="<div class='card'><div class='field' style='margin:0'><label>この注文の口座</label><div class='seg'>";
+  var h="<div class='card'><div class='field' style='margin:0'><label>この取引の口座</label><div class='seg'>";
   acts.forEach(function(a){
     h+="<button class='"+(a.id===cur?"on":"")+"' onclick=\"pickPlanAccount('"+a.id+"')\">"+esc(a.name)+"</button>";
   });
@@ -2512,7 +2512,7 @@ function viewPlan(){
   // 残高・契約サイズはフォームから外したので設定＋実残高から毎回同期
   PLAN.balance=String(Math.round(currentBalance()));
   PLAN.contractSize=String(DB.settings.contractSize);
-  var h=topbar("トレード前の計画");
+  var h=topbar("トレード前のシナリオ");
   h+=planAccountBar();
   h+="<div class='card'>";
   h+=field("日時","<input type='datetime-local' id='p_dt' value='"+esc(PLAN.datetime)+"'>");
@@ -2606,7 +2606,7 @@ function renderPlanBriefHint(){
   var b=briefFor(d,PLAN.symbol);
   var isToday=(d===today());
   if(b){
-    box.innerHTML="この日の環境認識："+esc(briefTrendText(b))+"（"+esc(b.date)+"／"+esc(b.symbol)+"・この計画に紐付きます）";
+    box.innerHTML="この日の環境認識："+esc(briefTrendText(b))+"（"+esc(b.date)+"／"+esc(b.symbol)+"・このシナリオに紐付きます）";
   }else{
     var same=briefOn(d);
     if(same){
@@ -2784,7 +2784,7 @@ function viewTrades(){
   var cancN=mine.filter(function(t){return t.status==="cancelled";}).length;
   h+="<div class='tabs'>";
   h+=tradeTabBtn("open","保有中",openN);
-  h+=tradeTabBtn("draft","計画中",planN);
+  h+=tradeTabBtn("draft","下書き",planN);
   h+=tradeTabBtn("closed","決済済み",closedN);
   h+=tradeTabBtn("cancelled","取消",cancN);
   h+="</div>";
@@ -2795,7 +2795,7 @@ function viewTrades(){
   list.sort(function(a,b){ return new Date(b.closedAt||b.createdAt)-new Date(a.closedAt||a.createdAt); });
 
   if(list.length===0){
-    var msg={open:"保有中のトレードはありません",draft:"計画中の下書きはありません",closed:"決済済みの記録はありません",cancelled:"取消したトレードはありません"}[UI.tradeTab];
+    var msg={open:"保有中のトレードはありません",draft:"下書きはありません",closed:"決済済みの記録はありません",cancelled:"取消したトレードはありません"}[UI.tradeTab];
     h+="<div class='card'><div class='empty'>"+esc(msg)+"</div></div>";
     return h;
   }
