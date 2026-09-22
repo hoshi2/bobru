@@ -485,6 +485,11 @@ function defaultSettings(){
     baseLot:1.00,            // 内部: 基本ロット目安
     lossStreakWarn:4,        // 内部: 連敗注意ライン
     ownDailyStopPct:2,       // 内部: 自分の日次停止ライン（規約の日次上限とは別に持つ）
+    versions:{               // 記録に焼き込む版番号。変えた前後のデータが混ざらないように
+      strategy:"NEW_STRATEGY_V1",
+      rules:"rules-v1",
+      bobEdge:"v1.5"
+    },
     marketProvider:"none",   // 朝分析の取得先（marketDataProvider の登録名）
     fx:{                     // 口座通貨への換算（USD建ての損益を口座通貨に直す）
       auto:true,             // 自動取得する
@@ -713,6 +718,16 @@ function ownStopOf(acc){
   var init=toNum(acc&&acc.initialBalance)||0, lim=init*ownStopPct()/100;
   var loss=Math.max(0,-todayPLOf(acc));
   return {limit:lim, loss:loss, pct:init>0?loss/init*100:0, hit:lim>0&&loss>=lim, init:init};
+}
+// 版番号。手法・ルール・BOB EDGE を変えたら、この番号を上げる
+function versionsOf(){
+  var v=DB.settings.versions;
+  if(!v||typeof v!=="object"){ v=defaultSettings().versions; DB.settings.versions=v; }
+  return v;
+}
+function stampVersions(rec){
+  var v=versionsOf();
+  rec.strategyVersion=v.strategy||""; rec.rulesVersion=v.rules||""; rec.bobEdgeVersion=v.bobEdge||"";
 }
 // 入った時点の状態を焼き込む。あとで設定を変えても、当時の事実が残るように
 function stampOwnStop(rec){
@@ -2859,6 +2874,7 @@ window.savePlanEntry=function(){
   var shot=rec._entryShot; delete rec._entryShot;
   stampAddContext(rec);
   stampOwnStop(rec);
+  stampVersions(rec);
   DB.trades.unshift(rec);
   if(shot){ IMG[rec.id+"_entry"]=shot; saveImg(); }
   collectTags(rec.tags);
@@ -2955,6 +2971,10 @@ function tradeCard(t,tab){
   if(t.sawLower) pills.push(labelSaw(t.sawLower));
   if(t.addAgainst) pills.push("逆行中の追加"+(t.addLotUp?"・ロット増":""));
   if(t.afterOwnStop) pills.push("自分の停止ライン到達後");
+  // 版番号は、いまの設定と違うときだけ出す（いつもの記録は静かなまま）
+  if(t.strategyVersion && t.strategyVersion!==versionsOf().strategy) pills.push("手法 "+t.strategyVersion);
+  if(t.rulesVersion && t.rulesVersion!==versionsOf().rules) pills.push("ルール "+t.rulesVersion);
+  if(t.bobEdgeVersion && t.bobEdgeVersion!==versionsOf().bobEdge) pills.push("BOB EDGE "+t.bobEdgeVersion);
   if(t.status!=="draft"&&!isNum(toNum(t.sl))) pills.push("SLなし");
   if(t.status==="closed"&&t.ruleOk) pills.push(labelRule(t.ruleOk));
   if(t.status==="closed"&&Array.isArray(t.deviations)) t.deviations.forEach(function(d){ var l=labelDeviation(d); if(l) pills.push(l); });
@@ -3000,7 +3020,7 @@ window.cancelTrade=function(id){ var t=findTrade(id); if(!t) return; if(!confirm
 window.reopenTrade=function(id){ var t=findTrade(id); if(!t) return; t.status="open"; t.closedAt=null; t.updatedAt=now(); saveData(); toast("保有中に戻しました"); UI.tradeTab="open"; render(); };
 window.deleteTrade=function(id){ if(!confirm("完全に削除しますか？")) return; DB.trades=DB.trades.filter(function(t){return t.id!==id;}); delete IMG[id+"_entry"]; delete IMG[id+"_exit"]; saveImg(); saveData(); toast("削除しました"); render(); };
 window.deleteDraft=function(id){ if(!confirm("下書きを削除しますか？")) return; DB.tradePlans=DB.tradePlans.filter(function(t){return t.id!==id;}); delete IMG[id+"_entry"]; saveImg(); saveData(); toast("削除しました"); render(); };
-window.promoteDraft=function(id){ var t=findDraft(id); if(!t) return; stampAddContext(t); stampOwnStop(t); t.status="open"; t.savedAt=now(); t.updatedAt=now(); DB.tradePlans=DB.tradePlans.filter(function(x){return x.id!==id;}); DB.trades.unshift(t); saveData(); toast("エントリーにしました"); UI.tradeTab="open"; render(); };
+window.promoteDraft=function(id){ var t=findDraft(id); if(!t) return; stampAddContext(t); stampOwnStop(t); stampVersions(t); t.status="open"; t.savedAt=now(); t.updatedAt=now(); DB.tradePlans=DB.tradePlans.filter(function(x){return x.id!==id;}); DB.trades.unshift(t); saveData(); toast("エントリーにしました"); UI.tradeTab="open"; render(); };
 
 /* ---------- 編集モーダル（保有中/下書き 内容編集） ---------- */
 var EDIT={};
@@ -3352,6 +3372,14 @@ function viewGrowth(){
     ["見た",function(t){return (t.closeSawLower||t.sawLower)==="yes";}],
     ["見ていない",function(t){return (t.closeSawLower||t.sawLower)==="no";}]
   ]);
+  // 版ごと。記録に出てくる版だけを行にする（2つ以上あるときだけ表を出す）
+  [["strategyVersion","手法の版"],["rulesVersion","ルールの版"],["bobEdgeVersion","BOB EDGE の版"]].forEach(function(f){
+    var seen=[];
+    list.forEach(function(t){ var v=t[f[0]]; if(v&&seen.indexOf(v)<0) seen.push(v); });
+    if(seen.length>1) h+=classTable(f[1], list, seen.map(function(v){
+      return [v,function(t){ return t[f[0]]===v; }];
+    }));
+  });
   // 逸脱の中身。1件が複数に入ることがある。下の4つはアプリが判定したもの
   h+=classTable("逸脱の中身", list, DEVIATIONS.map(function(o){
     return [o[1],function(t){ return Array.isArray(t.deviations)&&t.deviations.indexOf(o[0])>=0; }];
@@ -3764,6 +3792,15 @@ function viewSettings(){
   h+="<div class='smallnote'>これらは自分で決めた内部基準です。Fintokei公式ルールとは別管理です。</div>";
   h+="</div>";
 
+  var vv=versionsOf();
+  h+="<div class='sect-title'>版番号</div><div class='card'>";
+  h+="<div class='row2'>"+field("手法の版","<input type='text' id='s_vstr' value='"+esc(vv.strategy)+"'>")+
+     field("ルールの版","<input type='text' id='s_vrul' value='"+esc(vv.rules)+"'>")+"</div>";
+  h+=field("BOB EDGE の版","<input type='text' id='s_vedge' value='"+esc(vv.bobEdge)+"'>");
+  h+="<div class='smallnote'>いまの版が、これから保存する取引に焼き込まれます。過去の記録は変わりません。"+
+     "手法・ルール・インジケーターを変えたときに上げると、変更前後の成績を分けて見られます。変えるとルールブックの変更履歴に残ります。</div>";
+  h+="</div>";
+
   h+="<div class='sect-title'>表示</div><div class='card'>";
   h+=field("テーマ","<select id='s_theme'><option value='dark' "+(s.theme==="dark"?"selected":"")+">ダーク</option><option value='light' "+(s.theme==="light"?"selected":"")+">ライト</option><option value='system' "+(s.theme==="system"?"selected":"")+">端末設定に合わせる</option></select>");
   h+="</div>";
@@ -3830,6 +3867,11 @@ window.saveSettings=function(){
   s.balanceMode=g("s_balmode"); s.manualBalance=g("s_manual")===""?null:toNum(g("s_manual"));
   s.internalRiskPct=toNum(g("s_irisk"))||1; s.baseLot=toNum(g("s_blot")); s.lossStreakWarn=toNum(g("s_streak"))||4;
   var ostop=toNum(g("s_ownstop")); s.ownDailyStopPct=(isNum(ostop)&&ostop>=0)?ostop:2;
+  var vv=versionsOf(), vNew={strategy:g("s_vstr").trim()||vv.strategy, rules:g("s_vrul").trim()||vv.rules, bobEdge:g("s_vedge").trim()||vv.bobEdge};
+  [["strategy","手法の版"],["rules","ルールの版"],["bobEdge","BOB EDGE の版"]].forEach(function(k){
+    if(vNew[k[0]]!==vv[k[0]]) logRuleChange({type:"edit",folder:k[1],before:vv[k[0]],after:vNew[k[0]],reason:""});
+  });
+  s.versions=vNew;
   var th=g("s_theme"); s.theme=th; applyTheme();
   saveData(); toast("設定を保存しました"); render();
 };
