@@ -591,6 +591,9 @@ function defaultResearch(){
 var ACCOUNT_TYPES=[["step1","ステップ1"],["step2","ステップ2"],["live","本番"]];
 var ACCOUNT_CLOSE_REASONS=[["pass","合格"],["fail","失格"],["expired","期限切れ"]];
 // 逸脱の中身（決済時に複数選ぶ）。SLなし・逆行中の追加・ロット増・停止ライン到達後はアプリが判定するので入れない
+// 決済の理由。保有時間は入った時刻と決済時刻から計算するので、入力欄は作らない
+var EXIT_REASONS=[["sl","SL"],["tp","TP"],["premise","前提崩れ"],["eod","区切り前に手仕舞い"],
+  ["manual","裁量利確"],["fear","恐怖で早逃げ"],["other","その他"]];
 var DEVIATIONS=[["unplanned","計画外エントリー"],["slWiden","SLを遠ざけた"],["lowerTF","予定外の1分・5分足"],
   ["earlyExit","早すぎる手仕舞い"],["reentry","予定外の再エントリー"],["other","その他"]];
 // 口座のひな形。選ぶと数字が入るだけで、あとから口座ごとに変えられる。
@@ -2927,6 +2930,21 @@ function labelEma(v){ return {above_both:"75・200の上",above200:"200の上・
 function labelPat(v){ return {A:"パターンA",B:"パターンB",range:"レンジ戦略",other:"その他"}[v]||""; }
 function labelSaw(v){ return {yes:"1分5分：見た",no:"1分5分：見てない"}[v]||""; }
 function labelEmotion(v){ return {calm:"冷静",rush:"焦り",anger:"怒り",fear:"恐怖",greed:"欲",tired:"疲労",other:"その他"}[v]||""; }
+function labelExitReason(v){ for(var i=0;i<EXIT_REASONS.length;i++){ if(EXIT_REASONS[i][0]===v) return EXIT_REASONS[i][1]; } return ""; }
+// 保有時間（分）。入った時刻と決済時刻の差
+function holdMinutes(t){
+  if(t.status!=="closed"||!t.createdAt||!t.closedAt) return null;
+  var a=new Date(t.createdAt), b=new Date(t.closedAt);
+  if(isNaN(a)||isNaN(b)) return null;
+  var m=(b-a)/60000;
+  return m>=0?m:null;
+}
+function fmtHold(m){
+  if(!isNum(m)) return "";
+  if(m<60) return Math.round(m)+"分";
+  var h=Math.floor(m/60), mm=Math.round(m%60);
+  return h+"時間"+(mm>0?mm+"分":"");
+}
 function labelDeviation(v){ for(var i=0;i<DEVIATIONS.length;i++){ if(DEVIATIONS[i][0]===v) return DEVIATIONS[i][1]; } return ""; }
 function labelRule(v){ return {yes:"ルール通り",no:"ルール逸脱",partial:"一部逸脱"}[v]||""; }
 function labelResult(v){ return {win:"勝ち",lose:"負け",be:"建値"}[v]||""; }
@@ -2976,6 +2994,8 @@ function tradeCard(t,tab){
   if(t.rulesVersion && t.rulesVersion!==versionsOf().rules) pills.push("ルール "+t.rulesVersion);
   if(t.bobEdgeVersion && t.bobEdgeVersion!==versionsOf().bobEdge) pills.push("BOB EDGE "+t.bobEdgeVersion);
   if(t.status!=="draft"&&!isNum(toNum(t.sl))) pills.push("SLなし");
+  if(t.status==="closed"&&t.exitReason) pills.push("決済 "+labelExitReason(t.exitReason));
+  var hm=holdMinutes(t); if(isNum(hm)) pills.push("保有 "+fmtHold(hm));
   if(t.status==="closed"&&t.ruleOk) pills.push(labelRule(t.ruleOk));
   if(t.status==="closed"&&Array.isArray(t.deviations)) t.deviations.forEach(function(d){ var l=labelDeviation(d); if(l) pills.push(l); });
   if(t.status==="closed"&&t.emotion) pills.push(labelEmotion(t.emotion));
@@ -3102,7 +3122,7 @@ window.openCloseModal=function(id){
   var t=findTrade(id); if(!t) return;
   var editing = t.status==="closed";
   var pl0=toNum(t.realizedPL);
-  CLOSE={id:id,result:t.result||"",ruleOk:t.ruleOk||"",deviations:(Array.isArray(t.deviations)?t.deviations.slice():[]),sawLower:t.closeSawLower||t.sawLower||"",emotion:t.emotion||"",
+  CLOSE={id:id,result:t.result||"",ruleOk:t.ruleOk||"",exitReason:t.exitReason||"",deviations:(Array.isArray(t.deviations)?t.deviations.slice():[]),sawLower:t.closeSawLower||t.sawLower||"",emotion:t.emotion||"",
          // 実現損益の符号。iOS の数字キーパッドにマイナスが無いので、入力欄は絶対値にして符号はここで持つ
          plSign:(isNum(pl0)&&pl0>0)?"pos":"neg",
          plSignTouched:isNum(pl0)};
@@ -3125,6 +3145,7 @@ window.openCloseModal=function(id){
   h+="</div>";
   h+="<div id='c_plhint'></div>";
   // ── ここまでが必須級。以下は任意でたたんでおく ──
+  h+=closeChip("決済の理由","exitReason",EXIT_REASONS);
   h+="<details class='moredetails'><summary>詳細を記録（任意）</summary><div class='moreinner'>";
   h+="<div class='row2'>"+field("手数料","<input type='number' inputmode='decimal' step='any' id='c_fee' value='"+esc(t.fee)+"'>")+
      field("スワップ","<input type='number' inputmode='decimal' step='any' id='c_swap' value='"+esc(t.swap)+"'>")+"</div>";
@@ -3259,6 +3280,7 @@ window.saveClose=function(id){
   t.fee=toNum(g("c_fee")); t.swap=toNum(g("c_swap"));
   t.result=CLOSE.result||null; t.ruleOk=CLOSE.ruleOk||null;
   t.deviations=CLOSE.deviations.slice();
+  t.exitReason=CLOSE.exitReason||null;
   t.closeSawLower=CLOSE.sawLower||null; t.emotion=CLOSE.emotion||null;
   t.reviewMemo=g("c_review"); t.learn=g("c_learn");
   t.status="closed"; t.updatedAt=now();
@@ -3380,6 +3402,17 @@ function viewGrowth(){
       return [v,function(t){ return t[f[0]]===v; }];
     }));
   });
+  h+=classTable("決済の理由", list, EXIT_REASONS.map(function(o){
+    return [o[1],function(t){ return t.exitReason===o[0]; }];
+  }));
+  // 保有時間。入った時刻と決済時刻から計算している（入力はしていない）
+  h+=classTable("保有時間", list, [
+    ["5分未満",function(t){var m=holdMinutes(t);return isNum(m)&&m<5;}],
+    ["5〜30分",function(t){var m=holdMinutes(t);return isNum(m)&&m>=5&&m<30;}],
+    ["30分〜2時間",function(t){var m=holdMinutes(t);return isNum(m)&&m>=30&&m<120;}],
+    ["2〜6時間",function(t){var m=holdMinutes(t);return isNum(m)&&m>=120&&m<360;}],
+    ["6時間以上",function(t){var m=holdMinutes(t);return isNum(m)&&m>=360;}]
+  ]);
   // 逸脱の中身。1件が複数に入ることがある。下の4つはアプリが判定したもの
   h+=classTable("逸脱の中身", list, DEVIATIONS.map(function(o){
     return [o[1],function(t){ return Array.isArray(t.deviations)&&t.deviations.indexOf(o[0])>=0; }];
