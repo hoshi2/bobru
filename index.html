@@ -585,6 +585,9 @@ function defaultResearch(){
    開始日・終了日は持たない（最初と最後のトレードから決まるため）。 */
 var ACCOUNT_TYPES=[["step1","ステップ1"],["step2","ステップ2"],["live","本番"]];
 var ACCOUNT_CLOSE_REASONS=[["pass","合格"],["fail","失格"],["expired","期限切れ"]];
+// 逸脱の中身（決済時に複数選ぶ）。SLなし・逆行中の追加・ロット増・停止ライン到達後はアプリが判定するので入れない
+var DEVIATIONS=[["unplanned","計画外エントリー"],["slWiden","SLを遠ざけた"],["lowerTF","予定外の1分・5分足"],
+  ["earlyExit","早すぎる手仕舞い"],["reentry","予定外の再エントリー"],["other","その他"]];
 // 口座のひな形。選ぶと数字が入るだけで、あとから口座ごとに変えられる。
 // 出典：各社の公開条件（2026-09-22 本人がChatGPTで確認）。分配率は口座ごとの実条件で上書きする。
 var ACCOUNT_TEMPLATES=[
@@ -2908,6 +2911,7 @@ function labelEma(v){ return {above_both:"75・200の上",above200:"200の上・
 function labelPat(v){ return {A:"パターンA",B:"パターンB",range:"レンジ戦略",other:"その他"}[v]||""; }
 function labelSaw(v){ return {yes:"1分5分：見た",no:"1分5分：見てない"}[v]||""; }
 function labelEmotion(v){ return {calm:"冷静",rush:"焦り",anger:"怒り",fear:"恐怖",greed:"欲",tired:"疲労",other:"その他"}[v]||""; }
+function labelDeviation(v){ for(var i=0;i<DEVIATIONS.length;i++){ if(DEVIATIONS[i][0]===v) return DEVIATIONS[i][1]; } return ""; }
 function labelRule(v){ return {yes:"ルール通り",no:"ルール逸脱",partial:"一部逸脱"}[v]||""; }
 function labelResult(v){ return {win:"勝ち",lose:"負け",be:"建値"}[v]||""; }
 function fmtWhen(iso){ if(!iso) return ""; var d=new Date(iso); if(isNaN(d)) return "";
@@ -2951,7 +2955,9 @@ function tradeCard(t,tab){
   if(t.sawLower) pills.push(labelSaw(t.sawLower));
   if(t.addAgainst) pills.push("逆行中の追加"+(t.addLotUp?"・ロット増":""));
   if(t.afterOwnStop) pills.push("自分の停止ライン到達後");
+  if(t.status!=="draft"&&!isNum(toNum(t.sl))) pills.push("SLなし");
   if(t.status==="closed"&&t.ruleOk) pills.push(labelRule(t.ruleOk));
+  if(t.status==="closed"&&Array.isArray(t.deviations)) t.deviations.forEach(function(d){ var l=labelDeviation(d); if(l) pills.push(l); });
   if(t.status==="closed"&&t.emotion) pills.push(labelEmotion(t.emotion));
   if(pills.length){ h+="<div class='tmeta'>"+pills.map(function(p){return "<span class='pill'>"+esc(p)+"</span>";}).join("")+"</div>"; }
 
@@ -3076,7 +3082,7 @@ window.openCloseModal=function(id){
   var t=findTrade(id); if(!t) return;
   var editing = t.status==="closed";
   var pl0=toNum(t.realizedPL);
-  CLOSE={id:id,result:t.result||"",ruleOk:t.ruleOk||"",sawLower:t.closeSawLower||t.sawLower||"",emotion:t.emotion||"",
+  CLOSE={id:id,result:t.result||"",ruleOk:t.ruleOk||"",deviations:(Array.isArray(t.deviations)?t.deviations.slice():[]),sawLower:t.closeSawLower||t.sawLower||"",emotion:t.emotion||"",
          // 実現損益の符号。iOS の数字キーパッドにマイナスが無いので、入力欄は絶対値にして符号はここで持つ
          plSign:(isNum(pl0)&&pl0>0)?"pos":"neg",
          plSignTouched:isNum(pl0)};
@@ -3104,6 +3110,7 @@ window.openCloseModal=function(id){
      field("スワップ","<input type='number' inputmode='decimal' step='any' id='c_swap' value='"+esc(t.swap)+"'>")+"</div>";
   h+=closeChip("結果","result",[["win","勝ち"],["lose","負け"],["be","建値"]]);
   h+=closeChip("ルール通りだったか","ruleOk",[["yes","はい"],["no","いいえ"],["partial","一部逸脱"]]);
+  h+=closeMultiChip("逸脱の中身（複数選べる）","deviations",DEVIATIONS);
   h+=closeChip("1分・5分足を見たか","sawLower",[["no","見ていない"],["yes","見た"]]);
   h+=closeChip("感情状態","emotion",[["calm","冷静"],["rush","焦り"],["anger","怒り"],["fear","恐怖"],["greed","欲"],["tired","疲労"],["other","その他"]]);
   h+=field("振り返りメモ","<textarea id='c_review'>"+esc(t.reviewMemo||"")+"</textarea>");
@@ -3127,6 +3134,18 @@ function closeChip(label,k,opts){
   opts.forEach(function(o){ c+="<button type='button' class='chip"+(CLOSE[k]===o[0]?" on":"")+"' onclick=\"closeChipPick('"+k+"','"+o[0]+"')\">"+esc(o[1])+"</button>"; });
   c+="</div></div>"; return c;
 }
+function closeMultiChip(label,k,opts){
+  var c="<div class='field'><label>"+esc(label)+"</label><div class='chips' id='cc_"+k+"'>";
+  opts.forEach(function(o){ c+="<button type='button' class='chip"+(CLOSE[k].indexOf(o[0])>=0?" on":"")+"' data-v='"+o[0]+"' onclick=\"closeMultiPick('"+k+"','"+o[0]+"')\">"+esc(o[1])+"</button>"; });
+  c+="</div></div>"; return c;
+}
+window.closeMultiPick=function(k,v){
+  var a=CLOSE[k], i=a.indexOf(v);
+  if(i>=0) a.splice(i,1); else a.push(v);
+  Array.prototype.forEach.call(document.getElementById("cc_"+k).querySelectorAll("button"),function(b){
+    b.classList.toggle("on", a.indexOf(b.getAttribute("data-v"))>=0);
+  });
+};
 window.closeChipPick=function(k,v){
   CLOSE[k]=(CLOSE[k]===v?"":v);
   var box=document.getElementById("cc_"+k);
@@ -3219,6 +3238,7 @@ window.saveClose=function(id){
   t.realizedPL=closePLValue();
   t.fee=toNum(g("c_fee")); t.swap=toNum(g("c_swap"));
   t.result=CLOSE.result||null; t.ruleOk=CLOSE.ruleOk||null;
+  t.deviations=CLOSE.deviations.slice();
   t.closeSawLower=CLOSE.sawLower||null; t.emotion=CLOSE.emotion||null;
   t.reviewMemo=g("c_review"); t.learn=g("c_learn");
   t.status="closed"; t.updatedAt=now();
@@ -3332,6 +3352,15 @@ function viewGrowth(){
     ["見た",function(t){return (t.closeSawLower||t.sawLower)==="yes";}],
     ["見ていない",function(t){return (t.closeSawLower||t.sawLower)==="no";}]
   ]);
+  // 逸脱の中身。1件が複数に入ることがある。下の4つはアプリが判定したもの
+  h+=classTable("逸脱の中身", list, DEVIATIONS.map(function(o){
+    return [o[1],function(t){ return Array.isArray(t.deviations)&&t.deviations.indexOf(o[0])>=0; }];
+  }).concat([
+    ["SLなし",function(t){return !isNum(toNum(t.sl));}],
+    ["逆行中の追加",function(t){return !!t.addAgainst;}],
+    ["逆行中のロット増",function(t){return !!t.addLotUp;}],
+    ["停止ライン到達後",function(t){return t.afterOwnStop===true;}]
+  ]));
   h+=classTable("自分の日次停止", list, [
     ["到達前に入った",function(t){return t.afterOwnStop===false;}],
     ["到達後に入った",function(t){return t.afterOwnStop===true;}]
