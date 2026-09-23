@@ -98,10 +98,7 @@ button{cursor:pointer}
 .tile .v.long{font-size:21px}
 .tile .s{font-size:11px;color:var(--txt3);margin-top:3px}
 /* 今日：環境認識・保有中（横長1枚）*/
-.tgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 12px;margin-top:10px}
-.tgrid .ti .k{font-size:11px;color:var(--txt3)} .tgrid .ti .v{font-size:15px;font-weight:600;margin-top:2px}
 .pillrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
-.pill{font-size:11px;background:var(--card2);border:1px solid var(--line);color:var(--txt2);padding:3px 9px;border-radius:20px;font-weight:600;display:inline-block}
 .pill.blue{border-color:color-mix(in srgb,var(--blue2) 40%,transparent);color:var(--blue2);background:color-mix(in srgb,var(--blue) 12%,transparent);box-shadow:var(--glow-s)}
 .pill.red{border-color:color-mix(in srgb,var(--red) 40%,transparent);color:var(--red)}
 .logo{width:28px;height:28px;flex:0 0 auto}
@@ -157,17 +154,12 @@ nav#nav button.on .ic{stroke:var(--accent);filter:drop-shadow(0 0 5px rgba(111,2
 .calnav{display:flex;align-items:center;justify-content:space-between;margin:0 0 6px}
 .calnav button{background:none;border:0;color:var(--txt2);font-size:20px;padding:4px 12px;cursor:pointer}
 .cal .wd{font-size:11px;color:var(--txt3);text-align:center;padding:2px 0}
-.cal .d.up,.cal .d.down,.cal .d.flat{cursor:pointer}
+.cal button.d{cursor:pointer}
 .gold{color:var(--gold)} .blue{color:var(--blue)}
 
 .balrow{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:6px}
 .balrow .bal{font-size:34px;font-weight:600;letter-spacing:-.02em;text-shadow:var(--num-glow)}
 .balrow .cur{font-size:14px;color:var(--txt3);font-weight:600}
-.oprow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0}
-.oprow.sep{border-top:1px solid var(--line)}
-.oprow .opsym{font-size:14px;font-weight:700;display:flex;align-items:center;gap:7px}
-.oprow .opsub{font-size:11px;color:var(--txt3);margin-top:3px}
-.oprow .opright{text-align:right;font-weight:700;white-space:nowrap}
 
 /* ---- 設定：折りたたみ・PC 2列（2026-09-24 見本） ---- */
 .sgrid{display:grid;grid-template-columns:1fr;gap:0 18px}
@@ -224,8 +216,8 @@ html[data-theme="light"] .cal .d{background:var(--card)}
 .cal .d .p{font-size:11.5px;font-weight:700;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cal .d.p1{background:var(--cal-up);border-color:color-mix(in srgb,var(--blue2) 35%,transparent);box-shadow:var(--cal-up-shadow)}
 .cal .d.p2{background:linear-gradient(160deg,#1aa5dc,#0d5f85);border-color:var(--blue2);box-shadow:var(--glow)}
-.cal .d.p1 .n,.cal .d.p2 .n,.cal .d.p1 .p,.cal .d.p2 .p{color:#e8f0ff}
-html[data-theme="light"] .cal .d.p2{background:var(--blue);color:#fff}
+html:not([data-theme="light"]) .cal .d.p1 .n,html:not([data-theme="light"]) .cal .d.p1 .p,.cal .d.p2 .n,.cal .d.p2 .p{color:#e8f0ff}
+html[data-theme="light"] .cal .d.p2{background:var(--blue)}
 .cal .d.down .p{color:var(--red)}
 .cal .d.flat{background:var(--card2)}
 .cal .d.sel{outline:1px solid var(--blue2);outline-offset:-1px}
@@ -291,12 +283,9 @@ html[data-theme="light"] .btn.primary{color:#fff}
 .btnrow{display:flex;gap:9px}
 .btnrow .btn{flex:1}
 
-.statwrap,.pair,.pair>div,.chartgrid,.tablegrid{display:contents}
+.pair,.pair>div,.chartgrid,.tablegrid{display:contents}
 
 /* ---- Morning Brief（環境認識） ---- */
-.bhead{display:flex;justify-content:space-between;align-items:center;gap:10px;margin-bottom:11px}
-.bhead .bk{font-size:13px;color:var(--txt2);font-weight:600;letter-spacing:.03em}
-.bhead .bdate{font-size:12px;color:var(--txt3);font-weight:600;font-variant-numeric:tabular-nums}
 .trendrow{display:grid;grid-template-columns:repeat(4,1fr);gap:7px}
 .trendcell{background:var(--card2);border:1px solid var(--line);border-radius:var(--radius-s);padding:9px 2px;text-align:center}
 .trendcell .tf{font-size:11px;color:var(--txt3);font-weight:600;margin-bottom:2px}
@@ -930,19 +919,6 @@ function inViewAcct(t,allowAll){
   if(id==="all") return true;
   if(id===currentAccountId()) return !t.accountId || t.accountId===id;
   return t.accountId===id;
-}
-function acctFilterBar(allowAll){
-  var sel=viewAcctId(allowAll), cur=currentAccountId();
-  var list=(Array.isArray(DB.accounts)?DB.accounts:[]);
-  if(list.length<2 && !allowAll) return "";
-  var h="<div class='filterbar'>";
-  list.forEach(function(a){
-    var lab=a.name+(a.id===cur?" ・記録先":"")+(a.closedReason?"（終了）":"");
-    h+="<button class='"+(sel===a.id?"on":"")+"' onclick=\"setViewAcct('"+a.id+"')\">"+esc(lab)+"</button>";
-  });
-  if(allowAll && list.length>1) h+="<button class='"+(sel==="all"?"on":"")+"' onclick=\"setViewAcct('all')\">全口座</button>";
-  h+="</div>";
-  return h;
 }
 window.setViewAcct=function(v){ UI.acct=v; render(); };
 // 分析だけ「この口座／全体」を選べる（右上の切り替えは口座だけ。全体のままシナリオを書けないように）
@@ -1644,7 +1620,6 @@ function topbar(sub,note){
          "<div class='ttl'><h1>"+esc(sub||"")+"</h1></div>"+
          "<div class='tbright'>"+(note?"<span class='sub'>"+esc(note)+"</span>":"")+acctSwitcher()+gear+"</div></div>";
 }
-var LOGO_SVG="<svg class='logo' viewBox='0 0 30 30'><defs><linearGradient id='lg' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#6fd6ff'/><stop offset='1' stop-color='#1aa5dc'/></linearGradient></defs><rect x='1' y='1' width='28' height='28' rx='8' fill='#04070c' stroke='url(#lg)' stroke-width='1.2'/><path d='M7 20l5-6 4 4 7-9' fill='none' stroke='url(#lg)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='23' cy='9' r='1.6' fill='#6fd6ff'/></svg>";
 // 右上の口座切り替え（押すと一覧）。今日・シナリオ・記録・分析の全部がこれに従う（記録先＝表示中）
 function acctSwitcher(){
   var list=activeAccounts(); if(!list.length) return "";
@@ -1701,12 +1676,11 @@ function homeTiles(){
   var closed30=accountTrades().filter(function(t){return t.status==="closed"&&inPeriod(t,"30d");});
   var st30=computeStats(closed30);
   var openN=accountTrades().filter(function(t){return t.status==="open";}).length;
-  var tile=function(k,v,cls,sub){ var plain=String(v).replace(/<[^>]*>/g,""); return "<div class='tile'><div class='k'>"+esc(k)+"</div><div class='v tabular "+(cls||"")+(plain.length>=9?" long":"")+"'>"+v+"</div>"+(sub?"<div class='s'>"+sub+"</div>":"")+"</div>"; };
   var h="<div class='tiles'>";
   h+=tile("口座残高", fmtMoney(bal), "plain", esc(s.currency||"")+"　開始から <span class='"+clsSign(netAll)+"'>"+fmtSigned(netAll)+"</span>");
   h+=tile("本日の損益", tp.n?fmtSigned(tp.pl):"—", tp.n?clsSign(tp.pl):"muted", tp.n?(bal-tp.pl>0?fmtSigned(tp.pl/(bal-tp.pl)*100,2)+"%":"")+"　"+tp.n+"件":"まだ決済なし");
   h+=tile("本日のR", tp.r!==null?fmtR(tp.r):"—", tp.r!==null?clsSign(tp.r):"muted", tp.n+"件");
-  h+=tile("勝率（30日）", st30.winRate!==null?fmtPct(st30.winRate,1):"—", st30.winRate!==null?"":"muted", closed30.length?(st30.wins!==undefined?st30.wins+"/"+closed30.length:closed30.length+"件"):"30日以内の決済なし");
+  h+=tile("勝率（30日）", st30.winRate!==null?fmtPct(st30.winRate,1):"—", st30.winRate!==null?"":"muted", closed30.length?(st30.wins+"/"+(st30.wins+st30.losses)+(st30.be?"（建値 "+st30.be+"）":"")):"30日以内の決済なし");
   var streakV = st.type==="win"?(st.wins+"連勝") : st.type==="lose"?(st.losses+"連敗") : "—";
   var streakC = st.type==="win"?"" : st.type==="lose"?"neg" : "muted";
   h+=tile("連勝・連敗", streakV, streakC, "保有中 "+openN+"件");
@@ -1823,6 +1797,8 @@ function accountStatusCard(acc){
   h+="</div>";
   return h;
 }
+// 数字タイル（今日・分析で共用）。桁が多い数字は少し小さく
+function tile(k,v,cls,sub){ var plain=String(v).replace(/<[^>]*>/g,""); return "<div class='tile'><div class='k'>"+esc(k)+"</div><div class='v tabular "+(cls||"")+(plain.length>=9?" long":"")+"'>"+v+"</div>"+(sub?"<div class='s'>"+sub+"</div>":"")+"</div>"; }
 function stat(k,v,sm){ return "<div class='stat'><div class='k'>"+esc(k)+"</div><div class='v"+(sm?" sm":"")+"'>"+v+"</div></div>"; }
 function meter(lab,right,pct,color){
   return "<div class='meter'><div class='lab'><span>"+esc(lab)+"</span><span class='tabular'>"+right+"</span></div>"+
@@ -2512,19 +2488,6 @@ function eventSortKey(e){
 function eventsSorted(list){
   return (list||[]).filter(function(e){ return e.time||e.name; })
     .slice().sort(function(a,b){ return eventSortKey(a)-eventSortKey(b); });
-}
-function briefTrendRow(raw){
-  var b=normalizeBrief(raw);
-  var c=function(lab,v){
-    return "<div class='trendcell'><div class='tf'>"+esc(lab)+"</div><div class='tv "+clsTrend(v)+"'>"+arrowTrend(v)+
-           "</div><div class='tl'>"+esc(labelTrend(v))+"</div></div>";
-  };
-  return "<div class='trendrow'>"+c("日足",b.trend.daily)+c("4H",b.trend.h4)+
-         c("1H",b.trend.h1)+c("15M",b.trend.m15)+"</div>";
-}
-function eventLine(e){
-  return "<div class='evline'><span class='evt'>"+esc(e.time||"--:--")+"</span><span class='evn'>"+esc(e.name||"")+
-         "</span><span class='imp "+esc(e.importance||"mid")+"'>"+esc(labelImp(e.importance))+"</span></div>";
 }
 // 1行サマリ（日足↑ / 4H↑ / 1H→）
 function briefTrendText(raw){
@@ -3333,11 +3296,19 @@ function viewTrades(){
     h+="<div class='card'><div class='empty'>"+esc(msg)+"</div></div>";
     return h;
   }
-  // PC：表（行を押すと詳細カードが開く）。スマホ：カード
-  h+=tradeTable(list, UI.tradeTab);
-  h+="<div class='rcards'>"; list.forEach(function(t){ h+=tradeCard(t, UI.tradeTab); }); h+="</div>";
+  // PC：表（行を押すと詳細カードが開く）。スマホ：カード。両方は描かない（画像つきの記録が2重になるため）
+  if(isWideScreen()) h+=tradeTable(list, UI.tradeTab);
+  else { h+="<div class='rcards'>"; list.forEach(function(t){ h+=tradeCard(t, UI.tradeTab); }); h+="</div>"; }
   return h;
 }
+function isWideScreen(){ return !!(window.matchMedia && window.matchMedia("(min-width:900px)").matches); }
+// 幅が PC ⇔ スマホ をまたいだら記録タブだけ描き直す
+(function(){
+  if(!window.matchMedia) return;
+  var mq=window.matchMedia("(min-width:900px)");
+  var onChange=function(){ if(TAB==="trades") render(); };
+  if(mq.addEventListener) mq.addEventListener("change",onChange); else if(mq.addListener) mq.addListener(onChange);
+})();
 function tradeTable(list,tab){
   var closed=(tab==="closed");
   var cols=closed?["日時","銘柄","エントリー → 決済","ロット","損益","R","保有","印",""]:["日時","銘柄","エントリー","SL","TP","ロット","予定損失","RR","印",""];
@@ -3787,7 +3758,6 @@ function viewGrowth(){
   }
 
   // 統計タイル（横1列×2段）
-  var tile=function(k,v,cls,sub){ var plain=String(v).replace(/<[^>]*>/g,""); return "<div class='tile'><div class='k'>"+esc(k)+"</div><div class='v tabular "+(cls||"")+(plain.length>=9?" long":"")+"'>"+v+"</div>"+(sub?"<div class='s'>"+sub+"</div>":"")+"</div>"; };
   var init=growthInitialBalance();
   var holds=list.map(holdMinutes).filter(isNum).sort(function(a,b){return a-b;});
   var med=holds.length?holds[Math.floor(holds.length/2)]:null, under5=holds.filter(function(m){return m<5;}).length;
@@ -3934,8 +3904,8 @@ function calendarCard(){
   }
   // 青の濃さ＝その月の中での利益の大きさ（上位1/3を濃く）
   var gains=inMonth.map(function(d){ return r.days[d].pl; }).filter(function(v){ return v>0; }).sort(function(a,b){ return b-a; });
-  var strong=gains.length?gains[Math.max(0,Math.floor(gains.length/3)-0)]:0; if(gains.length&&gains.length<3) strong=gains[0];
-  var compact=function(v){ var a=Math.abs(v); var t=a>=1000000?(a/1000000).toFixed(1).replace(/\.0$/,"")+"M":a>=10000?Math.round(a/1000)+"k":fmtMoney(a); return (v>0?"+":v<0?"−":"")+t; };
+  var strong=gains.length?gains[Math.max(0,Math.ceil(gains.length/3)-1)]:0;
+  var compact=function(v){ return (v>0?"+":"")+abbr(v); };
   h+="<div class='cal'>";
   ["月","火","水","木","金","土","日","週"].forEach(function(w){ h+="<div class='wd'>"+w+"</div>"; });
   var first=new Date(y,m-1,1), lead=(first.getDay()+6)%7, last=new Date(y,m,0).getDate();
@@ -4692,13 +4662,26 @@ function drawLineChart(cv,cssH,pts,color,opt){
   // area fill
   var grad=ctx.createLinearGradient(0,padT,0,h-padB);
   grad.addColorStop(0, hexA(color,0.22)); grad.addColorStop(1, hexA(color,0.0));
-  // なめらかな1本線（点と点の間を曲線でつなぐ。値そのものは変えない）
+  // なめらかな1本線。点の値はそのまま、点の間だけ曲線でつなぐ
   var P=pts.map(function(p,i){ return [X(i),Y(p.y)]; });
+  // 傾きを点ごとに決め、隣り合う点の間で値を追い越さないようにする（Fritsch–Carlson）
+  var m=[], d=[];
+  for(var k=0;k<P.length-1;k++){ var dx=P[k+1][0]-P[k][0]; d.push(dx>0?(P[k+1][1]-P[k][1])/dx:0); }
+  for(var k2=0;k2<P.length;k2++){
+    if(k2===0) m.push(d[0]||0);
+    else if(k2===P.length-1) m.push(d[d.length-1]||0);
+    else m.push((d[k2-1]*d[k2]<=0)?0:(d[k2-1]+d[k2])/2);
+  }
+  for(var k3=0;k3<d.length;k3++){
+    if(d[k3]===0){ m[k3]=0; m[k3+1]=0; continue; }
+    var a=m[k3]/d[k3], b=m[k3+1]/d[k3], hyp=a*a+b*b;
+    if(hyp>9){ var tt=3/Math.sqrt(hyp); m[k3]=tt*a*d[k3]; m[k3+1]=tt*b*d[k3]; }
+  }
   var curve=function(){
     ctx.moveTo(P[0][0],P[0][1]);
     for(var i=0;i<P.length-1;i++){
-      var p0=P[i-1]||P[i], p1=P[i], p2=P[i+1], p3=P[i+2]||p2;
-      ctx.bezierCurveTo(p1[0]+(p2[0]-p0[0])/6, p1[1]+(p2[1]-p0[1])/6, p2[0]-(p3[0]-p1[0])/6, p2[1]-(p3[1]-p1[1])/6, p2[0], p2[1]);
+      var dx2=(P[i+1][0]-P[i][0])/3;
+      ctx.bezierCurveTo(P[i][0]+dx2, P[i][1]+m[i]*dx2, P[i+1][0]-dx2, P[i+1][1]-m[i+1]*dx2, P[i+1][0], P[i+1][1]);
     }
   };
   ctx.beginPath(); curve();
