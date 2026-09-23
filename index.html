@@ -65,14 +65,48 @@ button{cursor:pointer}
 
 /* ---- app shell ---- */
 #app{max-width:640px;margin:0 auto;padding:var(--pad);padding-top:calc(var(--pad) + var(--sat));min-height:60vh}
-.topbar{display:flex;align-items:center;justify-content:space-between;margin:6px 0 24px}
+.topbar{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:10px 0 30px}
 .topbar h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.02em;display:flex;align-items:center;gap:9px}
+/* 見出し（今日の状態 など）。スマホでは日付を省く */
+@media(max-width:480px){.topbar .sub{display:none}}
+.topbar .ttl{display:flex;flex-direction:column;gap:2px;min-width:0}
+.topbar .ttl h1{font-size:22px;letter-spacing:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* 右上：口座切り替え（押すと一覧）＋歯車 */
+.acct-wrap{position:relative}
+.acct{display:flex;align-items:center;gap:8px;background:var(--card2);border:1px solid var(--line2);color:var(--txt);border-radius:20px;padding:6px 10px 6px 12px;font-size:12.5px;font-weight:600;max-width:190px}
+.acct .dot{width:7px;height:7px;border-radius:50%;background:var(--blue2);box-shadow:0 0 8px rgba(111,214,255,.8);flex:0 0 auto}
+.acct .acct-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.acct .chev{width:14px;height:14px;color:var(--txt3);flex:0 0 auto}
+.acct:hover{border-color:color-mix(in srgb,var(--blue2) 40%,transparent)}
+.acct-menu{display:none;position:absolute;right:0;top:calc(100% + 8px);min-width:240px;background:var(--card);border:1px solid var(--line2);border-radius:12px;padding:6px;box-shadow:0 12px 40px rgba(0,0,0,.6),var(--glow-s);z-index:60}
+.acct-wrap.open .acct-menu{display:block}
+.acct-head{font-size:11px;color:var(--txt3);padding:6px 10px 4px;letter-spacing:.06em}
+.acct-menu button{display:flex;width:100%;align-items:center;justify-content:space-between;gap:12px;background:none;border:0;color:var(--txt);border-radius:8px;padding:9px 10px;text-align:left;font-size:13px}
+.acct-menu button span{display:flex;flex-direction:column;gap:1px;min-width:0}
+.acct-menu button b{font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis} .acct-menu button small{font-size:11px;color:var(--txt3)}
+.acct-menu button em{font-style:normal;color:var(--blue2);visibility:hidden}
+.acct-menu button.on{background:color-mix(in srgb,var(--blue) 12%,transparent)} .acct-menu button.on em{visibility:visible}
+.acct-menu button:hover{background:var(--card2)}
+/* 今日：数字タイル横1列（PC 6枚・スマホ 2枚ずつ）*/
+.tiles{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;margin-bottom:22px}
+.tiles > *{min-width:0}
+.tile{min-height:112px;background:var(--tile-grad);border:1px solid var(--line);border-radius:var(--radius);padding:16px 18px;position:relative;overflow:hidden}
+.tile::before{content:"";position:absolute;left:14%;right:14%;top:0;height:1px;background:var(--topline);opacity:.7;pointer-events:none}
+.tile .k{font-size:11.5px;color:var(--txt2);margin-top:4px}
+.tile .v{font-size:26px;margin-top:6px;font-weight:600;letter-spacing:-.01em;color:var(--blue2);text-shadow:var(--num-glow);overflow-wrap:anywhere}
+.tile .v.pos{color:var(--green)} .tile .v.neg{color:var(--red)} .tile .v.plain{color:var(--txt)} .tile .v.muted{color:var(--txt3);text-shadow:none}
+.tile .v.long{font-size:21px}
+.tile .s{font-size:11px;color:var(--txt3);margin-top:3px}
+/* 今日：環境認識・保有中（横長1枚）*/
+.tgrid{display:grid;grid-template-columns:repeat(3,1fr);gap:10px 12px;margin-top:10px}
+.tgrid .ti .k{font-size:11px;color:var(--txt3)} .tgrid .ti .v{font-size:15px;font-weight:600;margin-top:2px}
+.pillrow{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.pill{font-size:11px;background:var(--card2);border:1px solid var(--line);color:var(--txt2);padding:3px 9px;border-radius:20px;font-weight:600;display:inline-block}
+.pill.blue{border-color:color-mix(in srgb,var(--blue2) 40%,transparent);color:var(--blue2);background:color-mix(in srgb,var(--blue) 12%,transparent);box-shadow:var(--glow-s)}
+.pill.red{border-color:color-mix(in srgb,var(--red) 40%,transparent);color:var(--red)}
 .logo{width:28px;height:28px;flex:0 0 auto}
-.topbar h1 .tos{font-size:9px;color:var(--blue2);letter-spacing:.22em;font-weight:600;display:block;line-height:1;margin-top:2px}
 .topbar .sub{font-size:11px;color:var(--txt3);font-weight:500}
 .topbar .tbright{display:flex;align-items:center;gap:8px}
-.acctsel{background:var(--card2);border:1px solid var(--line2);color:var(--txt);border-radius:9px;padding:6px 9px;font-size:12.5px;max-width:150px;text-overflow:ellipsis;font-weight:600}
-@media(max-width:480px){.topbar .sub{display:none}}
 .iconbtn{background:none;border:0;padding:5px;margin:0;color:var(--txt3);display:flex;align-items:center;border-radius:8px}
 .iconbtn .ic{width:20px;height:20px;display:block}
 .iconbtn:active{background:var(--card2)}
@@ -89,6 +123,7 @@ nav#nav{
   display:flex;
 }
 nav#nav .navwrap{max-width:640px;margin:0 auto;display:flex;width:100%}
+nav#nav .navbrand{display:none}
 nav#nav button{
   flex:1;background:none;border:0;color:var(--txt3);
   display:flex;flex-direction:column;align-items:center;justify-content:center;gap:3px;
@@ -103,7 +138,7 @@ nav#nav button.on .ic{stroke:var(--accent);filter:drop-shadow(0 0 5px rgba(111,2
 .card::before,.stat::before,.tcard::before{content:"";position:absolute;left:14%;right:14%;top:0;height:1px;background:var(--topline);opacity:.7;pointer-events:none}
 .card.tight{padding:13px}
 .card h2{font-size:13px;color:var(--txt2);margin:0 0 11px;font-weight:600;letter-spacing:.03em}
-.sect-title{font-size:12px;color:var(--txt3);font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin:26px 2px 10px}
+.sect-title{font-size:11.5px;color:var(--txt3);font-weight:600;letter-spacing:.06em;margin:28px 2px 10px}
 .sect-title:first-child{margin-top:2px}
 
 /* ---- stat grid ---- */
@@ -414,10 +449,17 @@ html[data-theme="light"] .filterbar button.on{color:#fff}
   nav#nav button.on{ background:color-mix(in srgb,var(--accent) 13%, transparent); box-shadow:inset 3px 0 0 var(--accent), var(--glow-s); text-shadow:none; }
   nav#nav button.on:hover{ color:var(--accent); }
 
-  #app{ max-width:780px; padding:26px 24px 64px; }
-  .topbar{ margin-bottom:18px; }
-  .topbar h1{ font-size:21px; }
+  nav#nav .navbrand{ display:flex; align-items:center; gap:9px; font-weight:800; font-size:16px; color:var(--txt); padding:6px 8px 22px; }
+  nav#nav .navbrand .tos{ font-size:8px; color:var(--blue2); letter-spacing:.22em; font-weight:600; display:block; line-height:1; margin-top:2px; }
+  nav#nav .navbrand .logo{ width:26px; height:26px; }
+  #app{ max-width:1180px; padding:28px 28px 64px; }
+  .topbar{ margin:14px 0 34px; }
+  .topbar .ttl h1{ font-size:24px; }
   .topbar .sub{ font-size:12px; }
+  #app.tab-home .tiles{ grid-template-columns:repeat(6,1fr); }
+  #app.tab-home .tgrid{ grid-template-columns:repeat(6,1fr); }
+  #app.tab-home .pair{ display:grid; grid-template-columns:1fr 1fr; gap:0 18px; align-items:start; }
+  #app.tab-home .pair > div{ display:block; min-width:0; }
 
   /* トーストはサイドバーと重ならないよう右下へ */
   .toast{ left:auto; right:26px; bottom:26px; transform:none; }
@@ -437,14 +479,6 @@ html[data-theme="light"] .filterbar button.on{color:#fff}
 @media (min-width:1180px){
   #app.tab-home,#app.tab-growth{ max-width:1120px; }
 
-  /* ホーム: 本日の指標を横1列に */
-  #app.tab-home .statwrap{ display:grid; grid-template-columns:repeat(6,1fr); gap:10px; margin-bottom:12px; }
-  #app.tab-home .statwrap > .grid3{ display:contents; }
-
-  /* ホーム: 環境認識と Fintokei を左右に */
-  #app.tab-home .pair{ display:grid; grid-template-columns:1fr 1fr; gap:0 18px; align-items:start; }
-  #app.tab-home .pair > div{ display:block; min-width:0; }
-
   /* 成長: グラフと集計表を2列に */
   #app.tab-growth .chartgrid,
   #app.tab-growth .tablegrid{ display:grid; grid-template-columns:1fr 1fr; gap:0 16px; align-items:start; }
@@ -457,6 +491,7 @@ html[data-theme="light"] .filterbar button.on{color:#fff}
 <div id="app"></div>
 
 <nav id="nav"><div class="navwrap">
+  <div class="navbrand"><svg class='logo' viewBox='0 0 30 30'><defs><linearGradient id='lg2' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#6fd6ff'/><stop offset='1' stop-color='#1aa5dc'/></linearGradient></defs><rect x='1' y='1' width='28' height='28' rx='8' fill='#04070c' stroke='url(#lg2)' stroke-width='1.2'/><path d='M7 20l5-6 4 4 7-9' fill='none' stroke='url(#lg2)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='23' cy='9' r='1.6' fill='#6fd6ff'/></svg><span>ぼぶる<span class="tos">TRADE OS</span></span></div>
   <button data-tab="home"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 11l9-8 9 8"/><path d="M5 10v10h14V10"/></svg>今日</button>
   <button data-tab="plan"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 5v14M5 12h14"/></svg>シナリオ</button>
   <button data-tab="trades"><svg class="ic" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 6h16M4 12h16M4 18h10"/></svg>記録</button>
@@ -818,7 +853,7 @@ setInterval(function(){
       at=nextResetAt(new Date(),e.getAttribute("data-tz"),+e.getAttribute("data-hour")); e.setAttribute("data-reset",at);
       if(lab.indexOf("（")>=0){ var d=new Date(at); lab="次の区切り（"+d.getHours()+":"+(d.getMinutes()<10?"0":"")+d.getMinutes()+"）まで "; e.setAttribute("data-label",lab); }
     }
-    e.textContent=lab+fmtUntil(at-Date.now());
+    e.textContent=(lab||"")+fmtUntil(at-Date.now());
   }
 },30000);
 function closedCountOf(acc){ return tradesOfAccount(acc.id).filter(function(t){ return t.status==="closed"; }).length; }
@@ -1541,18 +1576,30 @@ function render(){
   }
 }
 
-function topbar(sub){
-  var logo="<svg class='logo' viewBox='0 0 30 30'><defs><linearGradient id='lg' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#6fd6ff'/><stop offset='1' stop-color='#1aa5dc'/></linearGradient></defs><rect x='1' y='1' width='28' height='28' rx='8' fill='#04070c' stroke='url(#lg)' stroke-width='1.2'/><path d='M7 20l5-6 4 4 7-9' fill='none' stroke='url(#lg)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='23' cy='9' r='1.6' fill='#6fd6ff'/></svg>";
+function topbar(sub,note){
   var gear="<button class='iconbtn' aria-label='設定' onclick='gotoTab(\"settings\")'><svg class='ic' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linejoin='round'><path d='M10.3 3.5h3.4l.5 2.3a7 7 0 0 1 1.9 1.1l2.2-.8 1.7 3-1.8 1.5a7 7 0 0 1 0 2.2l1.8 1.5-1.7 3-2.2-.8a7 7 0 0 1-1.9 1.1l-.5 2.3h-3.4l-.5-2.3a7 7 0 0 1-1.9-1.1l-2.2.8-1.7-3 1.8-1.5a7 7 0 0 1 0-2.2L4 9.1l1.7-3 2.2.8a7 7 0 0 1 1.9-1.1z'/><circle cx='12' cy='12' r='2.6'/></svg></button>";
-  return "<div class='topbar'><h1>"+logo+"<span>"+esc(DB.settings.appName||"ぼぶる")+"<span class='tos'>TRADE OS</span></span></h1><div class='tbright'><span class='sub'>"+esc(sub||"")+"</span>"+acctSwitcher()+gear+"</div></div>";
+  // 見出しが本文の主役。ロゴは PC の左メニューの上だけ（見本どおり）
+  return "<div class='topbar'>"+
+         "<div class='ttl'><h1>"+esc(sub||"")+"</h1></div>"+
+         "<div class='tbright'>"+(note?"<span class='sub'>"+esc(note)+"</span>":"")+acctSwitcher()+gear+"</div></div>";
 }
-// 右上の口座切り替え。今日・シナリオ・記録・分析の全部がこれに従う（記録先＝表示中）
+var LOGO_SVG="<svg class='logo' viewBox='0 0 30 30'><defs><linearGradient id='lg' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#6fd6ff'/><stop offset='1' stop-color='#1aa5dc'/></linearGradient></defs><rect x='1' y='1' width='28' height='28' rx='8' fill='#04070c' stroke='url(#lg)' stroke-width='1.2'/><path d='M7 20l5-6 4 4 7-9' fill='none' stroke='url(#lg)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='23' cy='9' r='1.6' fill='#6fd6ff'/></svg>";
+// 右上の口座切り替え（押すと一覧）。今日・シナリオ・記録・分析の全部がこれに従う（記録先＝表示中）
 function acctSwitcher(){
-  var list=activeAccounts(); if(list.length<2) return "";
-  var cur=currentAccountId();
-  return "<select class='acctsel' aria-label='口座' onchange='switchAccount(this.value)'>"+list.map(function(a){
-    return "<option value='"+a.id+"'"+(a.id===cur?" selected":"")+">"+esc(a.name)+"</option>"; }).join("")+"</select>";
+  var list=activeAccounts(); if(!list.length) return "";
+  var cur=currentAccountId(), curA=findAccount(cur)||list[0];
+  var h="<span class='acct-wrap' id='acctWrap'><button class='acct' aria-label='口座を切り替え' onclick='toggleAcctMenu(event)'><i class='dot'></i><span class='acct-name'>"+esc(curA.name)+"</span>"+
+        "<svg class='chev' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg></button>";
+  h+="<div class='acct-menu'><div class='acct-head'>口座を切り替え</div>";
+  list.forEach(function(a){
+    h+="<button class='"+(a.id===cur?"on":"")+"' onclick=\"pickAccount(event,'"+a.id+"')\"><span><b>"+esc(a.name)+"</b><small class='tabular'>"+fmtMoney(balanceOf(a))+" "+esc(a.currency||"")+"</small></span><em>✓</em></button>";
+  });
+  h+="</div></span>";
+  return h;
 }
+window.toggleAcctMenu=function(e){ e.stopPropagation(); var w=document.getElementById("acctWrap"); if(w) w.classList.toggle("open"); };
+window.pickAccount=function(e,id){ e.stopPropagation(); var w=document.getElementById("acctWrap"); if(w) w.classList.remove("open"); if(id!==currentAccountId()) window.switchAccount(id); };
+document.addEventListener("click",function(){ var w=document.getElementById("acctWrap"); if(w) w.classList.remove("open"); });
 
 /* ---------- ホーム ---------- */
 // 数字が上：今日の数字 → 環境認識と保有中 → 口座の制約
@@ -1560,17 +1607,16 @@ function acctSwitcher(){
 function viewHome(){
   var s=DB.settings;
   var st=currentStreak();
+  var d=new Date(), wd=["日","月","火","水","木","金","土"][d.getDay()];
+  var h=topbar("今日の状態", d.getFullYear()+"/"+("0"+(d.getMonth()+1)).slice(-2)+"/"+("0"+d.getDate()).slice(-2)+"（"+wd+"）");
 
-  var h=topbar("今日の状態");
-
-  // 4連敗注意（静かに）
+  // 連敗注意（静かに）
   if(st.type==="lose" && st.losses>=(toNum(s.lossStreakWarn)||4)){
     h+="<div class='notice'><span class='dot'></span>現在"+st.losses+"連敗</div>";
   }
 
-  h+=homeBalanceCard();
-  h+=homeTodayStats();
-  // 並び（2026-09-24 本人決定）：数字 → 環境認識（横長）→ 保有中 → 口座の状況はいちばん下
+  // 並び（2026-09-24 本人決定・見本どおり）：数字タイル横1列（残高もタイル）→ 環境認識（横長）→ 保有中（横長）→ 口座の状況はいちばん下
+  h+=homeTiles();
   h+="<div class='sect-title'>環境認識</div>"+homeBriefCard();
   h+="<div class='sect-title'>保有中</div>"+homeOpenCard();
   var curId=currentAccountId();
@@ -1585,39 +1631,31 @@ function viewHome(){
   return h;
 }
 
-// 口座残高と、開始からの通算
-function homeBalanceCard(){
+// 数字タイル：口座残高／本日の損益／本日のR／勝率（30日）／連勝・連敗／区切りまで
+function homeTiles(){
   var s=DB.settings;
-  var bal=currentBalance();
-  var netAll=bal-(toNum(s.initialBalance)||0);
-  var h="<div class='card'>";
-  h+="<div class='balrow'><span class='bal tabular'>"+fmtMoney(bal)+" <span class='cur'>"+esc(s.currency)+"</span></span>";
-  h+="<span class='"+clsSign(netAll)+" tabular' style='font-weight:700'>"+fmtSigned(netAll)+"</span></div>";
-  h+="</div>";
-  return h;
-}
-
-// 本日の損益・R・回数と、連勝連敗・保有中・直近30日勝率
-function homeTodayStats(){
-  var s=DB.settings;
+  var bal=currentBalance(), netAll=bal-(toNum(s.initialBalance)||0);
   var tp=todayPL();
   var st=currentStreak();
+  var closed30=accountTrades().filter(function(t){return t.status==="closed"&&inPeriod(t,"30d");});
+  var st30=computeStats(closed30);
   var openN=accountTrades().filter(function(t){return t.status==="open";}).length;
-  var st30=computeStats(accountTrades().filter(function(t){return t.status==="closed"&&inPeriod(t,"30d");}));
-
-  var h="<div class='statwrap'>";
-  h+="<div class='grid3'>";
-  h+=stat("本日の損益", (tp.n?("<span class='"+clsSign(tp.pl)+"'>"+fmtSigned(tp.pl)+"</span>"):"<span class='muted'>—</span>"), true);
-  h+=stat("本日のR", tp.r!==null?("<span class='"+clsSign(tp.r)+"'>"+fmtR(tp.r)+"</span>"):"<span class='muted'>—</span>", true);
-  h+=stat("本日の回数", "<span class='tabular'>"+tp.n+"</span>", true);
-  h+="</div>";
-
-  h+="<div class='grid3' style='margin-top:10px'>";
-  var streakTxt = st.type==="win"?("<span class='pos'>"+st.wins+"連勝</span>") : st.type==="lose"?("<span class='"+((st.losses>=(toNum(s.lossStreakWarn)||4))?"gold":"neg")+"'>"+st.losses+"連敗</span>") : "<span class='muted'>—</span>";
-  h+=stat("連勝/連敗", streakTxt, true);
-  h+=stat("保有中", "<span class='tabular'>"+openN+"</span>", true);
-  h+=stat("直近30日 勝率", st30.winRate!==null?("<span class='tabular'>"+fmtPct(st30.winRate,0)+"</span>"):"<span class='muted'>—</span>", true);
-  h+="</div>";
+  var tile=function(k,v,cls,sub){ var plain=String(v).replace(/<[^>]*>/g,""); return "<div class='tile'><div class='k'>"+esc(k)+"</div><div class='v tabular "+(cls||"")+(plain.length>=9?" long":"")+"'>"+v+"</div>"+(sub?"<div class='s'>"+sub+"</div>":"")+"</div>"; };
+  var h="<div class='tiles'>";
+  h+=tile("口座残高", fmtMoney(bal), "plain", esc(s.currency||"")+"　開始から <span class='"+clsSign(netAll)+"'>"+fmtSigned(netAll)+"</span>");
+  h+=tile("本日の損益", tp.n?fmtSigned(tp.pl):"—", tp.n?clsSign(tp.pl):"muted", tp.n?(bal-tp.pl>0?fmtSigned(tp.pl/(bal-tp.pl)*100,2)+"%":"")+"　"+tp.n+"件":"まだ決済なし");
+  h+=tile("本日のR", tp.r!==null?fmtR(tp.r):"—", tp.r!==null?clsSign(tp.r):"muted", tp.n+"件");
+  h+=tile("勝率（30日）", st30.winRate!==null?fmtPct(st30.winRate,1):"—", st30.winRate!==null?"":"muted", closed30.length?(st30.wins!==undefined?st30.wins+"/"+closed30.length:closed30.length+"件"):"30日以内の決済なし");
+  var streakV = st.type==="win"?(st.wins+"連勝") : st.type==="lose"?(st.losses+"連敗") : "—";
+  var streakC = st.type==="win"?"" : st.type==="lose"?"neg" : "muted";
+  h+=tile("連勝・連敗", streakV, streakC, "保有中 "+openN+"件");
+  var acc=currentAccount(), tpl=acc&&findTemplate(acc.template), r=tpl&&tpl.dayReset;
+  if(r){
+    var at=nextResetAt(new Date(),r.tz,r.hour), rd=new Date(at);
+    h+=tile("区切りまで", "<span data-reset='"+at+"' data-tz='"+esc(r.tz)+"' data-hour='"+r.hour+"' data-label=''>"+esc(fmtUntil(at-Date.now()))+"</span>", "plain", "日本時間 "+rd.getHours()+":"+("0"+rd.getMinutes()).slice(-2));
+  }else{
+    h+=tile("区切りまで", "—", "muted", "口座の区切り時刻なし");
+  }
   h+="</div>";
   return h;
 }
@@ -1627,19 +1665,24 @@ function homeOpenCard(){
   var list=accountTrades().filter(function(t){return t.status==="open";});
   if(!list.length) return "<div class='card'><div class='empty'>保有中のトレードはありません</div></div>";
   list.sort(function(a,b){ return new Date(b.createdAt)-new Date(a.createdAt); });
-  var h="<div class='card'>";
-  list.forEach(function(t,i){
+  var h="";
+  list.forEach(function(t){
     var c=calcTrade(t);
-    h+="<div class='oprow"+(i?" sep":"")+"' onclick='gotoOpenTrades()'>";
-    h+="<div><div class='opsym'>"+esc(t.symbol)+" "+dirTag(t.dir)+"</div>";
+    var sc=scenarioRiskOf(t.accountId||currentAccountId(), t.scenarioId||t.id);
+    var bal=toNum(t.balanceAtEntry); var scPct=(isNum(bal)&&bal>0)?sc.loss/bal*100:null;
     var rc=resetClock(t,false);
-    h+="<div class='opsub tabular'>"+(isNum(t.lot)?t.lot.toFixed(2)+" ロット":"")+
-       (isNum(t.entry)?" ・ "+fmtMoney(t.entry,2):"")+(rc?" ・ "+rc:"")+"</div></div>";
-    h+="<div class='opright'><div class='opsub'>予定損失</div>";
-    h+="<div class='neg tabular'>"+(isNum(c.plannedLoss)?("-"+fmtMoney(c.plannedLoss)):"—")+"</div></div>";
-    h+="</div>";
+    var ti=function(k,v,cls){ return "<div class='ti'><div class='k'>"+esc(k)+"</div><div class='v tabular "+(cls||"")+"'>"+v+"</div></div>"; };
+    h+="<div class='card' style='cursor:pointer' onclick='gotoOpenTrades()'>";
+    h+="<div style='display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap'><span><b>"+esc(t.symbol)+"</b> "+dirTag(t.dir)+(isNum(t.lot)?" "+t.lot.toFixed(2)+"ロット":"")+"</span>"+(rc?"<span class='muted' style='font-size:13px'>"+rc+"</span>":"")+"</div>";
+    h+="<div class='tgrid'>";
+    h+=ti("エントリー", isNum(t.entry)?fmtMoney(t.entry,2):"—");
+    h+=ti("SL", isNum(t.sl)?fmtMoney(t.sl,2):"—");
+    h+=ti("TP", isNum(t.tp)?fmtMoney(t.tp,2):"—");
+    h+=ti("予定損失", isNum(c.plannedLoss)?("−"+fmtMoney(c.plannedLoss)):"—", "neg");
+    h+=ti("RR", isNum(c.rr)?("1 : "+c.rr.toFixed(2)):"—");
+    h+=ti("シナリオ", sc.n+"件"+(scPct!==null?"・"+fmtPct(scPct,2):""));
+    h+="</div></div>";
   });
-  h+="</div>";
   return h;
 }
 window.gotoOpenTrades=function(){ UI.tradeTab="open"; TAB="trades"; render(); };
@@ -2847,30 +2890,28 @@ function homeBriefCard(){
   var raw=todayBrief();
   if(!raw){
     var h0="<div class='card'>";
-    h0+="<div class='bhead'><div class='bk'>今日の環境認識</div><div class='bdate'>"+esc(today())+"</div></div>";
-    h0+="<div class='smallnote' style='margin:0 0 11px'>まだ作成されていません。先に相場を整理しておくと、あとで「どんな環境なら勝てているか」を振り返れます。</div>";
-    h0+="<button class='btn ghost sm' onclick='gotoBriefToday()'>環境認識をつくる</button>";
+    h0+="<div class='smallnote' style='margin:0 0 11px'>今日の環境認識はまだありません。先に相場を整理しておくと、あとで「どんな環境なら勝てているか」を振り返れます。</div>";
+    h0+="<button class='btn ghost sm' style='width:auto;display:inline-block;padding:8px 14px' onclick='gotoBriefToday()'>環境認識をつくる</button>";
     h0+="</div>";
     return h0;
   }
   var b=normalizeBrief(raw);
-  var h="<div class='card'>";
-  h+="<div class='bhead'><div class='bk'>今日の環境認識</div><div class='bdate'>"+esc(b.symbol)+
-     (isNum(b.price.last)?" ・"+esc(fmtMoney(b.price.last,2)):"")+"</div></div>";
-  if(b.bias) h+="<div class='smallnote' style='margin:0 0 9px'>今日の見方 <span class='"+clsBias(b.bias)+
-     "' style='font-weight:700'>"+esc(labelBias(b.bias))+"</span></div>";
-  h+=briefTrendRow(b);
+  var pill=function(lab,v){ return "<span class='pill'>"+esc(lab)+" "+esc(arrowTrend(v))+"</span>"; };
+  var h="<div class='card' style='cursor:pointer' onclick='gotoBriefToday()'>";
+  // 上段：見方＋時間足の向き（左）、直近の指標（右）
   var ev=eventsSorted(b.events);
-  if(ev.length){
-    h+="<div style='margin-top:11px'>";
-    ev.slice(0,4).forEach(function(e){ h+=eventLine(e); });
-    if(ev.length>4) h+="<div class='smallnote'>ほか "+(ev.length-4)+" 件</div>";
-    h+="</div>";
-  }
-  if(b.scenarios.noTrade){
-    h+="<div class='scen nt' style='margin-top:12px'><div class='sl'>NO TRADE</div><div class='sv'>"+esc(b.scenarios.noTrade)+"</div></div>";
-  }
-  h+="<button class='btn ghost sm' style='margin-top:12px' onclick='gotoBriefToday()'>環境認識をひらく</button>";
+  h+="<div style='display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap'>";
+  h+="<div class='pillrow'><span class='pill "+(b.bias==="long"?"blue":b.bias==="short"?"red":"")+"'>"+esc(labelBias(b.bias))+"</span>"+
+     pill("日足",b.trend.daily)+pill("4H",b.trend.h4)+pill("1H",b.trend.h1)+pill("15M",b.trend.m15)+"</div>";
+  if(ev.length) h+="<span class='muted' style='font-size:12px'>"+esc((ev[0].time||"--:--")+" "+(ev[0].name||"")+"（重要度 "+labelImp(ev[0].importance)+"）")+(ev.length>1?" ほか"+(ev.length-1)+"件":"")+"</span>";
+  h+="</div>";
+  // 中段：意識される数字
+  var ti=function(k,v){ return "<div class='ti'><div class='k'>"+esc(k)+"</div><div class='v tabular'>"+(isNum(v)?fmtMoney(v,1):"—")+"</div></div>"; };
+  h+="<div class='tgrid'>"+ti("前日高値",b.levels.prevHigh)+ti("前日安値",b.levels.prevLow)+ti("EMA75",b.ema.e75)+ti("EMA200",b.ema.e200)+ti("週足高値",b.levels.weekHigh)+ti("週足安値",b.levels.weekLow)+"</div>";
+  // 下段：ひとこと（シナリオ or メモ or 見送り条件）
+  var line=(b.memo||b.aiSummary||"").trim();
+  if(!line){ var parts=[]; if(b.scenarios.bull) parts.push("↑ "+b.scenarios.bull); if(b.scenarios.bear) parts.push("↓ "+b.scenarios.bear); if(b.scenarios.noTrade) parts.push("見送り："+b.scenarios.noTrade); line=parts.join("　"); }
+  if(line) h+="<div class='muted' style='font-size:13px;margin-top:10px;white-space:pre-wrap'>"+esc(line.length>160?line.slice(0,160)+"…":line)+"</div>";
   h+="</div>";
   return h;
 }
