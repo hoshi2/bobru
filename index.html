@@ -650,6 +650,7 @@ function makeAccount(o){
     closedAt:o.closedAt||null,
     closedReason:o.closedReason||null,
     template:findTemplate(o.template)?o.template:"",
+    brokerIds:Array.isArray(o.brokerIds)?o.brokerIds.slice():[],
     rules:normalizeRules(o.rules, isAccountType(t)?t:"", o.template, o._fin)
   };
 }
@@ -1087,6 +1088,158 @@ function tradesToCSV(){
   });
   return rows.join("\n");
 }
+/* ==== ctraderImport start ==== */
+/* cTrader の履歴CSVを読む部品。DB や画面には触らない（osascript で単体テストできるように）。
+   1行＝1決済（取引）。分割決済は「新規時刻＋エントリー価格＋方向」が同じ行を1トレードにまとめる。 */
+var ctraderImport=(function(){
+  function parseCSV(text){
+    var rows=[], row=[], cur="", q=false, i, ch;
+    text=String(text||"").replace(/^﻿/,"");
+    for(i=0;i<text.length;i++){
+      ch=text[i];
+      if(q){
+        if(ch==='"'){ if(text[i+1]==='"'){ cur+='"'; i++; } else q=false; }
+        else cur+=ch;
+      }else{
+        if(ch==='"') q=true;
+        else if(ch===','){ row.push(cur); cur=""; }
+        else if(ch==='\n'){ row.push(cur); rows.push(row); row=[]; cur=""; }
+        else if(ch==='\r'){ /* skip */ }
+        else cur+=ch;
+      }
+    }
+    if(cur!==""||row.length){ row.push(cur); rows.push(row); }
+    return rows.filter(function(r){ return r.some(function(c){ return String(c).trim()!==""; }); });
+  }
+  function num(v){
+    if(v===null||v===undefined) return null;
+    var s=String(v).replace(/[  \s]/g,"").replace(/ロット|lots?/ig,"").replace(/[^\d.\-]/g,"");
+    if(s===""||s==="-"||s===".") return null;
+    var n=parseFloat(s); return isFinite(n)?n:null;
+  }
+  // "22/09/2026 16:18:44.940" (+ 見出しの UTC+N) → ISO
+  function parseTime(s, offsetH){
+    var m=String(s||"").match(/(\d{1,2})\/(\d{1,2})\/(\d{4})[ T](\d{1,2}):(\d{2})(?::(\d{2}))?(?:\.(\d+))?/);
+    if(!m) return null;
+    var ms=Date.UTC(+m[3], +m[2]-1, +m[1], +m[4], +m[5], +(m[6]||0), +((m[7]||"0")+"00").slice(0,3));
+    ms-= (offsetH||0)*3600000;
+    return new Date(ms).toISOString();
+  }
+  function offsetOf(header){ var m=String(header||"").match(/UTC([+\-]\d+(?:\.\d+)?)/i); return m?parseFloat(m[1]):0; }
+  function dirOf(v){
+    var s=String(v||"").trim().toLowerCase();
+    if(s==="buy"||s==="買い"||s==="買") return "long";
+    if(s==="sell"||s==="売り"||s==="売") return "short";
+    return null;
+  }
+  function symbolOf(v){
+    var s=String(v||"").trim();
+    if(/金／米ドル|金\/米ドル|XAUUSD|^GOLD$/i.test(s)) return "XAUUSD";
+    if(/銀／米ドル|XAGUSD|^SILVER$/i.test(s)) return "XAGUSD";
+    return s.replace(/[／\/\s_]/g,"").toUpperCase();
+  }
+  // 見出しの並びは版や言語で変わるので、名前で探す
+  function findCol(header, patterns, skip){
+    for(var i=0;i<header.length;i++){
+      var h=String(header[i]||"").trim();
+      if(skip&&skip.test(h)) continue;
+      for(var j=0;j<patterns.length;j++) if(patterns[j].test(h)) return i;
+    }
+    return -1;
+  }
+  function readStatement(text, fileName){
+    var rows=parseCSV(text);
+    if(rows.length<2) return {ok:false,msg:"CSVに取引の行がありません"};
+    var H=rows[0];
+    var col={
+      orderId: findCol(H,[/^注文ID$/i,/^Order ?ID$/i]),
+      dealId:  findCol(H,[/^取引ID$/i,/^Deal ?ID$/i]),
+      symbol:  findCol(H,[/通貨ペア/,/^Symbol$/i]),
+      dir:     findCol(H,[/売り／買い（新規注文時）/,/売り.買い.*新規/,/Direction.*open/i,/^Direction$/i,/^Side$/i]),
+      openedAt:findCol(H,[/新規注文時間/,/Open(ing)? ?time/i]),
+      closedAt:findCol(H,[/決済時間/,/Clos(ing|e) ?time/i]),
+      entry:   findCol(H,[/エントリー価格/,/Entry ?price/i,/Open(ing)? ?price/i]),
+      close:   findCol(H,[/決済価格/,/Clos(ing|e) ?price/i]),
+      lot:     findCol(H,[/決済中のロット数/,/Closing ?(quantity|volume|lots)/i,/^Volume$/i,/^Lots$/i]),
+      swap:    findCol(H,[/^Swaps?$/i,/スワップ/]),
+      fee:     findCol(H,[/ブローカー手数料/,/^Commission/i]),
+      conv:    findCol(H,[/両替手数料/,/Conversion ?fee/i]),
+      gross:   findCol(H,[/^総額/,/^Gross/i],/\$|USD/),
+      net:     findCol(H,[/^純額/,/^Net/i],/\$|USD/),
+      balance: findCol(H,[/口座残高/,/^Balance/i])
+    };
+    var need=["dir","openedAt","closedAt","entry","close","lot","net"];
+    for(var k=0;k<need.length;k++) if(col[need[k]]<0) return {ok:false,msg:"cTrader の履歴CSVに見えません（「"+need[k]+"」の列が無い）。全部の列を表示してから書き出して下さい"};
+    var offO=offsetOf(H[col.openedAt]), offC=offsetOf(H[col.closedAt]);
+    var deals=[];
+    for(var r=1;r<rows.length;r++){
+      var R=rows[r]; var g=function(k){ return col[k]>=0?R[col[k]]:""; };
+      var d={
+        orderId:String(g("orderId")||"").trim()||null,
+        dealId:String(g("dealId")||"").trim()||null,
+        symbol:symbolOf(g("symbol")),
+        dir:dirOf(g("dir")),
+        openedAt:parseTime(g("openedAt"),offO),
+        closedAt:parseTime(g("closedAt"),offC),
+        entry:num(g("entry")), close:num(g("close")), lot:num(g("lot")),
+        swap:num(g("swap"))||0, fee:(num(g("fee"))||0)+(num(g("conv"))||0),
+        gross:num(g("gross")), net:num(g("net")), balance:num(g("balance"))
+      };
+      if(!d.dir||!d.openedAt||!d.closedAt||d.entry===null||d.lot===null||d.net===null) continue;
+      if(!d.dealId) d.dealId="row"+r+":"+d.openedAt+":"+d.entry+":"+d.lot;
+      deals.push(d);
+    }
+    if(!deals.length) return {ok:false,msg:"読める取引の行がありませんでした"};
+    var bm=String(fileName||"").match(/cT_(\d+)_/);
+    return {ok:true, brokerId:bm?bm[1]:null, deals:deals, currency:currencyOf(H, col)};
+  }
+  function currencyOf(H, col){
+    var h=col.net>=0?String(H[col.net]):"";
+    var m=h.match(/[（(]\s*([€$¥£]|[A-Z]{3})\s*[)）]/);
+    if(!m) return null;
+    return {"€":"EUR","$":"USD","¥":"JPY","£":"GBP"}[m[1]]||m[1];
+  }
+  // 分割決済をまとめる
+  function groupDeals(deals){
+    var map={}, order=[];
+    deals.forEach(function(d){
+      var key=d.openedAt+"|"+d.entry+"|"+d.dir+"|"+d.symbol;
+      if(!map[key]){ map[key]={symbol:d.symbol,dir:d.dir,openedAt:d.openedAt,entry:d.entry,lot:0,net:0,gross:0,fee:0,swap:0,
+                              closedAt:d.closedAt,closePrice:null,_wsum:0,dealIds:[],orderIds:[],balance:null}; order.push(key); }
+      var gr=map[key];
+      gr.lot+=d.lot; gr.net+=d.net; gr.gross+=(d.gross||0); gr.fee+=d.fee; gr.swap+=d.swap;
+      gr._wsum+=(d.close||0)*d.lot;
+      if(d.closedAt>gr.closedAt) gr.closedAt=d.closedAt;
+      gr.dealIds.push(d.dealId); if(d.orderId) gr.orderIds.push(d.orderId);
+      if(d.balance!==null && (gr.balance===null || d.closedAt>=gr.closedAt)) gr.balance=d.balance;
+    });
+    return order.map(function(k){
+      var gr=map[k]; gr.closePrice=gr.lot>0?Math.round(gr._wsum/gr.lot*1000)/1000:null; delete gr._wsum;
+      gr.lot=Math.round(gr.lot*100)/100; gr.net=Math.round(gr.net*100)/100; gr.gross=Math.round(gr.gross*100)/100;
+      gr.fee=Math.round(gr.fee*100)/100; gr.swap=Math.round(gr.swap*100)/100;
+      return gr;
+    });
+  }
+  // 候補：同じ銘柄・方向の保有中で、価格と時刻が近いもの。近い順に返す
+  function matchCandidates(group, openTrades, opt){
+    opt=opt||{}; var maxMin=opt.maxMinutes||180, pricePct=opt.pricePct||0.15;
+    var out=[];
+    (openTrades||[]).forEach(function(t){
+      if(t.symbol!==group.symbol||t.dir!==group.dir) return;
+      var e=parseFloat(t.entry), dp=isFinite(e)&&group.entry?Math.abs(e-group.entry)/group.entry*100:null;
+      var dt=t.createdAt?Math.abs(new Date(t.createdAt)-new Date(group.openedAt))/60000:null;
+      if(dp!==null && dp>pricePct) return;
+      if(dt!==null && dt>maxMin) return;
+      var score=(dp===null?pricePct:dp)/pricePct + (dt===null?maxMin:dt)/maxMin + (isFinite(parseFloat(t.lot))&&Math.abs(parseFloat(t.lot)-group.lot)<0.005?0:0.3);
+      out.push({trade:t, score:score, dPricePct:dp, dMin:dt});
+    });
+    out.sort(function(a,b){ return a.score-b.score; });
+    return out;
+  }
+  return {parseCSV:parseCSV, num:num, parseTime:parseTime, readStatement:readStatement, groupDeals:groupDeals, matchCandidates:matchCandidates, symbolOf:symbolOf, dirOf:dirOf};
+})();
+/* ==== ctraderImport end ==== */
+
 function round2(v){ return isNum(v)?Math.round(v*100)/100:v; }
 
 /* ---------- コア計算 ---------- */
@@ -3045,6 +3198,11 @@ function tradeCard(t,tab){
     if(sameScen.length>1) pills.push("シナリオ "+sameScen.length+"件");
   }
   if(t.afterOwnStop) pills.push("自分の停止ライン到達後");
+  if(t.source==="ctrader") pills.push("cTrader");
+  if(t.noPlan) pills.push("計画なし");
+  if(t.status==="closed"&&t.needsReview) pills.push("判断が未記入");
+  if(isNum(toNum(t.plannedEntry))) pills.push("計画 "+toNum(t.plannedEntry));
+  if(isNum(toNum(t.plannedLot))) pills.push("計画ロット "+toNum(t.plannedLot).toFixed(2));
   // 版番号は、いまの設定と違うときだけ出す（いつもの記録は静かなまま）
   if(t.strategyVersion && t.strategyVersion!==versionsOf().strategy) pills.push("手法 "+t.strategyVersion);
   if(t.rulesVersion && t.rulesVersion!==versionsOf().rules) pills.push("ルール "+t.rulesVersion);
@@ -3340,6 +3498,7 @@ window.saveClose=function(id){
   t.closeSawLower=CLOSE.sawLower||null; t.emotion=CLOSE.emotion||null;
   t.reviewMemo=g("c_review"); t.learn=g("c_learn");
   t.status="closed"; t.updatedAt=now();
+  t.needsReview=false;
   // 画像
   if(window._closeShotDataUrl){ IMG[id+"_exit"]=window._closeShotDataUrl; } else { delete IMG[id+"_exit"]; }
   saveImg();
@@ -3727,6 +3886,7 @@ function accountsCard(){
     meta.push(a.type?labelAccountType(a.type):(a.typeNote||"種別未設定"));
     meta.push("初期 "+fmtMoney(toNum(a.initialBalance))+" "+(a.currency||""));
     meta.push(n+"件");
+    if((a.brokerIds||[]).length) meta.push("cTrader "+a.brokerIds.join("・"));
     if(per) meta.push(per.first+" 〜 "+per.last);
     meta.push(a.closedReason?("終了："+labelCloseReason(a.closedReason)):"稼働中");
 
@@ -3912,6 +4072,13 @@ function viewSettings(){
   h+="<button class='btn ghost' style='margin-top:9px' onclick='doCSV()'>CSVを出力</button>";
   h+="</div>";
 
+  // cTrader 履歴の取り込み
+  h+="<div class='sect-title'>cTrader の履歴</div><div class='card'>";
+  h+="<div class='smallnote' style='margin:0 0 10px'>cTrader の「履歴」で列を全部表示してから書き出したCSVを読み込みます。"+
+     "保有中の計画に紐付けるか、計画なしの記録として作るかを1件ずつ確かめてから取り込みます。同じ取引は二度入りません。</div>";
+  h+="<button class='btn' onclick='importCtraderCSV()'>cTrader の履歴CSVを取り込む</button>";
+  h+="</div>";
+
   h+="<div class='sect-title'>危険な操作</div><div class='card'>";
   h+="<button class='btn danger' onclick='wipeAll()'>全データを削除</button>";
   h+="<div class='smallnote'>削除は二段階確認します。事前にバックアップ推奨。</div>";
@@ -3998,6 +4165,149 @@ window.doImport=function(){
   inp.click();
 };
 window.doCSV=function(){ downloadFile("boburu-trades-"+today()+".csv", tradesToCSV(), "text/csv"); toast("CSVを出力しました"); };
+
+/* ---------- cTrader 履歴の取り込み（C4） ---------- */
+// 1トレード＝事実（cTrader のCSV）＋判断（ぼぶるの計画）。ここでは事実だけを記録に入れる。
+var CTI=null; // 取り込み中の状態
+window.importCtraderCSV=function(){
+  var inp=document.createElement("input"); inp.type="file"; inp.accept=".csv,text/csv";
+  inp.onchange=function(e){
+    var f=e.target.files&&e.target.files[0]; if(!f) return;
+    var rd=new FileReader();
+    rd.onload=function(){
+      var r=ctraderImport.readStatement(rd.result, f.name);
+      if(!r.ok){ toast(r.msg); return; }
+      CTI={stmt:r, groups:ctraderImport.groupDeals(r.deals), accountId:null, remember:true, choices:{}, fileName:f.name};
+      var acc=accountByBrokerId(r.brokerId);
+      if(acc && !acc.closedReason){ CTI.accountId=acc.id; openCtiLinkModal(); } else openCtiAccountModal();
+    };
+    rd.readAsText(f,"utf-8");
+  };
+  inp.click();
+};
+function accountByBrokerId(bid){
+  if(!bid) return null;
+  var list=Array.isArray(DB.accounts)?DB.accounts:[];
+  for(var i=0;i<list.length;i++){ if((list[i].brokerIds||[]).indexOf(bid)>=0) return list[i]; }
+  return null;
+}
+function importedDealIds(){
+  var set={};
+  DB.trades.forEach(function(t){ (t.brokerDealIds||[]).forEach(function(d){ set[d]=t.id; }); });
+  return set;
+}
+function openCtiAccountModal(){
+  var list=activeAccounts(), cur=currentAccountId();
+  if(!list.length){ toast("稼働中の口座がありません"); CTI=null; return; }
+  var h="<h3>どの口座の履歴ですか？</h3>";
+  h+="<div class='smallnote' style='margin:0 0 10px'>ファイル "+esc(CTI.fileName)+
+     (CTI.stmt.brokerId?"（cTrader 口座番号 "+esc(CTI.stmt.brokerId)+"）":"")+
+     (CTI.stmt.currency?" ・ 通貨 "+esc(CTI.stmt.currency):"")+" ・ "+CTI.groups.length+"件</div>";
+  h+=field("口座","<select id='cti_acc'>"+list.map(function(a){
+    return "<option value='"+a.id+"'"+(a.id===cur?" selected":"")+">"+esc(a.name)+"（"+esc(a.currency||"")+"）</option>"; }).join("")+"</select>");
+  if(CTI.stmt.brokerId) h+="<label class='chk' style='margin-top:6px'><input type='checkbox' id='cti_rem' checked> この口座番号を記憶して、次回から自動で選ぶ</label>";
+  h+="<div class='btnrow' style='margin-top:14px'><button class='btn blue' onclick='ctiPickAccount()'>次へ</button><button class='btn ghost' onclick='ctiCancel()'>やめる</button></div>";
+  openModal(h);
+}
+window.ctiCancel=function(){ CTI=null; closeModal(); };
+window.ctiPickAccount=function(){
+  var sel=document.getElementById("cti_acc"); if(!sel||!sel.value) return;
+  var acc=findAccount(sel.value); if(!acc) return;
+  var rem=document.getElementById("cti_rem");
+  CTI.accountId=acc.id; CTI.remember=!!(rem&&rem.checked);
+  if(acc.currency && CTI.stmt.currency && String(acc.currency).toUpperCase()!==CTI.stmt.currency){
+    if(!confirm("CSVの通貨（"+CTI.stmt.currency+"）と口座の通貨（"+acc.currency+"）が違います。このまま続けますか？")) return;
+  }
+  openCtiLinkModal();
+};
+function ctiGroupLabel(g){
+  return "<b>"+esc(g.symbol)+"</b> "+dirTag(g.dir)+" "+g.lot.toFixed(2)+"ロット ／ "+g.entry+" → "+(g.closePrice!==null?g.closePrice:"—")+
+         " ／ <span class='"+clsSign(g.net)+"'>"+fmtSigned(g.net,2)+"</span>";
+}
+function openCtiLinkModal(){
+  var acc=findAccount(CTI.accountId); if(!acc){ CTI=null; closeModal(); return; }
+  var done=importedDealIds();
+  var open=DB.trades.filter(function(t){ return t.status==="open" && (t.accountId||currentAccountId())===CTI.accountId; });
+  var h="<h3>cTrader の履歴を紐付ける</h3>";
+  h+="<div class='smallnote' style='margin:0 0 6px'>口座「"+esc(acc.name)+"」・"+CTI.groups.length+"件。各行で、どの計画に紐付けるかを確かめて「取り込む」を押して下さい。"+
+     "入るのは事実（時刻・価格・ロット・損益・手数料）だけで、判断の欄（決済の理由など）は空のまま残ります。</div>";
+  // 同じ計画を2件の既定にしない（近い順に先着）。手で選び直すのは自由
+  var taken={};
+  CTI.groups.forEach(function(g,i){ var v=CTI.choices[i]; if(v&&v.indexOf("link:")===0) taken[v.slice(5)]=true; });
+  CTI.groups.forEach(function(g,i){
+    var already=g.dealIds.some(function(d){ return done[d]; });
+    var cands=already?[]:ctraderImport.matchCandidates(g,open);
+    if(!(i in CTI.choices)){
+      var free=cands.filter(function(c){ return !taken[c.trade.id]; });
+      CTI.choices[i]=already?"skip":(free.length?("link:"+free[0].trade.id):"new");
+      if(free.length) taken[free[0].trade.id]=true;
+    }
+    h+="<div style='padding:10px 0;border-top:1px solid var(--line)'>";
+    h+="<div style='font-size:13.5px'>"+ctiGroupLabel(g)+"</div>";
+    h+="<div class='smallnote' style='margin:2px 0 6px'>"+esc(fmtWhen(g.openedAt))+" → "+esc(fmtWhen(g.closedAt))+
+       (g.dealIds.length>1?"（"+g.dealIds.length+"回に分けて決済）":"")+"</div>";
+    if(already){ h+="<div class='smallnote'>取り込み済み</div>"; }
+    else{
+      h+="<select id='cti_c_"+i+"' onchange=\"ctiChoose("+i+",this.value)\">";
+      cands.forEach(function(c){ var t=c.trade;
+        h+="<option value='link:"+t.id+"'"+(CTI.choices[i]==="link:"+t.id?" selected":"")+">計画に紐付け："+esc(fmtWhen(t.createdAt))+" "+
+           esc(t.symbol)+" "+(isNum(t.entry)?t.entry:"—")+(isNum(t.lot)?" "+t.lot.toFixed(2)+"ロット":"")+"</option>"; });
+      h+="<option value='new'"+(CTI.choices[i]==="new"?" selected":"")+">計画なしの記録として新しく作る</option>";
+      h+="<option value='skip'"+(CTI.choices[i]==="skip"?" selected":"")+">取り込まない</option>";
+      h+="</select>";
+      if(!cands.length) h+="<div class='smallnote'>近い保有中の計画が見つかりません（同じ銘柄・方向で、価格と時刻が近いもの）</div>";
+    }
+    h+="</div>";
+  });
+  h+="<div class='btnrow' style='margin-top:14px'><button class='btn blue' onclick='ctiApply()'>取り込む</button><button class='btn ghost' onclick='ctiCancel()'>やめる</button></div>";
+  openModal(h);
+}
+window.ctiChoose=function(i,v){ if(CTI) CTI.choices[i]=v; };
+window.ctiApply=function(){
+  if(_saving||!CTI) return; _saving=true; setTimeout(function(){_saving=false;},800);
+  var acc=findAccount(CTI.accountId); if(!acc) return;
+  var nLink=0,nNew=0,nSkip=0, ts=now();
+  var accCur=String(acc.currency||acctCurrency()).toUpperCase();
+  CTI.groups.forEach(function(g,i){
+    var ch=CTI.choices[i]||"skip";
+    if(ch==="skip"){ nSkip++; return; }
+    var t=null;
+    if(ch.indexOf("link:")===0){ t=findTrade(ch.slice(5)); if(!t||t.status!=="open"){ nSkip++; return; } nLink++; }
+    else{
+      t={id:uid(), status:"open", accountId:acc.id, createdAt:g.openedAt, updatedAt:ts, savedAt:ts,
+         symbol:g.symbol, dir:g.dir, h4env:"", m15purple:"", trigger:"", pattern:"", emaPos:"", crossB:null,
+         entry:g.entry, sl:null, tp:null, lot:g.lot,
+         balanceAtEntry:(g.balance!==null?round2(g.balance-g.net):null), contractSize:toNum(DB.settings.contractSize),
+         fxRate:(accCur===acctCurrency()?fxRateFor(g.symbol):(accCur===quoteCurrencyOf(g.symbol)?1:null)),
+         acctCurrency:accCur,
+         sawLower:"", memo:"", tags:[], scenarioMode:"join", briefId:null,
+         closedAt:null, closePrice:null, realizedPL:null, fee:null, swap:null,
+         result:null, ruleOk:null, closeSawLower:null, emotion:null, reviewMemo:"", learn:"",
+         noPlan:true};
+      stampVersions(t);
+      DB.trades.unshift(t); nNew++;
+    }
+    // 事実で上書き。計画の値と違うときは計画の値を残す
+    if(isNum(toNum(t.entry)) && Math.abs(toNum(t.entry)-g.entry)>1e-9) t.plannedEntry=toNum(t.entry);
+    if(isNum(toNum(t.lot)) && Math.abs(toNum(t.lot)-g.lot)>1e-9) t.plannedLot=toNum(t.lot);
+    t.entry=g.entry; t.lot=g.lot;
+    t.closedAt=g.closedAt; t.closePrice=g.closePrice; t.realizedPL=g.net; t.fee=g.fee; t.swap=g.swap;
+    if(!t.result) t.result=g.net>0?"win":g.net<0?"lose":"be";
+    t.status="closed"; t.updatedAt=ts;
+    t.source="ctrader"; t.importedAt=ts;
+    t.brokerDealIds=(t.brokerDealIds||[]).concat(g.dealIds);
+    t.brokerOrderIds=(t.brokerOrderIds||[]).concat(g.orderIds);
+    t.needsReview=true;
+  });
+  if(CTI.remember && CTI.stmt.brokerId){
+    acc.brokerIds=Array.isArray(acc.brokerIds)?acc.brokerIds:[];
+    if(acc.brokerIds.indexOf(CTI.stmt.brokerId)<0) acc.brokerIds.push(CTI.stmt.brokerId);
+  }
+  saveData(); closeModal(); CTI=null;
+  toast("取り込みました：紐付け "+nLink+"件・新規 "+nNew+"件"+(nSkip?"・見送り "+nSkip+"件":""));
+  UI.tradeTab="closed"; render();
+};
+
 window.wipeAll=function(){
   if(!confirm("全データを削除します。よろしいですか？（1/2）")) return;
   if(!confirm("本当に削除しますか？この操作は取り消せません。（2/2）")) return;
