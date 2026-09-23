@@ -199,6 +199,10 @@ details.st .body .btn{margin-top:10px}
 .acc-row .m{font-size:11.5px;color:var(--txt3);margin-top:2px}
 .acc-row .btn{margin:0;white-space:nowrap;flex:0 0 auto}
 
+/* ---- シナリオ：PC は左に入力、右に計算が追従（2026-09-24 見本） ---- */
+.plan-side{margin-bottom:14px}
+.pc-only{display:none}
+
 /* meter */
 .meter{margin-top:9px}
 .meter .lab{display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt2);margin-bottom:5px}
@@ -482,6 +486,10 @@ html[data-theme="light"] .filterbar button.on{color:#fff}
   #app.tab-home .pair{ display:grid; grid-template-columns:1fr 1fr; gap:0 18px; align-items:start; }
   #app.tab-home .pair > div{ display:block; min-width:0; }
   .sgrid{ grid-template-columns:1fr 1fr; align-items:start; }
+  .plan{ display:grid; grid-template-columns:minmax(0,1fr) 340px; gap:0 18px; align-items:start; }
+  .plan-a,.plan-b{ grid-column:1; min-width:0; }
+  .plan-side{ grid-column:2; grid-row:1 / span 2; position:sticky; top:28px; }
+  .pc-only{ display:block; } .sp-only{ display:none; }
 
   /* トーストはサイドバーと重ならないよう右下へ */
   .toast{ left:auto; right:26px; bottom:26px; transform:none; }
@@ -2979,7 +2987,8 @@ function viewPlan(){
   // 残高・契約サイズはフォームから外したので設定＋実残高から毎回同期
   PLAN.balance=String(Math.round(currentBalance()));
   PLAN.contractSize=String(DB.settings.contractSize);
-  var h=topbar("トレード前のシナリオ");
+  var h=topbar("シナリオ");
+  h+="<div class='plan'><div class='plan-a'>";
   h+=planAccountBar();
   h+="<div class='card'>";
   h+=field("日時","<input type='datetime-local' id='p_dt' value='"+esc(PLAN.datetime)+"'>");
@@ -3009,8 +3018,8 @@ function viewPlan(){
   h+="<div class='smallnote fxline' data-sym='@plan'></div>";
   h+="</div>";
 
-  // ライブ計算
-  h+="<div id='p_calc'></div>";
+  // ライブ計算（PC では右の列に付いてくる。保存ボタンは PC では計算の下、スマホではいちばん下）
+  h+="</div><div class='plan-side'><div id='p_calc'></div><div class='pc-only'>"+planButtons()+"</div></div><div class='plan-b'>";
 
   // 環境
   h+="<div class='card'>";
@@ -3029,11 +3038,15 @@ function viewPlan(){
   h+=shotField("エントリー前スクショ（任意）","entry",PLAN.entryShot);
   h+="</div>";
 
-  h+="<div class='btnrow'><button class='btn ghost' onclick='savePlanDraft()'>下書き保存</button>"+
-     "<button class='btn primary' onclick='savePlanEntry()'>エントリーとして保存</button></div>";
-  h+="<button class='btn ghost' style='margin-top:9px' onclick='clearPlan()'>入力クリア</button>";
-  h+="<button class='btn ghost' style='margin-top:9px' onclick='gotoTab(\"rules\")'>ルールブックをひらく</button>";
+  h+="<div class='sp-only'>"+planButtons()+"</div>";
+  h+="</div></div>";
   return h;
+}
+function planButtons(){
+  return "<div class='btnrow'><button class='btn ghost' onclick='savePlanDraft()'>下書き保存</button>"+
+     "<button class='btn primary' onclick='savePlanEntry()'>エントリーとして保存</button></div>"+
+     "<button class='btn ghost' style='margin-top:9px' onclick='clearPlan()'>入力クリア</button>"+
+     "<button class='btn ghost' style='margin-top:9px' onclick='gotoTab(\"rules\")'>ルールブックをひらく</button>";
 }
 function field(label,inner,errId){
   return "<div class='field'><label>"+esc(label)+"</label>"+inner+(errId?"<div class='inline-err' id='"+errId+"' style='display:none'></div>":"")+"</div>";
