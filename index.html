@@ -851,6 +851,37 @@ function addContextFor(accountId, symbol, dir, entry, lot, excludeId){
   if(out.against && isNum(l) && isNum(out.prevLot)) out.lotUp = l>out.prevLot;
   return out;
 }
+// シナリオ＝同じ根拠でまとめた注文のかたまり。同じ口座・銘柄・方向の保有をひとつと見なす。
+function openScenarioIdFor(accountId, symbol, dir, excludeId){
+  var found=null, at=0;
+  DB.trades.forEach(function(t){
+    if(t.status!=="open"||t.id===excludeId) return;
+    if((t.accountId||currentAccountId())!==accountId||t.symbol!==symbol||t.dir!==dir) return;
+    var k=new Date(t.savedAt||t.createdAt).getTime()||0;
+    if(!found||k>=at){ found=t.scenarioId||t.id; at=k; }
+  });
+  return found;
+}
+// そのシナリオが全部SLまで行ったときの損失（いま保有しているぶん）
+function scenarioRiskOf(accountId, scenarioId){
+  var sum=0, n=0;
+  if(!scenarioId) return {loss:0, n:0};
+  DB.trades.forEach(function(t){
+    if(t.status!=="open") return;
+    if((t.accountId||currentAccountId())!==accountId) return;
+    if((t.scenarioId||t.id)!==scenarioId) return;
+    n++;
+    var c=calcTrade(t); if(isNum(c.plannedLoss)&&c.plannedLoss>0) sum+=c.plannedLoss;
+  });
+  return {loss:sum, n:n};
+}
+function stampScenario(rec){
+  var accId=rec.accountId||currentAccountId();
+  var join=(rec.scenarioMode!=="new");
+  var open=join?openScenarioIdFor(accId, rec.symbol, rec.dir, rec.id):null;
+  rec.scenarioId=open||rec.id;
+  delete rec.scenarioMode;
+}
 function stampAddContext(rec){
   var cx=addContextFor(rec.accountId||currentAccountId(), rec.symbol, rec.dir, rec.entry, rec.lot, rec.id);
   rec.addGroupN=cx.n;
@@ -2593,7 +2624,8 @@ function freshPlan(){
     h4env:"", m15purple:"", trigger:"", pattern:"", emaPos:"", crossB:"",
     entry:"", sl:"", tp:"", lot:(s.baseLot!=null?String(s.baseLot):"1.00"),
     balance:String(Math.round(currentBalance())), contractSize:String(s.contractSize),
-    sawLower:"", memo:"", tags:[], entryShot:null
+    sawLower:"", memo:"", tags:[], entryShot:null,
+    scenarioMode:"join"   // 同じ方向の保有があるとき：join＝同じシナリオに足す / new＝別のシナリオにする
   };
 }
 // 注文するときに口座を選ぶ。選んだ口座が記録先になり、次に開いたときもそのまま。
@@ -2633,6 +2665,14 @@ function viewPlan(){
   h+="<div id='p_briefhint' class='smallnote'></div>";
   h+="</div>";
 
+  var openScen=currentAccount()?openScenarioIdFor(currentAccountId(), PLAN.symbol||"XAUUSD", PLAN.dir):null;
+  if(openScen){
+    var sr=scenarioRiskOf(currentAccountId(), openScen);
+    h+="<div class='card'>";
+    h+=chipField("この注文の扱い","p_scen",[["join","同じシナリオに足す"],["new","別のシナリオにする"]],PLAN.scenarioMode||"join");
+    h+="<div class='smallnote'>直前のシナリオに "+sr.n+"件 入っています。同じ根拠で分けて入れたものは「足す」、別の根拠なら「別」。</div>";
+    h+="</div>";
+  }
   h+="<div class='card'>";
   h+=field("エントリー価格","<input type='number' inputmode='decimal' step='any' id='p_entry' value='"+esc(PLAN.entry)+"' placeholder='0.00'>","p_entry_err");
   h+="<div class='row2'>";
@@ -2760,6 +2800,17 @@ function renderPlanCalc(){
   html+=budgetRow("この損切りで 全体残り", totalRemain, pl, maxLimit);
   html+="</div>";
 
+  // シナリオ合計。同じ根拠で分けて入れたぶんを合わせて見る（1注文ではなく1シナリオで測る）
+  if(acc){
+    var sid=(PLAN.scenarioMode!=="new")?openScenarioIdFor(acc.id, PLAN.symbol||"XAUUSD", PLAN.dir):null;
+    var sr=sid?scenarioRiskOf(acc.id, sid):{loss:0,n:0};
+    var sTot=sr.loss+(isNum(pl)?pl:0), sN=sr.n+1;
+    var sBal=toNum(PLAN.balance);
+    var sPct=(isNum(sBal)&&sBal>0)?sTot/sBal*100:null;
+    var over=isNum(sPct)&&sPct>(toNum(s.internalRiskPct)||1);
+    html+=cline("このシナリオ合計（"+sN+"件）",
+      (sTot>0?"-"+fmtMoney(sTot,0):"—")+(isNum(sPct)?" <span class='"+(over?"gold":"")+"'>"+fmtPct(sPct,2)+"</span>":""));
+  }
   // 同じ方向の保有があるときだけ、直前の建値・ロットと並べる（判断は本人）
   var cx=acc?addContextFor(acc.id, PLAN.symbol||"XAUUSD", PLAN.dir, PLAN.entry, PLAN.lot):{n:0};
   if(cx.n>0){
@@ -2801,7 +2852,7 @@ window.segPick=function(group,val){
   if(group==="p_dir"){ PLAN.dir=val; render(); }
 };
 window.chipPick=function(group,val){
-  var map={p_h4:"h4env",p_m15:"m15purple",p_trig:"trigger",p_pat:"pattern",p_saw:"sawLower",p_ema:"emaPos"};
+  var map={p_h4:"h4env",p_m15:"m15purple",p_trig:"trigger",p_pat:"pattern",p_saw:"sawLower",p_ema:"emaPos",p_scen:"scenarioMode"};
   var k=map[group]; if(!k) return;
   syncPlanFromDOM();
   PLAN[k]=(PLAN[k]===val?"":val);
@@ -2849,7 +2900,7 @@ function planToRecord(status){
     // 残高と同じで、あとでレートが動いても当時のリスク率・R が揺れないよう焼き込む
     fxRate:fxRateFor(symbol),
     acctCurrency:acctCurrency(),
-    sawLower:PLAN.sawLower, memo:PLAN.memo, tags:PLAN.tags||[],
+    sawLower:PLAN.sawLower, memo:PLAN.memo, tags:PLAN.tags||[], scenarioMode:PLAN.scenarioMode||"join",
     briefId:(brief&&brief.id)||null,
     // 決済系（未設定）
     closedAt:null, closePrice:null, realizedPL:null, fee:null, swap:null,
@@ -2875,6 +2926,7 @@ window.savePlanEntry=function(){
   _saving=true; setTimeout(function(){_saving=false;},600);
   var rec=planToRecord("open");
   var shot=rec._entryShot; delete rec._entryShot;
+  stampScenario(rec);
   stampAddContext(rec);
   stampOwnStop(rec);
   stampVersions(rec);
@@ -2988,6 +3040,10 @@ function tradeCard(t,tab){
   if(isNum(t.crossB)) pills.push("クロス "+t.crossB);
   if(t.sawLower) pills.push(labelSaw(t.sawLower));
   if(t.addAgainst) pills.push("逆行中の追加"+(t.addLotUp?"・ロット増":""));
+  if(t.scenarioId){
+    var sameScen=DB.trades.filter(function(x){ return (x.scenarioId||x.id)===t.scenarioId; });
+    if(sameScen.length>1) pills.push("シナリオ "+sameScen.length+"件");
+  }
   if(t.afterOwnStop) pills.push("自分の停止ライン到達後");
   // 版番号は、いまの設定と違うときだけ出す（いつもの記録は静かなまま）
   if(t.strategyVersion && t.strategyVersion!==versionsOf().strategy) pills.push("手法 "+t.strategyVersion);
@@ -3040,7 +3096,7 @@ window.cancelTrade=function(id){ var t=findTrade(id); if(!t) return; if(!confirm
 window.reopenTrade=function(id){ var t=findTrade(id); if(!t) return; t.status="open"; t.closedAt=null; t.updatedAt=now(); saveData(); toast("保有中に戻しました"); UI.tradeTab="open"; render(); };
 window.deleteTrade=function(id){ if(!confirm("完全に削除しますか？")) return; DB.trades=DB.trades.filter(function(t){return t.id!==id;}); delete IMG[id+"_entry"]; delete IMG[id+"_exit"]; saveImg(); saveData(); toast("削除しました"); render(); };
 window.deleteDraft=function(id){ if(!confirm("下書きを削除しますか？")) return; DB.tradePlans=DB.tradePlans.filter(function(t){return t.id!==id;}); delete IMG[id+"_entry"]; saveImg(); saveData(); toast("削除しました"); render(); };
-window.promoteDraft=function(id){ var t=findDraft(id); if(!t) return; stampAddContext(t); stampOwnStop(t); stampVersions(t); t.status="open"; t.savedAt=now(); t.updatedAt=now(); DB.tradePlans=DB.tradePlans.filter(function(x){return x.id!==id;}); DB.trades.unshift(t); saveData(); toast("エントリーにしました"); UI.tradeTab="open"; render(); };
+window.promoteDraft=function(id){ var t=findDraft(id); if(!t) return; stampScenario(t); stampAddContext(t); stampOwnStop(t); stampVersions(t); t.status="open"; t.savedAt=now(); t.updatedAt=now(); DB.tradePlans=DB.tradePlans.filter(function(x){return x.id!==id;}); DB.trades.unshift(t); saveData(); toast("エントリーにしました"); UI.tradeTab="open"; render(); };
 
 /* ---------- 編集モーダル（保有中/下書き 内容編集） ---------- */
 var EDIT={};
