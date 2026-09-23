@@ -77,6 +77,7 @@ button{cursor:pointer}
 .acct .dot{width:7px;height:7px;border-radius:50%;background:var(--blue2);box-shadow:0 0 8px rgba(111,214,255,.8);flex:0 0 auto}
 .acct .acct-name{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .acct .chev{width:14px;height:14px;color:var(--txt3);flex:0 0 auto}
+.acct.back{padding:6px 12px 6px 8px;gap:5px}
 .acct:hover{border-color:color-mix(in srgb,var(--blue2) 40%,transparent)}
 .acct-menu{display:none;position:absolute;right:0;top:calc(100% + 8px);min-width:240px;background:var(--card);border:1px solid var(--line2);border-radius:12px;padding:6px;box-shadow:0 12px 40px rgba(0,0,0,.6),var(--glow-s);z-index:60}
 .acct-wrap.open .acct-menu{display:block}
@@ -232,8 +233,6 @@ html[data-theme="light"] .cal .d.p2{background:var(--blue)}
 .meter .bar{height:7px;background:var(--card2);border-radius:6px;overflow:hidden;border:1px solid var(--line)}
 .meter .fill{height:100%;border-radius:6px;transition:width .35s ease;box-shadow:var(--glow-s)}
 
-.notice{background:color-mix(in srgb,var(--gold) 14%, var(--card));border:1px solid color-mix(in srgb,var(--gold) 45%, var(--line));color:var(--txt);border-radius:var(--radius-s);padding:11px 13px;font-size:13.5px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:9px}
-.notice .dot{width:8px;height:8px;border-radius:50%;background:var(--gold);flex:0 0 auto;box-shadow:0 0 0 4px color-mix(in srgb,var(--gold) 25%, transparent)}
 
 .empty{color:var(--txt3);text-align:center;padding:34px 16px;font-size:14px}
 .empty .big{font-size:15px;color:var(--txt2);margin-bottom:4px}
@@ -497,9 +496,12 @@ html[data-theme="light"] .filterbar button.on{color:#fff;background:var(--blue)}
   nav#nav .navbrand{ display:flex; align-items:center; gap:9px; font-weight:800; font-size:16px; color:var(--txt); padding:6px 8px 22px; }
   nav#nav .navbrand .tos{ font-size:8px; color:var(--blue2); letter-spacing:.22em; font-weight:600; display:block; line-height:1; margin-top:2px; }
   nav#nav .navbrand .logo{ width:26px; height:26px; }
-  #app{ max-width:1180px; padding:28px 28px 64px; }
+  #app{ max-width:1600px; padding:28px 36px 64px; }
   .topbar{ margin:14px 0 34px; }
-  .topbar .ttl h1{ font-size:24px; }
+  .topbar .ttl h1{ font-size:26px; }
+  body{ font-size:15.5px; }
+  .tile .v{ font-size:30px; } .tile .v.long{ font-size:24px; } .tile{ min-height:120px; }
+  .tgrid .ti .v{ font-size:15.5px; }
   .topbar .sub{ font-size:12px; }
   #app.tab-home .tiles{ grid-template-columns:repeat(6,1fr); }
   #app.tab-home .tgrid{ grid-template-columns:repeat(6,1fr); }
@@ -530,11 +532,6 @@ html[data-theme="light"] .filterbar button.on{color:#fff;background:var(--blue)}
   .btn:active{ transform:none; }
 }
 
-/* ---- 広い画面（1180px 以上）ではダッシュボードを2カラムに ---- */
-@media (min-width:1180px){
-  #app.tab-home,#app.tab-growth{ max-width:1120px; }
-
-}
 </style>
 </head>
 <body>
@@ -1044,7 +1041,7 @@ var IMG={};       // {tradeId_entry:dataURL, tradeId_exit:dataURL}
 var TAB="home";
 // 4つのタブに畳んだあとの所属。ここに無いタブ（設定）はどのタブにも属さない
 var NAV_PARENT={home:"home",brief:"home",plan:"plan",rules:"plan",trades:"trades",growth:"growth"};
-var UI={ tradeTab:"open", growthPeriod:"30d", growthCustom:{from:"",to:""}, briefDate:"", acct:"", calMonth:"", calDay:"", settingsOpen:{}, tradeOpen:{} };
+var UI={ prevTab:"", tradeTab:"open", growthPeriod:"30d", growthCustom:{from:"",to:""}, briefDate:"", acct:"", calMonth:"", calDay:"", settingsOpen:{}, tradeOpen:{} };
 var _saving=false;
 
 /* ---------- ロード/セーブ ---------- */
@@ -1573,6 +1570,12 @@ function todayPL(){
    レンダリング
    ========================================================================= */
 var _renderedTab=null;   // 直前に描画したタブ。同じタブの描き直しではスクロール位置を保つ
+var _fromHistory=false;  // 「戻る」で来た描画のときは履歴を積まない
+window.addEventListener("popstate",function(e){
+  var t=(e.state&&e.state.tab)||"home";
+  if(t===TAB) return;
+  _fromHistory=true; TAB=t; try{ render(); } finally { _fromHistory=false; }
+});
 function render(){
   var app=document.getElementById("app");
   var sameTab=(_renderedTab===TAB);
@@ -1598,6 +1601,11 @@ function render(){
   Array.prototype.forEach.call(document.querySelectorAll("#nav button"),function(b){
     b.classList.toggle("on", b.getAttribute("data-tab")===navOn);
   });
+  if(!sameTab){
+    UI.prevTab=_renderedTab||"";
+    // ブラウザの「戻る」（スマホの端からのスワイプも）で前の画面に戻れるように
+    try{ if(window.history && !_fromHistory){ if(_renderedTab===null) window.history.replaceState({tab:TAB},""); else window.history.pushState({tab:TAB},""); } }catch(e){}
+  }
   _renderedTab=TAB;
   window.scrollTo(0,keepY);
   // 画面別の初期化
@@ -1616,9 +1624,12 @@ function render(){
 function topbar(sub,note){
   var gear="<button class='iconbtn' aria-label='設定' onclick='gotoTab(\"settings\")'><svg class='ic' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linejoin='round'><path d='M10.3 3.5h3.4l.5 2.3a7 7 0 0 1 1.9 1.1l2.2-.8 1.7 3-1.8 1.5a7 7 0 0 1 0 2.2l1.8 1.5-1.7 3-2.2-.8a7 7 0 0 1-1.9 1.1l-.5 2.3h-3.4l-.5-2.3a7 7 0 0 1-1.9-1.1l-2.2.8-1.7-3 1.8-1.5a7 7 0 0 1 0-2.2L4 9.1l1.7-3 2.2.8a7 7 0 0 1 1.9-1.1z'/><circle cx='12' cy='12' r='2.6'/></svg></button>";
   // 見出しが本文の主役。ロゴは PC の左メニューの上だけ（見本どおり）
+  // 設定・環境認識・ルールブックは「前の画面へ戻る」ボタン。ほかは歯車
+  var sub_=(TAB==="settings"||TAB==="brief"||TAB==="rules");
+  var back="<button class='acct back' onclick='goBack()'><svg class='chev' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round' style='transform:none'><path d='M15 18l-6-6 6-6'/></svg><span class='acct-name'>戻る</span></button>";
   return "<div class='topbar'>"+
          "<div class='ttl'><h1>"+esc(sub||"")+"</h1></div>"+
-         "<div class='tbright'>"+(note?"<span class='sub'>"+esc(note)+"</span>":"")+acctSwitcher()+gear+"</div></div>";
+         "<div class='tbright'>"+(note?"<span class='sub'>"+esc(note)+"</span>":"")+(sub_?"":acctSwitcher())+(sub_?back:gear)+"</div></div>";
 }
 // 右上の口座切り替え（押すと一覧）。今日・シナリオ・記録・分析の全部がこれに従う（記録先＝表示中）
 function acctSwitcher(){
@@ -1645,11 +1656,6 @@ function viewHome(){
   var st=currentStreak();
   var d=new Date(), wd=["日","月","火","水","木","金","土"][d.getDay()];
   var h=topbar("今日の状態", d.getFullYear()+"/"+("0"+(d.getMonth()+1)).slice(-2)+"/"+("0"+d.getDate()).slice(-2)+"（"+wd+"）");
-
-  // 連敗注意（静かに）
-  if(st.type==="lose" && st.losses>=(toNum(s.lossStreakWarn)||4)){
-    h+="<div class='notice'><span class='dot'></span>現在"+st.losses+"連敗</div>";
-  }
 
   // 並び（2026-09-24 本人決定・見本どおり）：数字タイル横1列（残高もタイル）→ 環境認識（横長）→ 保有中（横長）→ 口座の状況はいちばん下
   h+=homeTiles();
@@ -1683,7 +1689,8 @@ function homeTiles(){
   h+=tile("勝率（30日）", st30.winRate!==null?fmtPct(st30.winRate,1):"—", st30.winRate!==null?"":"muted", closed30.length?(st30.wins+"/"+(st30.wins+st30.losses)+(st30.be?"（建値 "+st30.be+"）":"")):"30日以内の決済なし");
   var streakV = st.type==="win"?(st.wins+"連勝") : st.type==="lose"?(st.losses+"連敗") : "—";
   var streakC = st.type==="win"?"" : st.type==="lose"?"neg" : "muted";
-  h+=tile("連勝・連敗", streakV, streakC, "保有中 "+openN+"件");
+  var warnN=toNum(s.lossStreakWarn)||4, warnSub=(st.type==="lose"&&st.losses>=warnN)?"注意ライン "+warnN+" に到達":"保有中 "+openN+"件";
+  h+=tile("連勝・連敗", streakV, streakC, warnSub);
   var acc=currentAccount(), tpl=acc&&findTemplate(acc.template), r=tpl&&tpl.dayReset;
   if(r){
     var at=nextResetAt(new Date(),r.tz,r.hour), rd=new Date(at);
@@ -2733,6 +2740,11 @@ window.setBriefDate=function(){
 };
 window.gotoBriefDate=function(d){ switchBriefDate(d); };
 window.gotoTab=function(t){ TAB=t; render(); };
+window.goBack=function(){
+  var to=(UI.prevTab && UI.prevTab!==TAB) ? UI.prevTab : (NAV_PARENT[TAB]||"home");
+  if(window.history && window.history.state && window.history.state.tab===to && window.history.length>1){ window.history.back(); return; }
+  TAB=to; render();
+};
 window.gotoBriefToday=function(){
   if(UI.briefDate===today() && TAB==="brief") return;
   if(TAB==="brief"){ switchBriefDate(today()); return; }
