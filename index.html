@@ -5,20 +5,28 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-<meta name="theme-color" content="#141821">
+<meta name="theme-color" content="#010204">
 <title>ぼぶる</title>
 <link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32.png">
 <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
 <style>
 :root{
-  --bg:#0f131b; --bg2:#141821; --card:#1a2029; --card2:#212936;
-  --line:#2a3341; --line2:#333e4e;
-  --txt:#eef1f6; --txt2:#aab3c2; --txt3:#6f7a8b;
-  --green:#4c9a72; --green-d:#3f8562;
-  --red:#c0605c; --red-d:#a8514d;
-  --gold:#c9a227; --blue:#4f7fd6;
-  --accent:var(--gold);
+  /* 黒 × 水色（2026-09-24 の見本） */
+  --bg:#010204; --bg2:#04070c; --card:#060910; --card2:#0b1018;
+  --line:rgba(120,190,255,.07); --line2:rgba(120,190,255,.14);
+  --txt:#f2f6fb; --txt2:#8d9bb0; --txt3:#4e5b70;
+  --green:#6fd6ff; --green-d:#3fbfe8;
+  --red:#ef6b66; --red-d:#d8544f;
+  --gold:#6fd6ff; --blue:#22b8f0; --blue2:#6fd6ff;
+  --accent:var(--blue2);
+  --card-grad:linear-gradient(160deg,#080c14 0%,#04070c 100%);
+  --tile-grad:radial-gradient(120% 90% at 0% 0%,rgba(34,184,240,.10),transparent 55%),linear-gradient(160deg,#080c14 0%,#04070c 100%);
+  --topline:linear-gradient(90deg,transparent,rgba(111,214,255,.55),transparent);
+  --glow:0 0 24px rgba(34,184,240,.30); --glow-s:0 0 12px rgba(34,184,240,.18);
+  --num-glow:0 0 18px rgba(111,214,255,.35);
+  --bg-glow:radial-gradient(900px 500px at 18% -10%,rgba(34,184,240,.07),transparent 60%);
+  --cal-up:linear-gradient(160deg,#0f4a66,#0a2f45); --cal-up-shadow:0 0 14px rgba(34,184,240,.16);
   --radius:14px; --radius-s:10px;
   --nav-h:62px; --pad:16px; --side-w:212px;
   --sat:env(safe-area-inset-top,0px);
@@ -31,13 +39,16 @@ html[data-theme="light"]{
   --txt:#1b1c1e; --txt2:#63605a; --txt3:#97938b;
   --green:#2f6f52; --green-d:#255c43;
   --red:#a8443d; --red-d:#8e3833;
-  --gold:#34527f; --blue:#34527f;
+  --gold:#34527f; --blue:#34527f; --blue2:#34527f;
+  --card-grad:#ffffff; --tile-grad:#ffffff; --topline:transparent;
+  --glow:none; --glow-s:none; --num-glow:none; --bg-glow:none;
+  --cal-up:color-mix(in srgb,var(--green) 14%,transparent); --cal-up-shadow:none;
   --theme-color:#faf9f6;
 }
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 html,body{margin:0;padding:0}
 body{
-  background:var(--bg); color:var(--txt);
+  background:var(--bg-glow),var(--bg); color:var(--txt);
   font-family:-apple-system,BlinkMacSystemFont,"Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP","Segoe UI",Roboto,sans-serif;
   font-size:15px; line-height:1.5;
   /* redesign: every digit the same width, so columns of numbers line up */
@@ -54,11 +65,14 @@ button{cursor:pointer}
 
 /* ---- app shell ---- */
 #app{max-width:640px;margin:0 auto;padding:var(--pad);padding-top:calc(var(--pad) + var(--sat));min-height:60vh}
-.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.topbar{display:flex;align-items:center;justify-content:space-between;margin:6px 0 24px}
 .topbar h1{font-size:19px;margin:0;font-weight:700;letter-spacing:.02em;display:flex;align-items:center;gap:9px}
-.logo{width:26px;height:26px;border-radius:7px;flex:0 0 auto}
+.logo{width:28px;height:28px;flex:0 0 auto}
+.topbar h1 .tos{font-size:9px;color:var(--blue2);letter-spacing:.22em;font-weight:600;display:block;line-height:1;margin-top:2px}
 .topbar .sub{font-size:11px;color:var(--txt3);font-weight:500}
 .topbar .tbright{display:flex;align-items:center;gap:8px}
+.acctsel{background:var(--card2);border:1px solid var(--line2);color:var(--txt);border-radius:9px;padding:6px 9px;font-size:12.5px;max-width:150px;text-overflow:ellipsis;font-weight:600}
+@media(max-width:480px){.topbar .sub{display:none}}
 .iconbtn{background:none;border:0;padding:5px;margin:0;color:var(--txt3);display:flex;align-items:center;border-radius:8px}
 .iconbtn .ic{width:20px;height:20px;display:block}
 .iconbtn:active{background:var(--card2)}
@@ -81,14 +95,15 @@ nav#nav button{
   padding:8px 2px 6px;font-size:10.5px;font-weight:600;letter-spacing:.02em;
 }
 nav#nav button .ic{width:22px;height:22px;display:block}
-nav#nav button.on{color:var(--accent)}
-nav#nav button.on .ic{stroke:var(--accent)}
+nav#nav button.on{color:var(--accent);text-shadow:0 0 12px rgba(111,214,255,.55)}
+nav#nav button.on .ic{stroke:var(--accent);filter:drop-shadow(0 0 5px rgba(111,214,255,.6))}
 
 /* ---- cards ---- */
-.card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:15px;margin-bottom:12px}
+.card{background:var(--card-grad);border:1px solid var(--line);border-radius:var(--radius);padding:16px;margin-bottom:14px;position:relative}
+.card::before,.stat::before,.tcard::before{content:"";position:absolute;left:14%;right:14%;top:0;height:1px;background:var(--topline);opacity:.7;pointer-events:none}
 .card.tight{padding:13px}
 .card h2{font-size:13px;color:var(--txt2);margin:0 0 11px;font-weight:600;letter-spacing:.03em}
-.sect-title{font-size:12px;color:var(--txt3);font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin:20px 2px 9px}
+.sect-title{font-size:12px;color:var(--txt3);font-weight:600;letter-spacing:.06em;text-transform:uppercase;margin:26px 2px 10px}
 .sect-title:first-child{margin-top:2px}
 
 /* ---- stat grid ---- */
@@ -97,9 +112,9 @@ nav#nav button.on .ic{stroke:var(--accent)}
 /* 桁の大きい数字でタイルが枠を押し広げ、ページごと横スクロールしないように */
 .grid2 > *,.grid3 > *{min-width:0}
 .stat .v{overflow-wrap:anywhere}
-.stat{background:var(--card2);border:1px solid var(--line);border-radius:var(--radius-s);padding:11px 12px}
-.stat .k{font-size:11px;color:var(--txt3);margin-bottom:5px;letter-spacing:.02em}
-.stat .v{font-size:20px;font-weight:700;letter-spacing:-.01em}
+.stat{background:var(--tile-grad);border:1px solid var(--line);border-radius:var(--radius);padding:14px 15px;min-height:92px;position:relative;overflow:hidden}
+.stat .k{font-size:11.5px;color:var(--txt2);margin-bottom:6px;letter-spacing:.02em}
+.stat .v{font-size:24px;font-weight:600;letter-spacing:-.01em;text-shadow:var(--num-glow)}
 .stat .v.sm{font-size:16px}
 .stat .v small{font-size:12px;color:var(--txt3);font-weight:600;margin-left:3px}
 .pos{color:var(--green)} .neg{color:var(--red)} .muted{color:var(--txt3)}
@@ -111,14 +126,16 @@ nav#nav button.on .ic{stroke:var(--accent)}
 .cal .d{min-height:46px;border-radius:8px;padding:4px 3px;text-align:center;border:1px solid transparent;background:none;color:var(--txt);font:inherit}
 .cal .d .n{font-size:11px;color:var(--txt3)}
 .cal .d .p{font-size:12px;font-weight:700;margin-top:3px;white-space:nowrap}
-.cal .d.up{background:color-mix(in srgb,var(--green) 14%,transparent);cursor:pointer}
-.cal .d.down{background:color-mix(in srgb,var(--red) 14%,transparent);cursor:pointer}
+.cal .d.up{background:var(--cal-up);box-shadow:var(--cal-up-shadow);cursor:pointer}
+.cal .d.up .n{color:var(--txt2)}
+.cal .d.down{background:none;cursor:pointer}
+.cal .d.down .p{color:var(--red)}
 .cal .d.flat{background:var(--card2);cursor:pointer}
 .cal .d.sel{border-color:var(--txt2)}
 .gold{color:var(--gold)} .blue{color:var(--blue)}
 
 .balrow{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:6px}
-.balrow .bal{font-size:32px;font-weight:700;letter-spacing:-.02em}
+.balrow .bal{font-size:34px;font-weight:600;letter-spacing:-.02em;text-shadow:var(--num-glow)}
 .balrow .cur{font-size:14px;color:var(--txt3);font-weight:600}
 .oprow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0}
 .oprow.sep{border-top:1px solid var(--line)}
@@ -130,7 +147,7 @@ nav#nav button.on .ic{stroke:var(--accent)}
 .meter{margin-top:9px}
 .meter .lab{display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt2);margin-bottom:5px}
 .meter .bar{height:7px;background:var(--card2);border-radius:6px;overflow:hidden;border:1px solid var(--line)}
-.meter .fill{height:100%;border-radius:6px;transition:width .35s ease}
+.meter .fill{height:100%;border-radius:6px;transition:width .35s ease;box-shadow:var(--glow-s)}
 
 .notice{background:color-mix(in srgb,var(--gold) 14%, var(--card));border:1px solid color-mix(in srgb,var(--gold) 45%, var(--line));color:var(--txt);border-radius:var(--radius-s);padding:11px 13px;font-size:13.5px;font-weight:600;margin-bottom:12px;display:flex;align-items:center;gap:9px}
 .notice .dot{width:8px;height:8px;border-radius:50%;background:var(--gold);flex:0 0 auto;box-shadow:0 0 0 4px color-mix(in srgb,var(--gold) 25%, transparent)}
@@ -174,7 +191,7 @@ select{appearance:none;-webkit-appearance:none;background-image:url("data:image/
 /* buttons */
 .btn{display:block;width:100%;border:1px solid var(--line2);background:var(--card2);color:var(--txt);border-radius:var(--radius-s);padding:14px;font-size:15px;font-weight:700;letter-spacing:.02em;transition:.12s}
 .btn:active{transform:translateY(1px)}
-.btn.primary{background:var(--accent);border-color:var(--accent);color:#12140c}
+.btn.primary{background:linear-gradient(135deg,var(--blue),var(--blue2));border-color:transparent;color:#03131c;box-shadow:var(--glow)}
 html[data-theme="light"] .btn.primary{color:#fff}
 .btn.blue{background:var(--blue);border-color:var(--blue);color:#fff}
 .btn.ghost{background:transparent}
@@ -263,7 +280,7 @@ html[data-theme="light"] .btn.primary{color:#fff}
 .calc .budget .bpct{color:var(--txt3);font-weight:400;font-size:11.5px}
 
 /* trade cards */
-.tcard{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);padding:14px;margin-bottom:11px}
+.tcard{background:var(--card-grad);border:1px solid var(--line);border-radius:var(--radius);padding:15px;margin-bottom:12px;position:relative}
 .tcard .th{display:flex;justify-content:space-between;align-items:center;margin-bottom:9px}
 .tcard .th .sym{font-size:16px;font-weight:700;display:flex;align-items:center;gap:8px}
 .tag-ls{font-size:11px;font-weight:700;padding:2px 8px;border-radius:6px}
@@ -394,7 +411,7 @@ html[data-theme="light"] .filterbar button.on{color:#fff}
   }
   nav#nav button .ic{ width:19px; height:19px; }
   nav#nav button:hover{ background:var(--card2); color:var(--txt2); }
-  nav#nav button.on{ background:color-mix(in srgb,var(--accent) 13%, transparent); }
+  nav#nav button.on{ background:color-mix(in srgb,var(--accent) 13%, transparent); box-shadow:inset 3px 0 0 var(--accent), var(--glow-s); text-shadow:none; }
   nav#nav button.on:hover{ color:var(--accent); }
 
   #app{ max-width:780px; padding:26px 24px 64px; }
@@ -832,6 +849,20 @@ function acctFilterBar(allowAll){
   return h;
 }
 window.setViewAcct=function(v){ UI.acct=v; render(); };
+// 分析だけ「この口座／全体」を選べる（右上の切り替えは口座だけ。全体のままシナリオを書けないように）
+function growthAcctBar(){
+  var list=(Array.isArray(DB.accounts)?DB.accounts:[]); if(list.length<2) return "";
+  var all=(UI.acct==="all"), cur=currentAccount();
+  return "<div class='filterbar'><button class='"+(all?"":"on")+"' onclick=\"setViewAcct('')\">この口座"+(cur?"（"+esc(cur.name)+"）":"")+"</button>"+
+         "<button class='"+(all?"on":"")+"' onclick=\"setViewAcct('all')\">全体（全口座）</button></div>";
+}
+// 分析で「全体」のときの初期残高＝全口座の合計
+function growthInitialBalance(){
+  var va=findAccount(viewAcctId(true));
+  if(va) return toNum(va.initialBalance)||0;
+  if(UI.acct==="all") return (Array.isArray(DB.accounts)?DB.accounts:[]).reduce(function(a,x){ return a+(toNum(x.initialBalance)||0); },0);
+  return toNum(DB.settings.initialBalance)||0;
+}
 // 追加の文脈。同じ口座・銘柄・方向の保有があるとき、直前に建てたものと比べる。
 // 現在値は要らない：買いなら前より安く、売りなら前より高く建てるのが「逆行中の追加」。
 // Funded7 は逆行するたびロットを増やす追加を禁じているので、ロットの増減も残す。
@@ -1511,9 +1542,16 @@ function render(){
 }
 
 function topbar(sub){
-  var logo="<svg class='logo' viewBox='0 0 180 180'><rect width='180' height='180' rx='40' fill='#121821'/><path d='M34 124 L69 89 L97 113 L146 56' fill='none' stroke='#089981' stroke-width='16' stroke-linecap='round' stroke-linejoin='round'/></svg>";
-  var gear="<button class='iconbtn' aria-label='設定' onclick='gotoTab(\"settings\")'><svg class='ic' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.7'><circle cx='12' cy='12' r='3'/><path d='M12 3v3M12 18v3M3 12h3M18 12h3M5.6 5.6l2.1 2.1M16.3 16.3l2.1 2.1M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1'/></svg></button>";
-  return "<div class='topbar'><h1>"+logo+esc(DB.settings.appName||"ぼぶる")+"</h1><div class='tbright'><span class='sub'>"+esc(sub||"")+"</span>"+gear+"</div></div>";
+  var logo="<svg class='logo' viewBox='0 0 30 30'><defs><linearGradient id='lg' x1='0' y1='0' x2='1' y2='1'><stop offset='0' stop-color='#6fd6ff'/><stop offset='1' stop-color='#1aa5dc'/></linearGradient></defs><rect x='1' y='1' width='28' height='28' rx='8' fill='#04070c' stroke='url(#lg)' stroke-width='1.2'/><path d='M7 20l5-6 4 4 7-9' fill='none' stroke='url(#lg)' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'/><circle cx='23' cy='9' r='1.6' fill='#6fd6ff'/></svg>";
+  var gear="<button class='iconbtn' aria-label='設定' onclick='gotoTab(\"settings\")'><svg class='ic' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='1.6' stroke-linejoin='round'><path d='M10.3 3.5h3.4l.5 2.3a7 7 0 0 1 1.9 1.1l2.2-.8 1.7 3-1.8 1.5a7 7 0 0 1 0 2.2l1.8 1.5-1.7 3-2.2-.8a7 7 0 0 1-1.9 1.1l-.5 2.3h-3.4l-.5-2.3a7 7 0 0 1-1.9-1.1l-2.2.8-1.7-3 1.8-1.5a7 7 0 0 1 0-2.2L4 9.1l1.7-3 2.2.8a7 7 0 0 1 1.9-1.1z'/><circle cx='12' cy='12' r='2.6'/></svg></button>";
+  return "<div class='topbar'><h1>"+logo+"<span>"+esc(DB.settings.appName||"ぼぶる")+"<span class='tos'>TRADE OS</span></span></h1><div class='tbright'><span class='sub'>"+esc(sub||"")+"</span>"+acctSwitcher()+gear+"</div></div>";
+}
+// 右上の口座切り替え。今日・シナリオ・記録・分析の全部がこれに従う（記録先＝表示中）
+function acctSwitcher(){
+  var list=activeAccounts(); if(list.length<2) return "";
+  var cur=currentAccountId();
+  return "<select class='acctsel' aria-label='口座' onchange='switchAccount(this.value)'>"+list.map(function(a){
+    return "<option value='"+a.id+"'"+(a.id===cur?" selected":"")+">"+esc(a.name)+"</option>"; }).join("")+"</select>";
 }
 
 /* ---------- ホーム ---------- */
@@ -1531,18 +1569,15 @@ function viewHome(){
   }
 
   h+=homeBalanceCard();
-
   h+=homeTodayStats();
-  h+="<div class='pair'>";
-  h+="<div><div class='sect-title'>環境認識</div>"+homeBriefCard()+"</div>";
-  h+="<div><div class='sect-title'>保有中</div>"+homeOpenCard()+"</div>";
-  h+="</div>";
-  // 稼働中の口座を全部並べる。記録先の口座を先頭に。
+  // 並び（2026-09-24 本人決定）：数字 → 環境認識（横長）→ 保有中 → 口座の状況はいちばん下
+  h+="<div class='sect-title'>環境認識</div>"+homeBriefCard();
+  h+="<div class='sect-title'>保有中</div>"+homeOpenCard();
   var curId=currentAccountId();
   var acts=activeAccounts().slice().sort(function(a,b){ return (b.id===curId?1:0)-(a.id===curId?1:0); });
   h+="<div class='sect-title'>口座の状況</div>";
   if(!acts.length) h+="<div class='card'><div class='empty'>稼働中の口座はありません。設定の「口座」から作れます。</div></div>";
-  acts.forEach(function(a){ h+=accountStatusCard(a); });
+  h+="<div class='pair'>"; acts.forEach(function(a){ h+="<div>"+accountStatusCard(a)+"</div>"; }); h+="</div>";
 
   if(DB.trades.length===0){
     h+="<div class='card'><div class='empty'><div class='big'>まだ記録がありません</div>シナリオタブから最初のトレードを組み立ててみて</div></div>";
@@ -3168,9 +3203,8 @@ function collectTags(tags){
 /* ---------- トレード ---------- */
 function viewTrades(){
   var h=topbar("トレード一覧");
-  h+=acctFilterBar(true);
-  var mine=DB.trades.filter(function(t){ return inViewAcct(t,true); });
-  var plans=DB.tradePlans.filter(function(t){ return inViewAcct(t,true); });
+  var mine=DB.trades.filter(function(t){ return inViewAcct(t,false); });
+  var plans=DB.tradePlans.filter(function(t){ return inViewAcct(t,false); });
   var openN=mine.filter(function(t){return t.status==="open";}).length;
   var planN=plans.length;
   var closedN=mine.filter(function(t){return t.status==="closed";}).length;
@@ -3582,7 +3616,7 @@ window.saveClose=function(id){
 /* ---------- 成長 ---------- */
 function viewGrowth(){
   var h=topbar("成長");
-  h+=acctFilterBar(false);
+  h+=growthAcctBar();
   h+=calendarCard();
   // 期間フィルタ
   h+="<div class='filterbar'>";
@@ -3596,7 +3630,7 @@ function viewGrowth(){
        field("終了","<input type='date' id='g_to' value='"+esc(UI.growthCustom.to)+"' onchange='setGrowthCustom()'>")+
        "</div></div>";
   }
-  var list=DB.trades.filter(function(t){return t.status==="closed"&&inViewAcct(t,false)&&inPeriod(t,UI.growthPeriod,UI.growthCustom);});
+  var list=DB.trades.filter(function(t){return t.status==="closed"&&inViewAcct(t,true)&&inPeriod(t,UI.growthPeriod,UI.growthCustom);});
   var s=computeStats(list);
 
   if(s.n===0){
@@ -3724,9 +3758,8 @@ function viewGrowth(){
 /* ---------- 月ごとの日別損益 ---------- */
 // 見ている口座の決済を決済日ごとにまとめる。％はその日の始まりの残高に対する増減。
 function dailyResults(){
-  var va=findAccount(viewAcctId(false));
-  var bal=va?(toNum(va.initialBalance)||0):(toNum(DB.settings.initialBalance)||0);
-  var list=DB.trades.filter(function(t){ return t.status==="closed"&&inViewAcct(t,false); })
+  var bal=growthInitialBalance();
+  var list=DB.trades.filter(function(t){ return t.status==="closed"&&inViewAcct(t,true); })
     .sort(function(a,b){ return new Date(a.closedAt||a.createdAt)-new Date(b.closedAt||b.createdAt); });
   var days={}, order=[];
   list.forEach(function(t){
@@ -3736,6 +3769,7 @@ function dailyResults(){
     days[d].trades.push(t);
   });
   order.forEach(function(d){ var x=days[d]; x.pct=x.start>0?x.pl/x.start*100:null; });
+  var va=findAccount(viewAcctId(true));
   return {days:days, order:order, currency:va?(va.currency||""):(DB.settings.currency||"")};
 }
 function calendarCard(){
@@ -4035,7 +4069,7 @@ window.saveAccountRules=function(id){
 };
 window.switchAccount=function(id){
   var a=findAccount(id); if(!a) return;
-  applyAccountToSettings(a); saveData();
+  applyAccountToSettings(a); UI.acct=""; saveData();
   toast("「"+a.name+"」に切り替えました"); render();
 };
 window.addAccount=function(){
@@ -4552,7 +4586,7 @@ function hexA(c,a){
 function abbr(v){ var a=Math.abs(v); if(a>=1000000) return (v/1000000).toFixed(1)+"M"; if(a>=1000) return Math.round(v/1000)+"k"; return Math.round(v).toString(); }
 
 function drawGrowthCharts(){
-  var list=DB.trades.filter(function(t){return t.status==="closed"&&inViewAcct(t,false)&&inPeriod(t,UI.growthPeriod,UI.growthCustom);})
+  var list=DB.trades.filter(function(t){return t.status==="closed"&&inViewAcct(t,true)&&inPeriod(t,UI.growthPeriod,UI.growthCustom);})
     .sort(function(a,b){return new Date(a.closedAt||a.createdAt)-new Date(b.closedAt||b.createdAt);});
   if(!list.length) return;
   // 累積損益
@@ -4563,7 +4597,7 @@ function drawGrowthCharts(){
   if(cr){ var cumR=0; var ptsR=[{x:0,y:0}]; list.forEach(function(t,i){ var c=calcTrade(t); if(isNum(c.realizedR)) cumR+=c.realizedR; ptsR.push({x:i+1,y:cumR}); }); drawLineChart(cr,chartH(150),ptsR,cssVar("--blue"),{fmt:function(v){return v.toFixed(1)+"R";}}); }
   // 口座残高推移
   var ce=document.getElementById("c_equity");
-  if(ce){ var va=findAccount(viewAcctId(false)); var init=va?(toNum(va.initialBalance)||0):(toNum(DB.settings.initialBalance)||0); var eq=init; var ptsE=[{x:0,y:init}]; list.forEach(function(t,i){ var pl=toNum(t.realizedPL); if(isNum(pl)) eq+=pl; ptsE.push({x:i+1,y:eq}); }); drawLineChart(ce,chartH(150),ptsE,cssVar("--green"),{baseline0:false,fmt:function(v){return abbr(v);}}); }
+  if(ce){ var init=growthInitialBalance(); var eq=init; var ptsE=[{x:0,y:init}]; list.forEach(function(t,i){ var pl=toNum(t.realizedPL); if(isNum(pl)) eq+=pl; ptsE.push({x:i+1,y:eq}); }); drawLineChart(ce,chartH(150),ptsE,cssVar("--green"),{baseline0:false,fmt:function(v){return abbr(v);}}); }
   // パターン別平均R
   var cpr=document.getElementById("c_patr");
   if(cpr){
@@ -4594,7 +4628,7 @@ function applyTheme(){
     document.documentElement.setAttribute("data-theme", t==="light"?"light":"dark");
   }
   var mc=document.querySelector('meta[name=theme-color]');
-  if(mc) mc.setAttribute("content", document.documentElement.getAttribute("data-theme")==="light"?"#f6f7fa":"#141821");
+  if(mc) mc.setAttribute("content", document.documentElement.getAttribute("data-theme")==="light"?"#f6f7fa":"#010204");
 }
 
 /* ---------- 起動 ---------- */
