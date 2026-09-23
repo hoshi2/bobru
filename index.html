@@ -4285,7 +4285,7 @@ function openCtiAccountModal(){
   if(!list.length){ toast("稼働中の口座がありません"); CTI=null; return; }
   var h="<h3>どの口座の履歴ですか？</h3>";
   h+="<div class='smallnote' style='margin:0 0 10px'>ファイル "+esc(CTI.fileName)+
-     (CTI.stmt.brokerId?"（cTrader 口座番号 "+esc(CTI.stmt.brokerId)+"）":"")+
+     (CTI.stmt.brokerId?"（"+(CTI.stmt.platform==="mt5"?"MT5":"cTrader")+" 口座番号 "+esc(CTI.stmt.brokerId)+"）":"")+
      (CTI.stmt.currency?" ・ 通貨 "+esc(CTI.stmt.currency):"")+" ・ "+CTI.groups.length+"件</div>";
   h+=field("口座","<select id='cti_acc'>"+list.map(function(a){
     return "<option value='"+a.id+"'"+(a.id===cur?" selected":"")+">"+esc(a.name)+"（"+esc(a.currency||"")+"）</option>"; }).join("")+"</select>");
