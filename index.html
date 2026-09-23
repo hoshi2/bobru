@@ -156,17 +156,8 @@ nav#nav button.on .ic{stroke:var(--accent);filter:drop-shadow(0 0 5px rgba(111,2
 /* 月ごとの日別損益 */
 .calnav{display:flex;align-items:center;justify-content:space-between;margin:0 0 6px}
 .calnav button{background:none;border:0;color:var(--txt2);font-size:20px;padding:4px 12px;cursor:pointer}
-.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
 .cal .wd{font-size:11px;color:var(--txt3);text-align:center;padding:2px 0}
-.cal .d{min-height:46px;border-radius:8px;padding:4px 3px;text-align:center;border:1px solid transparent;background:none;color:var(--txt);font:inherit}
-.cal .d .n{font-size:11px;color:var(--txt3)}
-.cal .d .p{font-size:12px;font-weight:700;margin-top:3px;white-space:nowrap}
-.cal .d.up{background:var(--cal-up);box-shadow:var(--cal-up-shadow);cursor:pointer}
-.cal .d.up .n{color:var(--txt2)}
-.cal .d.down{background:none;cursor:pointer}
-.cal .d.down .p{color:var(--red)}
-.cal .d.flat{background:var(--card2);cursor:pointer}
-.cal .d.sel{border-color:var(--txt2)}
+.cal .d.up,.cal .d.down,.cal .d.flat{cursor:pointer}
 .gold{color:var(--gold)} .blue{color:var(--blue)}
 
 .balrow{display:flex;align-items:baseline;justify-content:space-between;flex-wrap:wrap;gap:6px}
@@ -202,6 +193,46 @@ details.st .body .btn{margin-top:10px}
 /* ---- シナリオ：PC は左に入力、右に計算が追従（2026-09-24 見本） ---- */
 .plan-side{margin-bottom:14px}
 .pc-only{display:none}
+
+/* ---- 記録：PC は表（行を押すと詳細）、スマホはカード（2026-09-24 見本） ---- */
+.rtable{display:none}
+.ttable{width:100%;border-collapse:collapse;font-size:13px;font-variant-numeric:tabular-nums}
+.ttable th{text-align:left;font-weight:600;color:var(--txt3);font-size:11.5px;padding:8px 8px;border-bottom:1px solid var(--line);white-space:nowrap}
+.ttable td{padding:10px 8px;border-bottom:1px solid var(--line);vertical-align:middle}
+.ttable td.r,.ttable th.r{text-align:right;white-space:nowrap}
+.ttable tr.trow{cursor:pointer}
+.ttable tr.trow:hover td{background:var(--card2)}
+.ttable tr.trow.open td{border-bottom-color:transparent}
+.ttable tr.tdetail td{padding:0 0 12px;background:none}
+.ttable tr.tdetail .tcard{margin:0;border-color:var(--line2)}
+.ttable .chev{width:16px;height:16px;color:var(--txt3);transition:transform .15s;vertical-align:middle}
+.ttable tr.open .chev{transform:rotate(180deg)}
+.ttable .tmeta{margin:0;gap:4px}
+.ttable .tmeta .pill{font-size:10.5px;padding:2px 7px}
+
+/* ---- 分析：期間＋この口座／全体、タイル横1列、カレンダーは月曜始まり＋週の枠 ---- */
+.filterrow{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:12px}
+.filterrow .filterbar{margin-bottom:0}
+.scope{display:inline-flex;border:1px solid var(--line2);border-radius:20px;padding:2px;background:var(--card2);flex:0 0 auto}
+.scope button{background:none;border:0;color:var(--txt3);font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:16px}
+.scope button.on{background:color-mix(in srgb,var(--blue) 12%,transparent);color:var(--blue2)}
+.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr)) minmax(0,1.15fr);gap:5px}
+.cal .d{min-height:54px;border-radius:9px;padding:6px 6px;text-align:left;border:1px solid var(--line);background:#05080e;color:var(--txt);font:inherit;display:flex;flex-direction:column;justify-content:space-between;font-size:11.5px}
+html[data-theme="light"] .cal .d{background:var(--card)}
+.cal .d.off{border-color:transparent;background:none}
+.cal .d .n{font-size:11px;color:var(--txt3);font-weight:700}
+.cal .d .p{font-size:11.5px;font-weight:700;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal .d.p1{background:var(--cal-up);border-color:color-mix(in srgb,var(--blue2) 35%,transparent);box-shadow:var(--cal-up-shadow)}
+.cal .d.p2{background:linear-gradient(160deg,#1aa5dc,#0d5f85);border-color:var(--blue2);box-shadow:var(--glow)}
+.cal .d.p1 .n,.cal .d.p2 .n,.cal .d.p1 .p,.cal .d.p2 .p{color:#e8f0ff}
+html[data-theme="light"] .cal .d.p2{background:var(--blue);color:#fff}
+.cal .d.down .p{color:var(--red)}
+.cal .d.flat{background:var(--card2)}
+.cal .d.sel{outline:1px solid var(--blue2);outline-offset:-1px}
+.cal .d.today{outline:1px solid var(--blue2);outline-offset:-1px;box-shadow:0 0 12px rgba(34,184,240,.35)}
+.cal .w{min-height:54px;background:var(--card2);border:1px dashed var(--line2);border-radius:9px;padding:6px 7px;font-size:11px;color:var(--txt2);display:flex;flex-direction:column;justify-content:space-between}
+.cal .w .pl{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal .w .s{color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* meter */
 .meter{margin-top:9px}
@@ -444,8 +475,8 @@ html[data-theme="light"] .btn.primary{color:#fff}
 .selectwrap{position:relative}
 .filterbar{display:flex;gap:6px;overflow-x:auto;margin-bottom:12px;padding-bottom:2px}
 .filterbar button{white-space:nowrap;background:var(--card);border:1px solid var(--line);color:var(--txt2);border-radius:20px;padding:7px 13px;font-size:12.5px;font-weight:600}
-.filterbar button.on{background:var(--accent);border-color:var(--accent);color:#12140c}
-html[data-theme="light"] .filterbar button.on{color:#fff}
+.filterbar button.on{background:color-mix(in srgb,var(--blue) 12%,transparent);border-color:var(--blue);color:var(--blue2)}
+html[data-theme="light"] .filterbar button.on{color:#fff;background:var(--blue)}
 
 /* =========================================================================
    PC レイアウト（900px 以上）
@@ -490,6 +521,11 @@ html[data-theme="light"] .filterbar button.on{color:#fff}
   .plan-a,.plan-b{ grid-column:1; min-width:0; }
   .plan-side{ grid-column:2; grid-row:1 / span 2; position:sticky; top:28px; }
   .pc-only{ display:block; } .sp-only{ display:none; }
+  .rtable{ display:block; } .rcards{ display:none; }
+  #app.tab-growth .chartgrid,#app.tab-growth .tablegrid{ display:grid; grid-template-columns:1fr 1fr; gap:0 16px; align-items:start; }
+  #app.tab-growth .chartgrid > .card,#app.tab-growth .tablegrid > .card{ min-width:0; }
+  #app.tab-growth .tiles{ grid-template-columns:repeat(6,1fr); }
+  .cal .d,.cal .w{ min-height:78px; }
 
   /* トーストはサイドバーと重ならないよう右下へ */
   .toast{ left:auto; right:26px; bottom:26px; transform:none; }
@@ -509,11 +545,6 @@ html[data-theme="light"] .filterbar button.on{color:#fff}
 @media (min-width:1180px){
   #app.tab-home,#app.tab-growth{ max-width:1120px; }
 
-  /* 成長: グラフと集計表を2列に */
-  #app.tab-growth .chartgrid,
-  #app.tab-growth .tablegrid{ display:grid; grid-template-columns:1fr 1fr; gap:0 16px; align-items:start; }
-  #app.tab-growth .chartgrid > .card,
-  #app.tab-growth .tablegrid > .card{ min-width:0; }
 }
 </style>
 </head>
@@ -918,8 +949,8 @@ window.setViewAcct=function(v){ UI.acct=v; render(); };
 function growthAcctBar(){
   var list=(Array.isArray(DB.accounts)?DB.accounts:[]); if(list.length<2) return "";
   var all=(UI.acct==="all"), cur=currentAccount();
-  return "<div class='filterbar'><button class='"+(all?"":"on")+"' onclick=\"setViewAcct('')\">この口座"+(cur?"（"+esc(cur.name)+"）":"")+"</button>"+
-         "<button class='"+(all?"on":"")+"' onclick=\"setViewAcct('all')\">全体（全口座）</button></div>";
+  return "<div class='scope'><button class='"+(all?"":"on")+"' onclick=\"setViewAcct('')\">この口座</button>"+
+         "<button class='"+(all?"on":"")+"' onclick=\"setViewAcct('all')\">全体</button></div>";
 }
 // 分析で「全体」のときの初期残高＝全口座の合計
 function growthInitialBalance(){
@@ -1037,7 +1068,7 @@ var IMG={};       // {tradeId_entry:dataURL, tradeId_exit:dataURL}
 var TAB="home";
 // 4つのタブに畳んだあとの所属。ここに無いタブ（設定）はどのタブにも属さない
 var NAV_PARENT={home:"home",brief:"home",plan:"plan",rules:"plan",trades:"trades",growth:"growth"};
-var UI={ tradeTab:"open", growthPeriod:"30d", growthCustom:{from:"",to:""}, briefDate:"", acct:"", calMonth:"", calDay:"", settingsOpen:{} };
+var UI={ tradeTab:"open", growthPeriod:"30d", growthCustom:{from:"",to:""}, briefDate:"", acct:"", calMonth:"", calDay:"", settingsOpen:{}, tradeOpen:{} };
 var _saving=false;
 
 /* ---------- ロード/セーブ ---------- */
@@ -3278,8 +3309,8 @@ function collectTags(tags){
 
 /* ---------- トレード ---------- */
 function viewTrades(){
-  var h=topbar("トレード一覧");
   var mine=DB.trades.filter(function(t){ return inViewAcct(t,false); });
+  var h=topbar("記録", "決済済み "+mine.filter(function(t){return t.status==="closed";}).length+"件");
   var plans=DB.tradePlans.filter(function(t){ return inViewAcct(t,false); });
   var openN=mine.filter(function(t){return t.status==="open";}).length;
   var planN=plans.length;
@@ -3302,9 +3333,46 @@ function viewTrades(){
     h+="<div class='card'><div class='empty'>"+esc(msg)+"</div></div>";
     return h;
   }
-  list.forEach(function(t){ h+=tradeCard(t, UI.tradeTab); });
+  // PC：表（行を押すと詳細カードが開く）。スマホ：カード
+  h+=tradeTable(list, UI.tradeTab);
+  h+="<div class='rcards'>"; list.forEach(function(t){ h+=tradeCard(t, UI.tradeTab); }); h+="</div>";
   return h;
 }
+function tradeTable(list,tab){
+  var closed=(tab==="closed");
+  var cols=closed?["日時","銘柄","エントリー → 決済","ロット","損益","R","保有","印",""]:["日時","銘柄","エントリー","SL","TP","ロット","予定損失","RR","印",""];
+  var h="<div class='rtable card' style='padding:6px 8px'><table class='ttable'><thead><tr>";
+  cols.forEach(function(c,i){ var right=closed?(i>=2&&i<=5):(i>=2&&i<=7); h+="<th"+(right?" class='r'":"")+">"+esc(c)+"</th>"; });
+  h+="</tr></thead><tbody>";
+  var chev="<svg class='chev' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg>";
+  list.forEach(function(t){
+    var c=calcTrade(t), open=!!(UI.tradeOpen&&UI.tradeOpen[t.id]);
+    var pills=tradePills(t).slice(0,3);
+    var when=fmtWhen(closed?(t.closedAt||t.createdAt):t.createdAt).slice(5);
+    h+="<tr class='trow"+(open?" open":"")+"' onclick=\"toggleTradeRow('"+t.id+"')\">";
+    h+="<td class='muted' style='white-space:nowrap'>"+esc(when)+"</td>";
+    h+="<td><b>"+esc(t.symbol||"")+"</b> "+dirTag(t.dir)+"</td>";
+    if(closed){
+      h+="<td class='r'>"+(isNum(t.entry)?fmtMoney(t.entry,2):"—")+" → "+(isNum(toNum(t.closePrice))?fmtMoney(toNum(t.closePrice),2):"—")+"</td>";
+      h+="<td class='r'>"+(isNum(t.lot)?t.lot.toFixed(2):"—")+"</td>";
+      var pl=toNum(t.realizedPL);
+      h+="<td class='r "+(isNum(pl)?clsSign(pl):"muted")+"'>"+(isNum(pl)?fmtSigned(pl):"—")+"</td>";
+      h+="<td class='r "+(isNum(c.realizedR)?clsSign(c.realizedR):"muted")+"'>"+(isNum(c.realizedR)?fmtR(c.realizedR):"—")+"</td>";
+      var hm=holdMinutes(t); h+="<td style='white-space:nowrap'>"+(isNum(hm)?esc(fmtHold(hm)):"—")+"</td>";
+    }else{
+      h+="<td class='r'>"+(isNum(t.entry)?fmtMoney(t.entry,2):"—")+"</td><td class='r'>"+(isNum(t.sl)?fmtMoney(t.sl,2):"—")+"</td><td class='r'>"+(isNum(t.tp)?fmtMoney(t.tp,2):"—")+"</td>";
+      h+="<td class='r'>"+(isNum(t.lot)?t.lot.toFixed(2):"—")+"</td>";
+      h+="<td class='r neg'>"+(isNum(c.plannedLoss)?("-"+fmtMoney(c.plannedLoss)):"—")+"</td>";
+      h+="<td class='r'>"+(isNum(c.rr)?("1 : "+c.rr.toFixed(2)):"—")+"</td>";
+    }
+    h+="<td><div class='tmeta'>"+pills.map(function(p){return "<span class='pill'>"+esc(p)+"</span>";}).join("")+"</div></td>";
+    h+="<td class='r'>"+chev+"</td></tr>";
+    if(open) h+="<tr class='tdetail'><td colspan='"+cols.length+"'>"+tradeCard(t,tab)+"</td></tr>";
+  });
+  h+="</tbody></table></div>";
+  return h;
+}
+window.toggleTradeRow=function(id){ if(!UI.tradeOpen) UI.tradeOpen={}; UI.tradeOpen[id]=!UI.tradeOpen[id]; render(); };
 function tradeTabBtn(key,label,cnt){
   return "<button class='"+(UI.tradeTab===key?"on":"")+"' onclick=\"setTradeTab('"+key+"')\">"+esc(label)+"<span class='cnt'>"+cnt+"</span></button>";
 }
@@ -3339,32 +3407,8 @@ function labelResult(v){ return {win:"勝ち",lose:"負け",be:"建値"}[v]||"";
 function fmtWhen(iso){ if(!iso) return ""; var d=new Date(iso); if(isNaN(d)) return "";
   return d.getFullYear()+"/"+("0"+(d.getMonth()+1)).slice(-2)+"/"+("0"+d.getDate()).slice(-2)+" "+("0"+d.getHours()).slice(-2)+":"+("0"+d.getMinutes()).slice(-2); }
 
-function tradeCard(t,tab){
-  var c=calcTrade(t);
-  var h="<div class='tcard'>";
-  h+="<div class='th'><div class='sym'>"+esc(t.symbol)+" "+dirTag(t.dir)+
-     (isNum(c.rr)?"<span class='tag-rr'>RR 1:"+c.rr.toFixed(2)+"</span>":"")+
-     "</div><div class='when'>"+fmtWhen(t.createdAt)+"</div></div>";
-  h+="<div class='tgrid'>";
-  h+=ti("エントリー", isNum(t.entry)?t.entry:"—");
-  h+=ti("SL", isNum(t.sl)?t.sl:"—");
-  h+=ti("TP", isNum(t.tp)?t.tp:"—");
-  h+=ti("ロット", isNum(t.lot)?t.lot.toFixed(2):"—");
-  h+=ti("予定損失", isNum(c.plannedLoss)?("<span class='neg'>-"+fmtMoney(c.plannedLoss)+"</span>"):"—");
-  h+=ti("予定利益", isNum(c.plannedProfit)?("<span class='pos'>+"+fmtMoney(c.plannedProfit)+"</span>"):"—");
-  h+="</div>";
-  if(t.status==="open"){ var rc=resetClock(t,true); if(rc) h+="<div class='smallnote tabular' style='margin:6px 0 0'>"+rc+"</div>"; }
-
-  // 決済済みは実現も表示
-  if(t.status==="closed"){
-    h+="<div class='tgrid'>";
-    h+=ti("結果", "<span class='"+(t.result==="win"?"pos":t.result==="lose"?"neg":"muted")+"'>"+labelResult(t.result)+"</span>");
-    h+=ti("実現損益", isNum(toNum(t.realizedPL))?("<span class='"+clsSign(toNum(t.realizedPL))+"'>"+fmtSigned(toNum(t.realizedPL))+"</span>"):"—");
-    h+=ti("実現R", isNum(c.realizedR)?("<span class='"+clsSign(c.realizedR)+"'>"+fmtR(c.realizedR)+"</span>"):"—");
-    h+="</div>";
-  }
-
-  // メタ pill
+// 記録に付く印（表とカードで共用）
+function tradePills(t){
   var pills=[];
   // 換算レートを持たない古い記録は建値通貨のまま。取り違えないよう印をつける
   if(tradeCurrency(t)!==acctCurrency()) pills.push(tradeCurrency(t)+"建て");
@@ -3396,6 +3440,34 @@ function tradeCard(t,tab){
   if(t.status==="closed"&&t.ruleOk) pills.push(labelRule(t.ruleOk));
   if(t.status==="closed"&&Array.isArray(t.deviations)) t.deviations.forEach(function(d){ var l=labelDeviation(d); if(l) pills.push(l); });
   if(t.status==="closed"&&t.emotion) pills.push(labelEmotion(t.emotion));
+  return pills;
+}
+function tradeCard(t,tab){
+  var c=calcTrade(t);
+  var h="<div class='tcard'>";
+  h+="<div class='th'><div class='sym'>"+esc(t.symbol)+" "+dirTag(t.dir)+
+     (isNum(c.rr)?"<span class='tag-rr'>RR 1:"+c.rr.toFixed(2)+"</span>":"")+
+     "</div><div class='when'>"+fmtWhen(t.createdAt)+"</div></div>";
+  h+="<div class='tgrid'>";
+  h+=ti("エントリー", isNum(t.entry)?t.entry:"—");
+  h+=ti("SL", isNum(t.sl)?t.sl:"—");
+  h+=ti("TP", isNum(t.tp)?t.tp:"—");
+  h+=ti("ロット", isNum(t.lot)?t.lot.toFixed(2):"—");
+  h+=ti("予定損失", isNum(c.plannedLoss)?("<span class='neg'>-"+fmtMoney(c.plannedLoss)+"</span>"):"—");
+  h+=ti("予定利益", isNum(c.plannedProfit)?("<span class='pos'>+"+fmtMoney(c.plannedProfit)+"</span>"):"—");
+  h+="</div>";
+  if(t.status==="open"){ var rc=resetClock(t,true); if(rc) h+="<div class='smallnote tabular' style='margin:6px 0 0'>"+rc+"</div>"; }
+
+  // 決済済みは実現も表示
+  if(t.status==="closed"){
+    h+="<div class='tgrid'>";
+    h+=ti("結果", "<span class='"+(t.result==="win"?"pos":t.result==="lose"?"neg":"muted")+"'>"+labelResult(t.result)+"</span>");
+    h+=ti("実現損益", isNum(toNum(t.realizedPL))?("<span class='"+clsSign(toNum(t.realizedPL))+"'>"+fmtSigned(toNum(t.realizedPL))+"</span>"):"—");
+    h+=ti("実現R", isNum(c.realizedR)?("<span class='"+clsSign(c.realizedR)+"'>"+fmtR(c.realizedR)+"</span>"):"—");
+    h+="</div>";
+  }
+
+  var pills=tradePills(t);
   if(pills.length){ h+="<div class='tmeta'>"+pills.map(function(p){return "<span class='pill'>"+esc(p)+"</span>";}).join("")+"</div>"; }
 
   var memo = t.status==="closed" ? [t.reviewMemo,t.learn?("学び: "+t.learn):""].filter(Boolean).join("\n") : t.memo;
@@ -3691,15 +3763,14 @@ window.saveClose=function(id){
 
 /* ---------- 成長 ---------- */
 function viewGrowth(){
-  var h=topbar("成長");
-  h+=growthAcctBar();
-  h+=calendarCard();
-  // 期間フィルタ
-  h+="<div class='filterbar'>";
+  var month=UI.calMonth||today().slice(0,7);
+  var h=topbar("分析", (+month.slice(0,4))+"年"+(+month.slice(5,7))+"月");
+  // 期間フィルタ（左）＋ この口座／全体（右）
+  h+="<div class='filterrow'><div class='filterbar'>";
   [["today","今日"],["7d","7日"],["30d","30日"],["month","今月"],["all","全期間"],["custom","期間指定"]].forEach(function(p){
     h+="<button class='"+(UI.growthPeriod===p[0]?"on":"")+"' onclick=\"setGrowthPeriod('"+p[0]+"')\">"+esc(p[1])+"</button>";
   });
-  h+="</div>";
+  h+="</div>"+growthAcctBar()+"</div>";
   if(UI.growthPeriod==="custom"){
     h+="<div class='card tight'><div class='row2'>"+
        field("開始","<input type='date' id='g_from' value='"+esc(UI.growthCustom.from)+"' onchange='setGrowthCustom()'>")+
@@ -3711,36 +3782,32 @@ function viewGrowth(){
 
   if(s.n===0){
     h+="<div class='card'><div class='empty'>この期間の決済記録はありません</div></div>";
+    h+="<div class='sect-title'>日ごとの結果</div>"+calendarCard();
     return h;
   }
 
-  h+="<div class='card'><h2>サンプル数："+s.n+"</h2>";
-  h+="<div class='grid3'>";
-  h+=stat("勝ち","<span class='pos tabular'>"+s.wins+"</span>",true);
-  h+=stat("負け","<span class='neg tabular'>"+s.losses+"</span>",true);
-  h+=stat("建値","<span class='muted tabular'>"+s.be+"</span>",true);
+  // 統計タイル（横1列×2段）
+  var tile=function(k,v,cls,sub){ var plain=String(v).replace(/<[^>]*>/g,""); return "<div class='tile'><div class='k'>"+esc(k)+"</div><div class='v tabular "+(cls||"")+(plain.length>=9?" long":"")+"'>"+v+"</div>"+(sub?"<div class='s'>"+sub+"</div>":"")+"</div>"; };
+  var init=growthInitialBalance();
+  var holds=list.map(holdMinutes).filter(isNum).sort(function(a,b){return a-b;});
+  var med=holds.length?holds[Math.floor(holds.length/2)]:null, under5=holds.filter(function(m){return m<5;}).length;
+  h+="<div class='tiles'>";
+  h+=tile("純損益", fmtSigned(s.netPL), clsSign(s.netPL), s.n+"件");
+  h+=tile("勝率", s.winRate!==null?fmtPct(s.winRate,1):"—", s.winRate!==null?"":"muted", s.wins+" / "+s.n+(s.be?"（建値 "+s.be+"）":""));
+  h+=tile("PF", s.pf!==null?s.pf.toFixed(2):"—", s.pf!==null?"plain":"muted", "利益 ÷ 損失");
+  h+=tile("平均R", s.avgR!==null?fmtR(s.avgR):"—", s.avgR!==null?clsSign(s.avgR):"muted", "純R "+fmtR(s.netR));
+  var ddPct=init>0?s.maxDD/init*100:null;
+  h+=tile("最大DD", s.maxDD>0?("−"+(isNum(ddPct)?fmtPct(ddPct,ddPct<0.1?2:1):fmtMoney(s.maxDD))):"0", s.maxDD>0?"neg":"muted", s.maxDD>0&&isNum(ddPct)?"−"+fmtMoney(s.maxDD):"");
+  h+=tile("保有の中央値", isNum(med)?esc(fmtHold(med)):"—", isNum(med)?"plain":"muted", "5分未満 "+under5+"件");
   h+="</div>";
-  h+="<div class='grid3' style='margin-top:10px'>";
-  h+=stat("勝率", s.winRate!==null?("<span class='tabular'>"+fmtPct(s.winRate,1)+"</span>"):"—",true);
-  h+=stat("PF", s.pf!==null?("<span class='tabular'>"+s.pf.toFixed(2)+"</span>"):"<span class='muted'>—</span>",true);
-  h+=stat("ルール遵守率", s.ruleRate!==null?("<span class='tabular'>"+fmtPct(s.ruleRate,0)+"</span>"):"—",true);
-  h+="</div></div>";
-
-  h+="<div class='card'>";
-  h+="<div class='grid2'>";
-  h+=stat("純損益","<span class='"+clsSign(s.netPL)+" tabular'>"+fmtSigned(s.netPL)+"</span>");
-  h+=stat("純R","<span class='"+clsSign(s.netR)+" tabular'>"+fmtR(s.netR)+"</span>");
+  h+="<div class='tiles'>";
+  h+=tile("ルール遵守率", s.ruleRate!==null?fmtPct(s.ruleRate,0):"—", s.ruleRate!==null?"plain":"muted", "");
+  h+=tile("平均利益", s.avgWin!==null?("+"+fmtMoney(s.avgWin)):"—", s.avgWin!==null?"pos":"muted", "");
+  h+=tile("平均損失", s.avgLoss!==null?("−"+fmtMoney(s.avgLoss)):"—", s.avgLoss!==null?"neg":"muted", "");
+  h+=tile("最大連勝", s.maxWinStreak, "plain", "");
+  h+=tile("最大連敗", s.maxLossStreak, s.maxLossStreak>0?"neg":"muted", "");
+  h+=tile("勝ち・負け", s.wins+" / "+s.losses, "plain", "");
   h+="</div>";
-  h+="<div class='grid3' style='margin-top:10px'>";
-  h+=stat("平均R", s.avgR!==null?("<span class='"+clsSign(s.avgR)+" tabular'>"+fmtR(s.avgR)+"</span>"):"—",true);
-  h+=stat("平均利益", s.avgWin!==null?("<span class='pos tabular'>+"+fmtMoney(s.avgWin)+"</span>"):"—",true);
-  h+=stat("平均損失", s.avgLoss!==null?("<span class='neg tabular'>-"+fmtMoney(s.avgLoss)+"</span>"):"—",true);
-  h+="</div>";
-  h+="<div class='grid3' style='margin-top:10px'>";
-  h+=stat("最大DD","<span class='neg tabular'>"+(s.maxDD>0?"-"+fmtMoney(s.maxDD):"0")+"</span>",true);
-  h+=stat("最大連勝","<span class='pos tabular'>"+s.maxWinStreak+"</span>",true);
-  h+=stat("最大連敗","<span class='neg tabular'>"+s.maxLossStreak+"</span>",true);
-  h+="</div></div>";
 
   // グラフ（PCの広い画面では2列に並ぶ）
   h+="<div class='chartgrid'>";
@@ -3750,6 +3817,8 @@ function viewGrowth(){
   h+="<div class='card'><h2>パターン別 平均R</h2><div class='chartbox'><canvas id='c_patr' height='150'></canvas></div><div id='c_patr_lab' class='chartlab'></div></div>";
   h+="<div class='card'><h2>4時間足環境別 平均R</h2><div class='chartbox'><canvas id='c_h4r' height='150'></canvas></div><div id='c_h4r_lab' class='chartlab'></div></div>";
   h+="</div>";
+  // 日ごとの結果（月曜始まり・週の枠つき）
+  h+="<div class='sect-title'>日ごとの結果</div>"+calendarCard();
 
   // 分類別集計テーブル（PCの広い画面では2列に並ぶ）
   h+="<div class='sect-title'>分類別 集計</div>";
@@ -3850,11 +3919,11 @@ function dailyResults(){
 }
 function calendarCard(){
   var r=dailyResults(), month=UI.calMonth||today().slice(0,7);
-  var y=+month.slice(0,4), m=+month.slice(5,7);
+  var y=+month.slice(0,4), m=+month.slice(5,7), td=today();
   var inMonth=r.order.filter(function(d){ return d.slice(0,7)===month; });
   var h="<div class='card'>";
   h+="<div class='calnav'><button onclick='moveCalMonth(-1)' aria-label='前の月'>‹</button>"+
-     "<b>"+y+"年"+m+"月の日別損益</b><button onclick='moveCalMonth(1)' aria-label='次の月'>›</button></div>";
+     "<b>"+y+"年"+m+"月</b><button onclick='moveCalMonth(1)' aria-label='次の月'>›</button></div>";
   if(inMonth.length){
     var tot=0; inMonth.forEach(function(d){ tot+=r.days[d].pl; });
     var st=r.days[inMonth[0]].start, tp=st>0?tot/st*100:null;
@@ -3863,18 +3932,34 @@ function calendarCard(){
   } else {
     h+="<div class='smallnote' style='margin:0 0 10px;text-align:center'>この月の決済はありません</div>";
   }
+  // 青の濃さ＝その月の中での利益の大きさ（上位1/3を濃く）
+  var gains=inMonth.map(function(d){ return r.days[d].pl; }).filter(function(v){ return v>0; }).sort(function(a,b){ return b-a; });
+  var strong=gains.length?gains[Math.max(0,Math.floor(gains.length/3)-0)]:0; if(gains.length&&gains.length<3) strong=gains[0];
+  var compact=function(v){ var a=Math.abs(v); var t=a>=1000000?(a/1000000).toFixed(1).replace(/\.0$/,"")+"M":a>=10000?Math.round(a/1000)+"k":fmtMoney(a); return (v>0?"+":v<0?"−":"")+t; };
   h+="<div class='cal'>";
-  ["月","火","水","木","金","土","日"].forEach(function(w){ h+="<div class='wd'>"+w+"</div>"; });
+  ["月","火","水","木","金","土","日","週"].forEach(function(w){ h+="<div class='wd'>"+w+"</div>"; });
   var first=new Date(y,m-1,1), lead=(first.getDay()+6)%7, last=new Date(y,m,0).getDate();
-  for(var i=0;i<lead;i++) h+="<div></div>";
+  var cells=[];
+  for(var i=0;i<lead;i++) cells.push({html:"<div class='d off'></div>"});
   for(var dd=1; dd<=last; dd++){
-    var key=month+"-"+(dd<10?"0":"")+dd, x=r.days[key];
-    if(!x){ h+="<div class='d'><div class='n'>"+dd+"</div></div>"; continue; }
-    var cls=x.pl>0?"up":x.pl<0?"down":"flat";
-    h+="<button class='d "+cls+(UI.calDay===key?" sel":"")+"' onclick=\"pickCalDay('"+key+"')\">"+
-       "<div class='n'>"+dd+"</div><div class='p "+clsSign(x.pl)+" tabular'>"+(isNum(x.pct)?fmtSigned(x.pct,1)+"%":"—")+"</div></button>";
+    var key=month+"-"+(dd<10?"0":"")+dd, x=r.days[key], isT=(key===td);
+    if(!x){ cells.push({html:"<div class='d"+(isT?" today":"")+"'><span class='n'>"+dd+"</span></div>"}); continue; }
+    var cls=x.pl>0?(x.pl>=strong&&strong>0?"p2":"p1"):x.pl<0?"down":"flat";
+    cells.push({key:key, html:"<button class='d "+cls+(UI.calDay===key?" sel":"")+(isT?" today":"")+"' onclick=\"pickCalDay('"+key+"')\">"+
+       "<span class='n'>"+dd+"</span><span class='p "+(x.pl<0?"neg":"")+" tabular'>"+esc(compact(x.pl))+"</span></button>"});
+  }
+  while(cells.length%7) cells.push({html:"<div class='d off'></div>"});
+  for(var row=0; row<cells.length/7; row++){
+    var wkPl=0, wkN=0, wkW=0, wkAny=false;
+    cells.slice(row*7,row*7+7).forEach(function(c){
+      h+=c.html;
+      if(c.key&&r.days[c.key]){ var dx=r.days[c.key]; wkAny=true; wkPl+=dx.pl; dx.trades.forEach(function(t){ wkN++; var p=toNum(t.realizedPL); if(isNum(p)&&p>0) wkW++; }); }
+    });
+    h+="<div class='w'><span class='pl "+(wkAny?clsSign(wkPl):"muted")+" tabular'>"+(wkAny?esc(compact(wkPl)):"—")+"</span>"+
+       "<span class='s'>"+(wkAny?(wkN+"件・"+(wkN?Math.round(wkW/wkN*100):0)+"%"):"取引なし")+"</span></div>";
   }
   h+="</div>";
+  h+="<div class='smallnote' style='margin-top:8px'>青の濃さ＝その日の利益の大きさ。赤い文字＝負けた日。右端＝その週のまとめ。</div>";
   var sel=UI.calDay&&UI.calDay.slice(0,7)===month?r.days[UI.calDay]:null;
   if(sel){
     h+="<div style='margin:12px 0 0;border-top:1px solid var(--line);padding-top:10px'>"+
@@ -4607,14 +4692,22 @@ function drawLineChart(cv,cssH,pts,color,opt){
   // area fill
   var grad=ctx.createLinearGradient(0,padT,0,h-padB);
   grad.addColorStop(0, hexA(color,0.22)); grad.addColorStop(1, hexA(color,0.0));
-  ctx.beginPath(); ctx.moveTo(X(0),Y(pts[0].y));
-  for(var i=1;i<n;i++) ctx.lineTo(X(i),Y(pts[i].y));
+  // なめらかな1本線（点と点の間を曲線でつなぐ。値そのものは変えない）
+  var P=pts.map(function(p,i){ return [X(i),Y(p.y)]; });
+  var curve=function(){
+    ctx.moveTo(P[0][0],P[0][1]);
+    for(var i=0;i<P.length-1;i++){
+      var p0=P[i-1]||P[i], p1=P[i], p2=P[i+1], p3=P[i+2]||p2;
+      ctx.bezierCurveTo(p1[0]+(p2[0]-p0[0])/6, p1[1]+(p2[1]-p0[1])/6, p2[0]-(p3[0]-p1[0])/6, p2[1]-(p3[1]-p1[1])/6, p2[0], p2[1]);
+    }
+  };
+  ctx.beginPath(); curve();
   ctx.lineTo(X(n-1),h-padB); ctx.lineTo(X(0),h-padB); ctx.closePath();
   ctx.fillStyle=grad; ctx.fill();
-  // line
-  ctx.beginPath(); ctx.moveTo(X(0),Y(pts[0].y));
-  for(var j=1;j<n;j++) ctx.lineTo(X(j),Y(pts[j].y));
-  ctx.strokeStyle=color; ctx.lineWidth=2; ctx.lineJoin="round"; ctx.stroke();
+  // line（ほのかな発光）
+  ctx.save(); ctx.shadowColor=hexA(color,0.55); ctx.shadowBlur=8;
+  ctx.beginPath(); curve();
+  ctx.strokeStyle=color; ctx.lineWidth=2; ctx.lineJoin="round"; ctx.lineCap="round"; ctx.stroke(); ctx.restore();
   // last dot
   ctx.fillStyle=color; ctx.beginPath(); ctx.arc(X(n-1),Y(pts[n-1].y),3,0,Math.PI*2); ctx.fill();
 }
@@ -4673,7 +4766,7 @@ function drawGrowthCharts(){
     var labels=[],vals=[],labtxt=[];
     groups.forEach(function(g){ var sub=list.filter(g[2]); var st=computeStats(sub); if(sub.length){ labels.push(g[0]); vals.push(st.avgR!==null?st.avgR:0); labtxt.push(g[1]+"(n="+sub.length+")"); } });
     if(vals.length){ drawBarChart(cpr,chartH(150),labels,vals,{fmt:function(v){return v.toFixed(1)+"R";}}); document.getElementById("c_patr_lab").textContent=labtxt.join("　"); }
-    else { document.getElementById("c_patr_lab").textContent="データなし"; }
+    else { document.getElementById("c_patr_lab").textContent="データなし"; document.getElementById("c_patr").style.display="none"; }
   }
   // 4H環境別平均R
   var ch4=document.getElementById("c_h4r");
@@ -4682,7 +4775,7 @@ function drawGrowthCharts(){
     var labels2=[],vals2=[],labtxt2=[];
     g4.forEach(function(g){ var sub=list.filter(g[2]); var st=computeStats(sub); if(sub.length){ labels2.push(g[0]); vals2.push(st.avgR!==null?st.avgR:0); labtxt2.push(g[1]+"(n="+sub.length+")"); } });
     if(vals2.length){ drawBarChart(ch4,chartH(150),labels2,vals2,{fmt:function(v){return v.toFixed(1)+"R";}}); document.getElementById("c_h4r_lab").textContent=labtxt2.join("　"); }
-    else { document.getElementById("c_h4r_lab").textContent="データなし"; }
+    else { document.getElementById("c_h4r_lab").textContent="データなし"; document.getElementById("c_h4r").style.display="none"; }
   }
 }
 
