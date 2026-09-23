@@ -178,6 +178,27 @@ nav#nav button.on .ic{stroke:var(--accent);filter:drop-shadow(0 0 5px rgba(111,2
 .oprow .opsub{font-size:11px;color:var(--txt3);margin-top:3px}
 .oprow .opright{text-align:right;font-weight:700;white-space:nowrap}
 
+/* ---- 設定：折りたたみ・PC 2列（2026-09-24 見本） ---- */
+.sgrid{display:grid;grid-template-columns:1fr;gap:0 18px}
+.sgrid > div{min-width:0}
+details.st{background:var(--card-grad);border:1px solid var(--line);border-radius:var(--radius);margin-bottom:10px;position:relative}
+details.st::before{content:"";position:absolute;left:14%;right:14%;top:0;height:1px;background:var(--topline);opacity:.7;pointer-events:none}
+details.st summary{list-style:none;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 18px;user-select:none}
+details.st summary::-webkit-details-marker{display:none}
+details.st summary > span{min-width:0}
+details.st summary .t{font-weight:700;font-size:14.5px}
+details.st summary .now{font-size:12px;color:var(--txt3);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+details.st summary .chev{width:16px;height:16px;flex:none;color:var(--txt3);transition:transform .15s}
+details.st[open] summary .chev{transform:rotate(180deg)}
+details.st[open] summary{border-bottom:1px solid var(--line)}
+details.st .body{padding:16px 18px 18px}
+details.st .body .btn{margin-top:10px}
+.btn.inline{display:inline-block;width:auto;padding:9px 14px;font-size:13.5px;border-radius:9px}
+.acc-row{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:11px 0;border-top:1px solid var(--line)}
+.acc-row:first-of-type{border-top:0;padding-top:0}
+.acc-row .m{font-size:11.5px;color:var(--txt3);margin-top:2px}
+.acc-row .btn{margin:0;white-space:nowrap;flex:0 0 auto}
+
 /* meter */
 .meter{margin-top:9px}
 .meter .lab{display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt2);margin-bottom:5px}
@@ -460,6 +481,7 @@ html[data-theme="light"] .filterbar button.on{color:#fff}
   #app.tab-home .tgrid{ grid-template-columns:repeat(6,1fr); }
   #app.tab-home .pair{ display:grid; grid-template-columns:1fr 1fr; gap:0 18px; align-items:start; }
   #app.tab-home .pair > div{ display:block; min-width:0; }
+  .sgrid{ grid-template-columns:1fr 1fr; align-items:start; }
 
   /* トーストはサイドバーと重ならないよう右下へ */
   .toast{ left:auto; right:26px; bottom:26px; transform:none; }
@@ -1007,7 +1029,7 @@ var IMG={};       // {tradeId_entry:dataURL, tradeId_exit:dataURL}
 var TAB="home";
 // 4つのタブに畳んだあとの所属。ここに無いタブ（設定）はどのタブにも属さない
 var NAV_PARENT={home:"home",brief:"home",plan:"plan",rules:"plan",trades:"trades",growth:"growth"};
-var UI={ tradeTab:"open", growthPeriod:"30d", growthCustom:{from:"",to:""}, briefDate:"", acct:"", calMonth:"", calDay:"" };
+var UI={ tradeTab:"open", growthPeriod:"30d", growthCustom:{from:"",to:""}, briefDate:"", acct:"", calMonth:"", calDay:"", settingsOpen:{} };
 var _saving=false;
 
 /* ---------- ロード/セーブ ---------- */
@@ -4022,12 +4044,18 @@ window.saveResearch=function(id){
 /* ---------- 設定 ---------- */
 
 /* ---------- 口座（設定タブ） ---------- */
-function accountsCard(){
+// 設定の1項目。閉じていても今の値（now）が1行で見える。開閉は UI に覚えて、保存で描き直しても戻らないようにする
+function settingsItem(id,title,now,body){
+  var open=!!(UI.settingsOpen&&UI.settingsOpen[id]);
+  return "<details class='st' id='st_"+id+"'"+(open?" open":"")+" ontoggle=\"settingsToggled('"+id+"',this.open)\"><summary><span><div class='t'>"+esc(title)+"</div><div class='now'>"+esc(now||"")+"</div></span>"+
+         "<svg class='chev' viewBox='0 0 24 24' fill='none' stroke='currentColor' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'><path d='M6 9l6 6 6-6'/></svg></summary><div class='body'>"+body+"</div></details>";
+}
+window.settingsToggled=function(id,open){ if(!UI.settingsOpen) UI.settingsOpen={}; UI.settingsOpen[id]=!!open; };
+
+function accountsBody(){
   var cur=currentAccountId();
   var list=Array.isArray(DB.accounts)?DB.accounts:[];
-  var h="<div class='sect-title'>口座</div><div class='card'>";
-  h+="<div class='smallnote' style='margin:0 0 4px'>ホームの残高・本日の損益・連勝連敗は、いまの口座の記録だけで計算します。口座は消せません。終わったときは理由を選んで終了にすると、記録はそのまま残ります。</div>";
-
+  var h="<div class='smallnote' style='margin:0 0 10px'>今日・シナリオ・記録は、右上で選んだ口座の記録だけで計算します。口座は消せません。終わったら理由を選んで終了にすると、記録はそのまま残ります。</div>";
   list.forEach(function(a){
     var on=(a.id===cur), per=accountPeriod(a.id), n=tradesOfAccount(a.id).length;
     var meta=[];
@@ -4036,32 +4064,18 @@ function accountsCard(){
     meta.push(n+"件");
     if((a.brokerIds||[]).length) meta.push("口座番号 "+a.brokerIds.join("・"));
     if(per) meta.push(per.first+" 〜 "+per.last);
-    meta.push(a.closedReason?("終了："+labelCloseReason(a.closedReason)):"稼働中");
-
-    h+="<div style='padding:11px 0;border-top:1px solid var(--line)'>";
-    h+="<div style='display:flex;align-items:center;gap:8px'><b>"+esc(a.name)+"</b>"+
-       (on?"<span style='font-size:11px;color:var(--accent)'>いまの口座</span>":"")+"</div>";
-    h+="<div class='smallnote' style='margin:4px 0 8px'>"+esc(meta.join(" ／ "))+"</div>";
-
-    if(!a.closedReason && !on){
-      h+="<button class='btn sm' onclick=\"switchAccount('"+a.id+"')\">この口座にする</button>";
-    }
-    if(!a.closedReason && on){
-      h+=accountRulesForm(a);
-      h+=field("終了の理由","<select id='ac_reason_"+a.id+"'><option value=''>選ぶ</option>"+
-           ACCOUNT_CLOSE_REASONS.map(function(o){ return "<option value='"+o[0]+"'>"+esc(o[1])+"</option>"; }).join("")+
-           "</select>");
-      h+="<button class='btn sm' onclick=\"closeAccount('"+a.id+"')\">この口座を終了する</button>";
-    }
-    if(a.closedReason && !on){
-      h+="<button class='btn sm' onclick=\"switchAccount('"+a.id+"')\">この口座の記録を見る</button>";
-    }
+    if(a.closedReason) meta.push("終了："+labelCloseReason(a.closedReason));
+    h+="<div class='acc-row'><span style='min-width:0'><b>"+esc(a.name)+"</b>"+(on?" <span class='pill blue'>いまの口座</span>":"")+
+       "<div class='m'>"+esc(meta.join(" ／ "))+"</div></span>";
+    if(!a.closedReason && !on) h+="<button class='btn ghost inline' onclick=\"switchAccount('"+a.id+"')\">この口座にする</button>";
+    if(a.closedReason && !on) h+="<button class='btn ghost inline' onclick=\"switchAccount('"+a.id+"')\">記録を見る</button>";
     h+="</div>";
+    if(!a.closedReason && on) h+="<div style='padding:4px 0 14px'>"+accountRulesForm(a)+"</div>";
   });
-
-  h+="<div style='padding:11px 0 0;border-top:1px solid var(--line)'>";
-  h+="<div class='smallnote' style='margin:0 0 8px'>新しい口座を作る</div>";
-  h+=field("ひな形（ルールの数字が入ります）","<select id='a_tpl'><option value=''>使わない</option>"+
+  return h;
+}
+function newAccountBody(){
+  var h=field("ひな形（ルールの数字が入ります）","<select id='a_tpl'><option value=''>使わない</option>"+
      ACCOUNT_TEMPLATES.map(function(t){ return "<option value='"+t.id+"'>"+esc(t.label)+"</option>"; }).join("")+"</select>");
   h+="<div class='row2'>"+
      field("口座名","<input type='text' id='a_name' placeholder='Fintokei ステップ1'>")+
@@ -4069,26 +4083,31 @@ function accountsCard(){
        ACCOUNT_TYPES.map(function(o){ return "<option value='"+o[0]+"'>"+esc(o[1])+"</option>"; }).join("")+
        "</select>")+"</div>";
   h+=field("初期残高","<input type='number' inputmode='decimal' step='any' id='a_init' placeholder='100000'>");
-  h+="<button class='btn blue sm' onclick='addAccount()'>口座を追加して切り替える</button>";
-  h+="</div>";
-
-  h+="</div>";
+  h+="<button class='btn primary sm' onclick='addAccount()'>口座を追加して切り替える</button>";
   return h;
 }
+// いまの口座の欄。口座名・種別・初期残高もここで直す（旧「基本」の二重項目をここに寄せた）
 function accountRulesForm(a){
   var r=a.rules||{}, id=a.id;
   var inp=function(key,label,val,step){
     return field(label,"<input type='number' inputmode='decimal' step='"+(step||"any")+"' id='ar_"+key+"_"+id+"' value='"+esc(val===null||val===undefined?"":val)+"'>");
   };
-  var h="<div class='smallnote' style='margin:4px 0 8px'>この口座のルール</div>";
-  h+="<div class='row2'>"+inp("target","目標(%)　空欄＝目標なし",r.targetPct)+inp("split","分配率(%)",r.profitSplitPct)+"</div>";
+  var h="<div class='sect-title' style='margin:6px 0 8px'>この口座</div>";
+  h+="<div class='row2'>"+field("口座名","<input type='text' id='ar_name_"+id+"' value='"+esc(a.name)+"'>")+
+     field("種別","<select id='ar_type_"+id+"'><option value=''"+(isAccountType(a.type)?"":" selected")+">未設定</option>"+
+       ACCOUNT_TYPES.map(function(o){ return "<option value='"+o[0]+"'"+(a.type===o[0]?" selected":"")+">"+esc(o[1])+"</option>"; }).join("")+"</select>")+"</div>";
+  h+="<div class='row2'>"+inp("init","初期残高",a.initialBalance)+inp("target","目標(%)　空欄＝目標なし",r.targetPct)+"</div>";
+  h+="<div class='sect-title' style='margin:10px 0 8px'>この口座のルール</div>";
   h+="<div class='row2'>"+inp("daily","1日の最大損失(%)",r.dailyLossPct)+inp("max","全体の最大損失(%)",r.maxLossPct)+"</div>";
   h+="<div class='row2'>"+inp("open","保有中の最大リスク(%)",r.openRiskPct)+
      field("損失の数え方","<select id='ar_dd_"+id+"'>"+DD_BASIS.map(function(o){
        return "<option value='"+o[0]+"'"+(r.ddBasis===o[0]?" selected":"")+">"+esc(o[1])+"</option>"; }).join("")+"</select>")+"</div>";
   h+="<div class='row2'>"+inp("days","最低取引日数",r.minTradingDays,"1")+inp("trades","最低決済数",r.minClosedTrades,"1")+"</div>";
-  h+="<button class='btn sm' onclick=\"saveAccountRules('"+id+"')\">この口座のルールを保存</button>";
-  h+="<div style='height:12px'></div>";
+  h+="<div class='row2'>"+inp("split","分配率(%)",r.profitSplitPct)+
+     field("終了の理由","<select id='ac_reason_"+id+"'><option value=''>選ぶ</option>"+
+       ACCOUNT_CLOSE_REASONS.map(function(o){ return "<option value='"+o[0]+"'>"+esc(o[1])+"</option>"; }).join("")+"</select>")+"</div>";
+  h+="<div class='btnrow'><button class='btn sm' onclick=\"saveAccountRules('"+id+"')\">この口座を保存</button>"+
+     "<button class='btn ghost sm' onclick=\"closeAccount('"+id+"')\">この口座を終了する</button></div>";
   return h;
 }
 window.saveAccountRules=function(id){
@@ -4096,8 +4115,23 @@ window.saveAccountRules=function(id){
   var g=function(k){ var e=document.getElementById("ar_"+k+"_"+id); return e?e.value:""; };
   var num=function(k,d){ var v=g(k); if(v==="") return d; var n=toNum(v); return isNum(n)?n:d; };
   var dd=(document.getElementById("ar_dd_"+id)||{}).value;
+  var nameEl=document.getElementById("ar_name_"+id), typeEl=document.getElementById("ar_type_"+id), initEl=document.getElementById("ar_init_"+id);
+  if(nameEl){ var nm=String(nameEl.value||"").trim(); if(nm) a.name=nm; }
+  if(typeEl){
+    var tsel=typeEl.value, prevType=a.type;
+    a.type=isAccountType(tsel)?tsel:"";
+    if(a.type!==prevType){
+      // 種別が変わったら目標の既定をひな形から取り直す（旧「基本」と同じ動き）。下の目標欄に値があればそちらが勝つ
+      var tp0=findTemplate(a.template), s0=DB.settings;
+      var def = tp0 ? tp0.targets[a.type] : (a.type==="step1"?numOr(s0.fin&&s0.fin.step1TargetPct,null):a.type==="step2"?numOr(s0.fin&&s0.fin.step2TargetPct,null):null);
+      if(g("target")==="" && def!==undefined){ a.rules=a.rules||{}; a.rules.targetPct=(def===undefined?null:def); }
+    }
+    if(a.type) a.typeNote="";
+  }
+  if(initEl){ var iv=toNum(initEl.value); if(isNum(iv)) a.initialBalance=iv; }
+  var prevTarget=(a.rules||{}).targetPct;
   a.rules={
-    targetPct:num("target",null),
+    targetPct:(g("target")===""&&typeEl&&a.type!==prevType)?prevTarget:num("target",null),
     dailyLossPct:num("daily",0),
     maxLossPct:num("max",0),
     ddBasis:(dd==="equity"||dd==="static")?dd:"equity",
@@ -4106,7 +4140,8 @@ window.saveAccountRules=function(id){
     minClosedTrades:num("trades",0),
     profitSplitPct:num("split",null)
   };
-  saveData(); toast("「"+a.name+"」のルールを保存しました"); render();
+  if(id===currentAccountId()) applyAccountToSettings(a);
+  saveData(); toast("「"+a.name+"」を保存しました"); render();
 };
 window.switchAccount=function(id){
   var a=findAccount(id); if(!a) return;
@@ -4138,102 +4173,96 @@ window.closeAccount=function(id){
 
 function viewSettings(){
   var s=DB.settings;
-  var h=topbar("設定");
+  var h=topbar("設定","ぼぶる v1・データはこの端末に保存");
+  var cur=currentAccount();
 
-  h+="<div class='sect-title'>基本</div><div class='card'>";
-  h+=field("アプリ名","<input type='text' id='s_appName' value='"+esc(s.appName)+"'>");
+  // ---- 左：よく使う順 ----
+  // 取引履歴の取り込み
+  var imp=null, impN=0;
+  DB.trades.forEach(function(t){ if(t.importedAt && (!imp || t.importedAt>imp)) imp=t.importedAt; });
+  var impSrc="";
+  if(imp){ DB.trades.forEach(function(t){ if(t.importedAt===imp){ impN++; impSrc=t.source||impSrc; } }); }
+  var impNow=imp?("最終取り込み "+fmtWhen(imp)+"・"+(impSrc==="mt5"?"MT5":impSrc==="ctrader"?"cTrader":impSrc)+"・"+impN+"件"):"MT5 レポート／cTrader CSV";
+  var impBody="<div class='smallnote' style='margin:0 0 10px'><b>MT5</b>：ツールボックスの「履歴」を右クリック →「レポート」→ HTML で保存したファイル。"+
+     "<b>cTrader</b>：「履歴」で列を全部表示してから書き出した CSV。どちらも中身で見分けます。<br>"+
+     "保有中の計画に紐付けるか、計画なしの記録として作るかを1件ずつ確かめてから取り込みます。同じ取引は二度入りません。</div>"+
+     "<button class='btn primary' onclick='importCtraderCSV()'>取引履歴を取り込む（MT5 レポート ／ cTrader CSV）</button>";
+  // 口座
+  var acts=activeAccounts().length, closedN=(DB.accounts||[]).length-acts;
+  var accNow=acts+"口座 稼働中"+(cur?"（いまの口座："+cur.name+"）":"")+(closedN>0?"・"+closedN+"口座 終了":"");
+  // 同期
+  var ls=DB.syncMetadata&&DB.syncMetadata.lastSync;
+  var syncBody="<div class='smallnote' style='margin:0 0 11px'>進めた端末で「同期コードをコピー」→ もう一方の端末で「取り込み」に貼ると、記録がそのまま移ります。取り込みは<b>丸ごと上書き</b>なので「最後に使った端末→次に使う端末」の一方通行で運用して下さい。画像は端末内のみで同期対象外です。</div>"+
+     "<div class='btnrow'><button class='btn' id='synccopy' onclick='copySyncCode()'>同期コードをコピー</button>"+
+     "<button class='btn ghost' onclick='importSyncCode()'>同期コードを取り込み</button></div>";
+  // 内部ルール
+  var rulesNow="リスク "+fmtPct(toNum(s.internalRiskPct),1).replace(".0%","%")+"・基本 "+(isNum(toNum(s.baseLot))?toNum(s.baseLot):"—")+" ロット・連敗 "+(toNum(s.lossStreakWarn)||4)+"・日次停止 −"+ownStopPct()+"%";
+  var rulesBody="<div class='row2'>"+field("1トレード内部リスク率(%)","<input type='number' inputmode='decimal' step='any' id='s_irisk' value='"+esc(s.internalRiskPct)+"'>")+
+     field("基本ロット","<input type='number' inputmode='decimal' step='any' id='s_blot' value='"+esc(s.baseLot)+"'>")+"</div>"+
+     "<div class='row2'>"+field("連敗注意ライン","<input type='number' inputmode='numeric' step='1' id='s_streak' value='"+esc(s.lossStreakWarn)+"'>")+
+     field("自分の日次停止ライン(%)","<input type='number' inputmode='decimal' step='any' id='s_ownstop' value='"+esc(ownStopPct())+"'>")+"</div>"+
+     "<div class='smallnote'>これらは自分で決めた内部基準です。口座のルール（Fintokei 公式など）とは別管理です。</div>";
+  // 版番号
+  var vv=versionsOf();
+  var verNow="手法 "+(vv.strategy||"—")+"・ルール "+(vv.rules||"—")+"・BOB EDGE "+(vv.bobEdge||"—");
+  var verBody="<div class='row2'>"+field("手法の版","<input type='text' id='s_vstr' value='"+esc(vv.strategy)+"'>")+
+     field("ルールの版","<input type='text' id='s_vrul' value='"+esc(vv.rules)+"'>")+"</div>"+
+     field("BOB EDGE の版","<input type='text' id='s_vedge' value='"+esc(vv.bobEdge)+"'>")+
+     "<div class='smallnote'>いまの版が、これから保存する取引に焼き込まれます。過去の記録は変わりません。"+
+     "手法・ルール・インジケーターを変えたときに上げると、変更前後の成績を分けて見られます。変えるとルールブックの変更履歴に残ります。</div>";
+
+  // ---- 右：たまに使う ----
+  // 口座通貨と為替レート
   var curOpts=["JPY","USD","EUR","GBP","AUD","CHF"];
   if(curOpts.indexOf(acctCurrency())<0) curOpts.unshift(acctCurrency());
-  h+="<div class='row2'>"+
-     field("口座通貨","<select id='s_currency'>"+curOpts.map(function(o){
-       return "<option value='"+esc(o)+"'"+(acctCurrency()===o?" selected":"")+">"+esc(o)+"</option>";
-     }).join("")+"</select>")+
-     field("口座名","<input type='text' id='s_accName' value='"+esc(s.accountName)+"'>")+"</div>";
-  var curAcc=currentAccount();
-  var curType=curAcc?curAcc.type:"";
-  h+=field("口座タイプ","<select id='s_accType'>"+
-     "<option value=''"+(isAccountType(curType)?"":" selected")+">未設定</option>"+
-     ACCOUNT_TYPES.map(function(o){
-       return "<option value='"+o[0]+"'"+(curType===o[0]?" selected":"")+">"+esc(o[1])+"</option>";
-     }).join("")+"</select>");
-  h+="<div class='row2'>"+field("初期残高","<input type='number' inputmode='decimal' step='any' id='s_init' value='"+esc(s.initialBalance)+"'>")+
-     field("契約サイズ","<input type='number' inputmode='decimal' step='any' id='s_cs' value='"+esc(s.contractSize)+"'>")+"</div>";
-  h+=field("現在残高の計算方法","<select id='s_balmode'><option value='auto' "+(s.balanceMode==="auto"?"selected":"")+">自動（初期残高＋決済損益）</option><option value='manual' "+(s.balanceMode==="manual"?"selected":"")+">手入力</option></select>");
-  h+=field("手入力残高（手入力時のみ）","<input type='number' inputmode='decimal' step='any' id='s_manual' value='"+esc(s.manualBalance)+"' placeholder='"+Math.round(currentBalance())+"'>");
-  h+="</div>";
-
-  h+=accountsCard();
-
-  h+="<div class='sect-title'>為替レート</div><div class='card'>";
+  var fxs=fxSettings();
+  var fxNow=acctCurrency()+(acctCurrency()==="USD"?"・換算なし":"・自動取得 "+(fxs.auto?"ON":"OFF")+(isNum(fxs.rate)&&fxs.rate>0?"・"+fxs.rate+(fxs.at||fxs.rateAt?"（"+fmtWhen(fxs.at||fxs.rateAt)+"）":""):(isNum(fxs.manual)&&fxs.manual>0?"・手動 "+fxs.manual:"")));
+  var fxBody=field("口座通貨","<select id='s_currency'>"+curOpts.map(function(o){
+       return "<option value='"+esc(o)+"'"+(acctCurrency()===o?" selected":"")+">"+esc(o)+"</option>"; }).join("")+"</select>");
   if(acctCurrency()==="USD"){
-    h+="<div class='smallnote' style='margin:0 0 11px'>口座通貨が USD なので、USD建ての銘柄では換算しません（レート 1）。</div>";
+    fxBody+="<div class='smallnote' style='margin:0 0 11px'>口座通貨が USD なので、USD建ての銘柄では換算しません（レート 1）。</div>";
   }else{
-    h+="<div class='smallnote' style='margin:0 0 11px'>XAUUSD のような USD建ての銘柄は損益が USD で出ます。"+
+    fxBody+="<div class='smallnote' style='margin:0 0 11px'>XAUUSD のような USD建ての銘柄は損益が USD で出ます。"+
        "口座通貨（"+esc(acctCurrency())+"）に直さないと、予定損失・リスク率・推奨ロットが合いません。</div>";
   }
-  var fxs=fxSettings();
-  h+="<div class='field'><label>自動取得</label><label class='chk'><input type='checkbox' id='s_fxauto'"+
+  fxBody+="<div class='field'><label>自動取得</label><label class='chk'><input type='checkbox' id='s_fxauto'"+
      (fxs.auto?" checked":"")+"><span>起動時と画面に戻ったときに取得する（10分はキャッシュ）</span></label></div>";
-  h+=field("手動レート（自動が取れないときの控え・任意）",
+  fxBody+=field("手動レート（自動が取れないときの控え・任意）",
      "<input type='number' inputmode='decimal' step='any' id='s_fxmanual' value='"+esc(fxs.manual)+"' placeholder='例）156.20'>");
-  h+="<div class='smallnote fxline' data-sym='XAUUSD' style='margin:0 0 11px'></div>";
-  if(acctCurrency()!=="USD") h+="<button class='btn ghost sm' onclick='refreshFxRate()'>いま取得する</button>";
-  if(fxs.source) h+="<div class='smallnote'>取得元 "+esc(fxs.source)+"。無料の公開レートで、更新は1日1回です。日中の変動は反映されません。</div>";
-  h+="</div>";
+  fxBody+="<div class='smallnote fxline' data-sym='XAUUSD' style='margin:0 0 11px'></div>";
+  if(acctCurrency()!=="USD") fxBody+="<button class='btn ghost inline' onclick='refreshFxRate()'>いま取得する</button>";
+  if(fxs.source) fxBody+="<div class='smallnote'>取得元 "+esc(fxs.source)+"。無料の公開レートで、更新は1日1回です。日中の変動は反映されません。</div>";
+  // 計算
+  var calcNow="契約サイズ "+esc(s.contractSize)+"・残高は"+(s.balanceMode==="manual"?"手入力":"自動（初期残高＋決済損益）");
+  var calcBody="<div class='row2'>"+field("契約サイズ","<input type='number' inputmode='decimal' step='any' id='s_cs' value='"+esc(s.contractSize)+"'>")+
+     field("現在残高の計算方法","<select id='s_balmode'><option value='auto' "+(s.balanceMode==="auto"?"selected":"")+">自動（初期残高＋決済損益）</option><option value='manual' "+(s.balanceMode==="manual"?"selected":"")+">手入力</option></select>")+"</div>"+
+     field("手入力残高（手入力時のみ）","<input type='number' inputmode='decimal' step='any' id='s_manual' value='"+esc(s.manualBalance)+"' placeholder='"+Math.round(currentBalance())+"'>");
+  // 表示
+  var themeLabel={dark:"ダーク（黒 × 水色）",light:"ライト（紙 × 藍）",system:"端末設定に合わせる"}[s.theme]||"ダーク（黒 × 水色）";
+  var dispNow=themeLabel+((s.appName&&s.appName!=="ぼぶる")?"・"+s.appName:"");
+  var dispBody="<div class='row2'>"+field("テーマ","<select id='s_theme'><option value='dark' "+(s.theme==="dark"?"selected":"")+">ダーク（黒 × 水色）</option><option value='light' "+(s.theme==="light"?"selected":"")+">ライト（紙 × 藍）</option><option value='system' "+(s.theme==="system"?"selected":"")+">端末設定に合わせる</option></select>")+
+     field("アプリ名","<input type='text' id='s_appName' value='"+esc(s.appName)+"'>")+"</div>";
+  // データ
+  var dataBody="<div class='btnrow'><button class='btn' onclick='doExport()'>JSON バックアップを出力</button>"+
+     "<button class='btn ghost' onclick='doImport()'>JSON から復元</button></div>"+
+     "<button class='btn ghost' onclick='doCSV()'>CSV を出力</button>"+
+     "<button class='btn ghost' onclick='wipeAll()'>全データを削除</button>"+
+     "<div class='smallnote'>削除は二段階確認します。事前にバックアップ推奨。</div>";
 
-  h+="<div class='sect-title'>内部ルール（自主設定）</div><div class='card'>";
-  h+="<div class='row2'>"+field("1トレード内部リスク率(%)","<input type='number' inputmode='decimal' step='any' id='s_irisk' value='"+esc(s.internalRiskPct)+"'>")+
-     field("基本ロット","<input type='number' inputmode='decimal' step='any' id='s_blot' value='"+esc(s.baseLot)+"'>")+"</div>";
-  h+="<div class='row2'>"+field("連敗注意ライン","<input type='number' inputmode='numeric' step='1' id='s_streak' value='"+esc(s.lossStreakWarn)+"'>")+
-     field("自分の日次停止ライン(%)","<input type='number' inputmode='decimal' step='any' id='s_ownstop' value='"+esc(ownStopPct())+"'>")+"</div>";
-  h+="<div class='smallnote'>これらは自分で決めた内部基準です。Fintokei公式ルールとは別管理です。</div>";
-  h+="</div>";
-
-  var vv=versionsOf();
-  h+="<div class='sect-title'>版番号</div><div class='card'>";
-  h+="<div class='row2'>"+field("手法の版","<input type='text' id='s_vstr' value='"+esc(vv.strategy)+"'>")+
-     field("ルールの版","<input type='text' id='s_vrul' value='"+esc(vv.rules)+"'>")+"</div>";
-  h+=field("BOB EDGE の版","<input type='text' id='s_vedge' value='"+esc(vv.bobEdge)+"'>");
-  h+="<div class='smallnote'>いまの版が、これから保存する取引に焼き込まれます。過去の記録は変わりません。"+
-     "手法・ルール・インジケーターを変えたときに上げると、変更前後の成績を分けて見られます。変えるとルールブックの変更履歴に残ります。</div>";
-  h+="</div>";
-
-  h+="<div class='sect-title'>表示</div><div class='card'>";
-  h+=field("テーマ","<select id='s_theme'><option value='dark' "+(s.theme==="dark"?"selected":"")+">ダーク</option><option value='light' "+(s.theme==="light"?"selected":"")+">ライト</option><option value='system' "+(s.theme==="system"?"selected":"")+">端末設定に合わせる</option></select>");
-  h+="</div>";
-
-  h+="<button class='btn primary' onclick='saveSettings()'>設定を保存</button>";
-
-  // 同期
-  h+="<div class='sect-title'>端末間の同期（PC⇔スマホ）</div><div class='card'>";
-  h+="<div class='smallnote' style='margin-bottom:11px'>進めた端末で「同期コードをコピー」→ もう一方の端末で「取り込み」に貼ると、記録がそのまま移ります。取り込みは<b>丸ごと上書き</b>なので「最後に使った端末→次に使う端末」の一方通行で運用して下さい。画像は端末内のみで同期対象外です。</div>";
-  h+="<button class='btn' id='synccopy' onclick='copySyncCode()'>同期コードをコピー</button>";
-  h+="<button class='btn ghost' style='margin-top:9px' onclick='importSyncCode()'>同期コードを取り込み</button>";
-  var ls=DB.syncMetadata&&DB.syncMetadata.lastSync;
-  if(ls) h+="<div class='smallnote'>最終同期: "+fmtWhen(ls)+"</div>";
-  h+="</div>";
-
-  // バックアップ
-  h+="<div class='sect-title'>バックアップ / データ</div><div class='card'>";
-  h+="<button class='btn' onclick='doExport()'>JSONバックアップを出力</button>";
-  h+="<button class='btn ghost' style='margin-top:9px' onclick='doImport()'>JSONから復元</button>";
-  h+="<button class='btn ghost' style='margin-top:9px' onclick='doCSV()'>CSVを出力</button>";
-  h+="</div>";
-
-  // cTrader 履歴の取り込み
-  h+="<div class='sect-title'>取引履歴の取り込み</div><div class='card'>";
-  h+="<div class='smallnote' style='margin:0 0 10px'><b>MT5</b>：ツールボックスの「履歴」を右クリック →「レポート」→ HTML で保存したファイル。"+
-     "<b>cTrader</b>：「履歴」で列を全部表示してから書き出した CSV。どちらも中身で見分けます。<br>"+
-     "保有中の計画に紐付けるか、計画なしの記録として作るかを1件ずつ確かめてから取り込みます。同じ取引は二度入りません。</div>";
-  h+="<button class='btn' onclick='importCtraderCSV()'>取引履歴を取り込む（MT5 レポート ／ cTrader CSV）</button>";
-  h+="</div>";
-
-  h+="<div class='sect-title'>危険な操作</div><div class='card'>";
-  h+="<button class='btn danger' onclick='wipeAll()'>全データを削除</button>";
-  h+="<div class='smallnote'>削除は二段階確認します。事前にバックアップ推奨。</div>";
-  h+="</div>";
-
-  h+="<div class='smallnote' style='text-align:center;margin:18px 0 4px'>ぼぶる v1 ・ データはこの端末に保存されます</div>";
+  h+="<div class='sgrid'><div>";
+  h+=settingsItem("import","取引履歴の取り込み",impNow,impBody);
+  h+=settingsItem("accounts","口座",accNow,accountsBody());
+  h+=settingsItem("sync","端末間の同期（PC ⇔ スマホ）",ls?("最終同期 "+fmtWhen(ls)):"まだ同期していません",syncBody);
+  h+=settingsItem("rules","内部ルール（自主設定）",rulesNow,rulesBody);
+  h+=settingsItem("versions","版番号",verNow,verBody);
+  h+="</div><div>";
+  h+=settingsItem("newacc","新しい口座を作る","ひな形から作れます",newAccountBody());
+  h+=settingsItem("fx","口座通貨と為替レート",fxNow,fxBody);
+  h+=settingsItem("calc","計算",calcNow,calcBody);
+  h+=settingsItem("display","表示",dispNow,dispBody);
+  h+=settingsItem("data","データ（バックアップ・復元・削除）","JSON・CSV の出力、復元、全データ削除",dataBody);
+  h+="</div></div>";
+  h+="<button class='btn primary' style='margin-top:8px' onclick='saveSettings()'>設定を保存</button>";
   return h;
 }
 window.saveSettings=function(){
@@ -4247,27 +4276,12 @@ window.saveSettings=function(){
   if(prevCur!==s.currency){
     s.fx.rate=null; s.fx.at=null; s.fx.rateAt=null; s.fx.quote=""; s.fx.source=""; FX.lastError="";
   }
-  s.accountName=g("s_accName");
-  s.initialBalance=toNum(g("s_init")); s.contractSize=toNum(g("s_cs"))||100;
-  // 口座名・種別・初期残高は「いまの口座」そのものを編集している
+  s.contractSize=toNum(g("s_cs"))||100;
+  // 口座名・種別・初期残高は設定の「口座」の欄で保存する（saveAccountRules）。ここでは通貨だけ、いまの口座に反映
   var accNow=currentAccount();
   if(accNow){
-    accNow.name=s.accountName||accNow.name;
-    var tsel=g("s_accType");
-    var prevType=accNow.type;
-    accNow.type=isAccountType(tsel)?tsel:"";
-    if(accNow.type!==prevType){
-      var tp0=findTemplate(accNow.template);
-      accNow.rules.targetPct = tp0 ? tp0.targets[accNow.type] :
-        (accNow.type==="step1"?numOr(s.fin.step1TargetPct,null):accNow.type==="step2"?numOr(s.fin.step2TargetPct,null):null);
-      if(accNow.rules.targetPct===undefined) accNow.rules.targetPct=null;
-    }
-    if(accNow.type) accNow.typeNote="";
-    accNow.initialBalance=isNum(s.initialBalance)?s.initialBalance:accNow.initialBalance;
     accNow.currency=s.currency||accNow.currency;
     applyAccountToSettings(accNow);
-  }else{
-    s.accountType=g("s_accType");
   }
   s.balanceMode=g("s_balmode"); s.manualBalance=g("s_manual")===""?null:toNum(g("s_manual"));
   s.internalRiskPct=toNum(g("s_irisk"))||1; s.baseLot=toNum(g("s_blot")); s.lossStreakWarn=toNum(g("s_streak"))||4;
