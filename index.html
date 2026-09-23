@@ -4320,7 +4320,7 @@ function openCtiLinkModal(){
   var acc=findAccount(CTI.accountId); if(!acc){ CTI=null; closeModal(); return; }
   var done=importedDealIds();
   var open=DB.trades.filter(function(t){ return t.status==="open" && (t.accountId||currentAccountId())===CTI.accountId; });
-  var h="<h3>cTrader の履歴を紐付ける</h3>";
+  var h="<h3>取引履歴を紐付ける</h3>";
   h+="<div class='smallnote' style='margin:0 0 6px'>口座「"+esc(acc.name)+"」・"+CTI.groups.length+"件。各行で、どの計画に紐付けるかを確かめて「取り込む」を押して下さい。"+
      "入るのは事実（時刻・価格・ロット・損益・手数料）だけで、判断の欄（決済の理由など）は空のまま残ります。</div>";
   // 同じ計画を2件の既定にしない（近い順に先着）。手で選び直すのは自由
