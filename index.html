@@ -56,6 +56,8 @@ body{
   -webkit-font-smoothing:antialiased;
   padding-bottom:calc(var(--nav-h) + var(--sab));
   overscroll-behavior-y:none;
+  /* iOS: 短い画面（記録など）に切り替えた直後に下のバーが浮くのを防ぐ。文書を常に1画面以上の高さにしておく */
+  min-height:100vh; min-height:100dvh; box-sizing:border-box;
 }
 .tabular{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
 .num{font-variant-numeric:tabular-nums;font-feature-settings:"tnum"}
@@ -2024,22 +2026,27 @@ function homeOpenCard(){
   if(!list.length) return "<div class='card'><div class='empty'>保有中のトレードはありません</div></div>";
   list.sort(function(a,b){ return new Date(b.createdAt)-new Date(a.createdAt); });
   var h="";
+  // 記録カードと同じ並び（本人指定 2026-09-24）。違いは、日付の行の右端に「シナリオ n件・合計リスク」を置くことだけ
   list.forEach(function(t){
     var c=calcTrade(t);
     var sc=scenarioRiskOf(t.accountId||currentAccountId(), t.scenarioId||t.id);
     var bal=toNum(t.balanceAtEntry); var scPct=(isNum(bal)&&bal>0)?sc.loss/bal*100:null;
-    var rc=resetClock(t,false);
-    var ti=function(k,v,cls){ return "<div class='ti'><div class='k'>"+esc(k)+"</div><div class='v tabular "+(cls||"")+"'>"+v+"</div></div>"; };
-    h+="<div class='card' style='cursor:pointer' onclick='gotoOpenTrades()'>";
-    h+="<div style='display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap'><span><b>"+esc(t.symbol)+"</b> "+dirTag(t.dir)+(isNum(t.lot)?" "+t.lot.toFixed(2)+"ロット":"")+"</span>"+(rc?"<span class='muted' style='font-size:13px'>"+rc+"</span>":"")+"</div>";
+    h+="<div class='tcard' style='cursor:pointer' onclick='gotoOpenTrades()'>";
+    h+="<div class='th' style='margin-bottom:2px'><div class='when'>"+esc(fmtWhen(t.createdAt))+"</div>"+
+       "<span class='pill' style='white-space:nowrap'>シナリオ "+sc.n+"件"+(scPct!==null?"・"+fmtPct(scPct,2):"")+"</span></div>";
+    h+="<div class='th'><div class='sym'>"+esc(t.symbol)+" "+dirTag(t.dir)+(isNum(c.rr)?"<span class='tag-rr'>RR 1:"+c.rr.toFixed(2)+"</span>":"")+"</div></div>";
     h+="<div class='tgrid'>";
-    h+=ti("エントリー", isNum(t.entry)?fmtMoney(t.entry,2):"—");
-    h+=ti("SL", isNum(t.sl)?fmtMoney(t.sl,2):"—");
-    h+=ti("TP", isNum(t.tp)?fmtMoney(t.tp,2):"—");
-    h+=ti("予定損失", isNum(c.plannedLoss)?("−"+fmtMoney(c.plannedLoss)):"—", "neg");
-    h+=ti("RR", isNum(c.rr)?("1 : "+c.rr.toFixed(2)):"—");
-    h+=ti("シナリオ", sc.n+"件"+(scPct!==null?"・"+fmtPct(scPct,2):""));
-    h+="</div></div>";
+    h+=ti("エントリー", isNum(t.entry)?t.entry:"—");
+    h+=ti("SL", isNum(t.sl)?t.sl:"—");
+    h+=ti("TP", isNum(t.tp)?t.tp:"—");
+    h+=ti("ロット", isNum(t.lot)?t.lot.toFixed(2):"—");
+    h+=ti("予定損失", isNum(c.plannedLoss)?("<span class='neg'>-"+fmtMoney(c.plannedLoss)+"</span>"):"—");
+    h+=ti("予定利益", isNum(c.plannedProfit)?("<span class='pos'>+"+fmtMoney(c.plannedProfit)+"</span>"):"—");
+    h+="</div>";
+    var rc=resetClock(t,true); if(rc) h+="<div class='smallnote tabular' style='margin:6px 0 0'>"+rc+"</div>";
+    var pills=tradePills(t).filter(function(p){ return p.indexOf("シナリオ ")!==0; });   // 上のチップと二重になるので外す
+    if(pills.length){ h+="<div class='tmeta' style='margin-bottom:0'>"+pills.map(function(p){return "<span class='pill'>"+esc(p)+"</span>";}).join("")+"</div>"; }
+    h+="</div>";
   });
   return h;
 }
