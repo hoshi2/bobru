@@ -4160,8 +4160,16 @@ function accountsBody(){
     h+="</div>";
     if(!a.closedReason && on) h+="<div style='padding:4px 0 14px'>"+accountRulesForm(a)+"</div>";
   });
+  // 追加は右の列の「新しい口座を作る」。ここからも開けるようにしておく（一覧の下まで見ると右上が視界から外れるため）
+  h+="<button class='btn ghost' style='margin-top:12px' onclick='openNewAccount()'>＋ 新しい口座を作る</button>";
   return h;
 }
+window.openNewAccount=function(){
+  if(!UI.settingsOpen) UI.settingsOpen={};
+  UI.settingsOpen.newacc=true; render();
+  var el=document.getElementById("st_newacc"); if(el && el.scrollIntoView) el.scrollIntoView({behavior:"smooth",block:"start"});
+  var nm=document.getElementById("a_name"); if(nm) setTimeout(function(){ try{ nm.focus(); }catch(e){} },300);
+};
 function newAccountBody(){
   var h=field("ひな形（ルールの数字が入ります）","<select id='a_tpl'><option value=''>使わない</option>"+
      ACCOUNT_TEMPLATES.map(function(t){ return "<option value='"+t.id+"'>"+esc(t.label)+"</option>"; }).join("")+"</select>");
