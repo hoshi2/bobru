@@ -4168,7 +4168,8 @@ function newAccountBody(){
      field("種別","<select id='a_type'><option value=''>選ぶ</option>"+
        ACCOUNT_TYPES.map(function(o){ return "<option value='"+o[0]+"'>"+esc(o[1])+"</option>"; }).join("")+
        "</select>")+"</div>";
-  h+=field("初期残高","<input type='number' inputmode='decimal' step='any' id='a_init' placeholder='100000'>");
+  h+="<div class='row2'>"+field("初期残高","<input type='number' inputmode='decimal' step='any' id='a_init' placeholder='100000'>")+
+     field("通貨","<select id='a_cur'>"+["JPY","USD","EUR","GBP","AUD","CHF"].map(function(c){ return "<option value='"+c+"'"+(c===acctCurrency()?" selected":"")+">"+c+"</option>"; }).join("")+"</select>")+"</div>";
   h+="<button class='btn primary sm' onclick='addAccount()'>口座を追加して切り替える</button>";
   return h;
 }
@@ -4182,7 +4183,9 @@ function accountRulesForm(a){
   h+="<div class='row2'>"+field("口座名","<input type='text' id='ar_name_"+id+"' value='"+esc(a.name)+"'>")+
      field("種別","<select id='ar_type_"+id+"'><option value=''"+(isAccountType(a.type)?"":" selected")+">未設定</option>"+
        ACCOUNT_TYPES.map(function(o){ return "<option value='"+o[0]+"'"+(a.type===o[0]?" selected":"")+">"+esc(o[1])+"</option>"; }).join("")+"</select>")+"</div>";
-  h+="<div class='row2'>"+inp("init","初期残高",a.initialBalance)+inp("target","目標(%)　空欄＝目標なし",r.targetPct)+"</div>";
+  h+="<div class='row2'>"+inp("init","初期残高",a.initialBalance)+
+     field("通貨","<select id='ar_cur_"+id+"'>"+["JPY","USD","EUR","GBP","AUD","CHF"].concat(a.currency&&["JPY","USD","EUR","GBP","AUD","CHF"].indexOf(a.currency)<0?[a.currency]:[]).map(function(c){ return "<option value='"+c+"'"+(c===a.currency?" selected":"")+">"+c+"</option>"; }).join("")+"</select>")+"</div>";
+  h+=inp("target","目標(%)　空欄＝目標なし",r.targetPct);
   h+="<div class='sect-title' style='margin:10px 0 8px'>この口座のルール</div>";
   h+="<div class='row2'>"+inp("daily","1日の最大損失(%)",r.dailyLossPct)+inp("max","全体の最大損失(%)",r.maxLossPct)+"</div>";
   h+="<div class='row2'>"+inp("open","保有中の最大リスク(%)",r.openRiskPct)+
@@ -4215,6 +4218,8 @@ window.saveAccountRules=function(id){
     if(a.type) a.typeNote="";
   }
   if(initEl){ var iv=toNum(initEl.value); if(isNum(iv)) a.initialBalance=iv; }
+  var curEl=document.getElementById("ar_cur_"+id);
+  if(curEl && curEl.value){ a.currency=String(curEl.value).toUpperCase(); }
   var prevTarget=(a.rules||{}).targetPct;
   a.rules={
     targetPct:(g("target")===""&&typeEl&&a.type!==prevType)?prevTarget:num("target",null),
@@ -4236,11 +4241,11 @@ window.switchAccount=function(id){
 };
 window.addAccount=function(){
   var g=function(x){var e=document.getElementById(x);return e?e.value:"";};
-  var name=(g("a_name")||"").trim(), type=g("a_type"), init=toNum(g("a_init")), tpl=g("a_tpl");
+  var name=(g("a_name")||"").trim(), type=g("a_type"), init=toNum(g("a_init")), tpl=g("a_tpl"), cur=(g("a_cur")||"").toUpperCase();
   if(!name){ toast("口座名を入れて下さい"); return; }
   if(!isAccountType(type)){ toast("種別を選んで下さい"); return; }
   if(!isNum(init)){ toast("初期残高を入れて下さい"); return; }
-  var acc=makeAccount({name:name,type:type,initialBalance:init,template:tpl,_fin:DB.settings.fin});
+  var acc=makeAccount({name:name,type:type,initialBalance:init,template:tpl,currency:cur||undefined,_fin:DB.settings.fin});
   DB.accounts.push(acc);
   applyAccountToSettings(acc);
   saveData(); toast("口座「"+name+"」を作って切り替えました"); render();
