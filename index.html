@@ -2183,6 +2183,8 @@ function emptyMarketSnapshot(req){
     scenarios:{bull:null,bear:null,noTrade:null},
     bias:null,                                            // "long"|"short"|"wait"|null
     summary:null,
+    events:null,                                          // [{time:"21:30",name:"…",importance:"high"}]
+    bobEdge:null,                                         // {m15:{…},h4:{…}}
     notes:[]                                              // 取得できなかった理由などの説明
   };
 }
@@ -2276,6 +2278,8 @@ function mergeSnapshot(dst,src){
       dst.sessions[k].high=toNum(s.high); dst.sessions[k].low=toNum(s.low);
     });
   }
+  if(Array.isArray(src.events)) dst.events=src.events.slice();
+  if(src.bobEdge&&typeof src.bobEdge==="object") dst.bobEdge=src.bobEdge;
   if(src.scenarios&&typeof src.scenarios==="object"){
     ["bull","bear","noTrade"].forEach(function(k){
       if(typeof src.scenarios[k]==="string") dst.scenarios[k]=src.scenarios[k];
@@ -2385,7 +2389,8 @@ function freshBrief(date){
     events:[],
     scenarios:{bull:"",bear:"",noTrade:""},
     bias:"",                       // "long"|"short"|"wait"|""
-    memo:"", aiSummary:"",
+    memo:"", aiSummary:"", aiBias:"",   // aiBias＝AIの見方（自分の判断 bias とは別に残す）
+    bobEdge:null,                        // BOB EDGE の値 {m15:{a,b,c,spread,slope,trend}, h4:{…}}（朝の環境認識が入れる）
     analysis:{source:"",at:null,demo:false,notes:[]}   // 朝分析の出所（手入力だけなら空のまま）
   };
 }
@@ -2427,7 +2432,8 @@ function normalizeBrief(b){
     f.scenarios.bull=b.scenarios.bull||""; f.scenarios.bear=b.scenarios.bear||""; f.scenarios.noTrade=b.scenarios.noTrade||"";
   }
   f.bias=b.bias||"";
-  f.memo=b.memo||""; f.aiSummary=b.aiSummary||"";
+  f.memo=b.memo||""; f.aiSummary=b.aiSummary||""; f.aiBias=b.aiBias||"";
+  f.bobEdge=(b.bobEdge&&typeof b.bobEdge==="object")?JSON.parse(JSON.stringify(b.bobEdge)):null;
   if(b.analysis&&typeof b.analysis==="object"){
     f.analysis.source=b.analysis.source||"";
     f.analysis.at=b.analysis.at||null;
@@ -2806,7 +2812,14 @@ function briefSessionWindows(){
 function briefAnalysisCard(){
   var pname=currentProviderName();
   var info=marketDataProvider.info(pname)||{label:pname,note:"",demo:false};
-  var h="<div class='card'><h2>朝分析</h2>";
+  var h=remoteBriefBanner();
+  if(BRIEF.analysis.source==="claude-code"&&BRIEF.analysis.at){
+    h+="<div class='card'><h2>朝の環境認識（AI）</h2><div class='smallnote' style='margin:0'>Claude が "+esc(fmtWhen(BRIEF.analysis.at))+" に作成。数字は TradingView、文章は AI の見立てです。自分の判断（今日の見方・メモ）は別に残ります。</div>"+
+       (BRIEF.aiBias?"<div class='smallnote'>AI の見方：<b class='"+clsBias(BRIEF.aiBias)+"'>"+esc(labelBias(BRIEF.aiBias))+"</b></div>":"")+
+       briefBobEdgeHtml(BRIEF.bobEdge)+"</div>";
+  }
+  if(canFetchRemoteBrief()) h+="<button class='btn ghost sm' style='margin:0 0 12px' onclick='recheckRemoteBrief()'>届いた環境認識を取りに行く</button>";
+  h+="<div class='card'><h2>朝分析</h2>";
   if(BRIEF.analysis.demo){
     h+="<div class='demowarn'>いまフォームに入っているのはデモのサンプル値です。実際の相場とは関係がないので、記録として保存しないで下さい。</div>";
   }
@@ -2832,6 +2845,15 @@ function briefAnalysisCard(){
   h+="</div>";
   h+="</div>";
   return h;
+}
+function briefBobEdgeHtml(be){
+  if(!be||typeof be!=="object") return "";
+  var row=function(lab,x){ if(!x) return ""; var t=x.trend==="up"?"↑ 上向き":x.trend==="down"?"↓ 下向き":"→ 横ばい";
+    return "<div class='tgrid'><div class='ti'><div class='k'>"+esc(lab)+" 紫の広がり</div><div class='v tabular'>"+(isNum(x.spread)?x.spread.toFixed(1):"—")+"</div></div>"+
+           "<div class='ti'><div class='k'>紫の向き</div><div class='v'>"+esc(t)+"</div></div>"+
+           "<div class='ti'><div class='k'>白 / 水色 / 赤</div><div class='v tabular'>"+(isNum(x.a)?x.a.toFixed(0):"—")+" / "+(isNum(x.b)?x.b.toFixed(0):"—")+" / "+(isNum(x.c)?x.c.toFixed(0):"—")+"</div></div></div>"; };
+  return "<div class='sect-title' style='margin:12px 2px 4px'>BOB EDGE</div>"+row("15M",be.m15)+row("4H",be.h4)+
+         "<div class='smallnote'>TradingView の BOB EDGE v1.8 と同じ式で、確定足から計算。</div>";
 }
 function briefAnalysisStatusHtml(){
   var a=BRIEF&&BRIEF.analysis;
@@ -2872,8 +2894,12 @@ function applySnapshotToBrief(b,s){
   });
 
   ["bull","bear","noTrade"].forEach(function(k){ txt(s.scenarios[k],function(v){ b.scenarios[k]=v; }); });
-  txt(s.bias,function(v){ b.bias=v; });
+  txt(s.bias,function(v){ b.aiBias=v; if(!b.bias) b.bias=v; });
   txt(s.summary,function(v){ b.aiSummary=v; });
+  if(Array.isArray(s.events)){
+    b.events=s.events.map(function(e){ return {time:String((e&&e.time)||""), name:String((e&&e.name)||""), importance:(e&&e.importance)||"mid"}; }); n++;
+  }
+  if(s.bobEdge&&typeof s.bobEdge==="object"){ b.bobEdge=JSON.parse(JSON.stringify(s.bobEdge)); n++; }
   return n;
 }
 // 何か入力されているか（空の新規フォームとの差で見る）
@@ -2929,11 +2955,64 @@ window.runMorningAnalysis=function(){
     });
 };
 
+
+/* =========================================================================
+   朝の環境認識の受け取り
+   Claude Code（Mac／クラウド／スマホ）が作った briefs/latest.json を、公開ページから取りに行く。
+   今日のぶんで、まだ入れていなければ：今日の環境認識が無いときはそのまま入れる。
+   手で書いたものがあるときは上書きせず「届いています → 反映」を出す。
+   ファイルから開いたとき（file://）は取りに行けないので何もしない。
+   ========================================================================= */
+var REMOTE={pending:null, checkedAt:0, lastError:""};
+function remoteBriefUrl(){ return "briefs/latest.json?t="+Date.now(); }
+function canFetchRemoteBrief(){ return typeof fetch==="function" && /^https?:/.test(String(location.protocol||"")); }
+function remoteAlreadyApplied(rec,snap){
+  return !!(rec && rec.analysis && rec.analysis.at && snap.asOf && rec.analysis.at===snap.asOf);
+}
+function checkRemoteBrief(force){
+  if(!canFetchRemoteBrief()) return;
+  if(!force && Date.now()-REMOTE.checkedAt<5*60*1000) return;
+  REMOTE.checkedAt=Date.now();
+  fetch(remoteBriefUrl(),{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }).then(function(snap){
+    REMOTE.lastError="";
+    if(!snap||typeof snap!=="object"||!snap.date) return;
+    if(snap.date!==today()){ REMOTE.pending=null; return; }          // 今日のぶんだけ扱う
+    var rec=briefOn(snap.date);
+    if(rec && remoteAlreadyApplied(rec,snap)){ REMOTE.pending=null; return; }
+    if(!rec){ applyRemoteSnapshot(snap); return; }                    // 今日の環境認識がまだ無い → そのまま入れる
+    REMOTE.pending=snap;                                              // 手で書いたものがある → ボタンで反映
+    if(TAB==="home"||TAB==="brief") render();
+  }).catch(function(e){ REMOTE.lastError=String(e&&e.message||e); });
+}
+function applyRemoteSnapshot(snap){
+  var rec=briefOn(snap.date);
+  var b=normalizeBrief(rec||{date:snap.date, symbol:snap.symbol||"XAUUSD"});
+  b.date=snap.date;
+  var n=applySnapshotToBrief(b, mergeSnapshot(emptyMarketSnapshot({symbol:snap.symbol,date:snap.date}), snap));
+  b.analysis={source:snap.source||"claude-code", at:snap.asOf||now(), demo:false, notes:(snap.notes||[]).slice()};
+  if(rec){ b.id=rec.id||uid(); b.createdAt=rec.createdAt||now(); b.updatedAt=now();
+    for(var i=0;i<DB.briefs.length;i++){ if(DB.briefs[i]===rec){ DB.briefs[i]=b; break; } } }
+  else { b.id=uid(); b.createdAt=now(); b.updatedAt=now(); DB.briefs.unshift(b); }
+  REMOTE.pending=null; saveData();
+  if(TAB==="brief" && UI.briefDate===snap.date) BRIEF=null;   // 開いていたら読み直す
+  toast("今日の環境認識が届きました（"+n+"項目）");
+  render();
+  return n;
+}
+window.applyRemoteBrief=function(){ if(REMOTE.pending) applyRemoteSnapshot(REMOTE.pending); };
+window.recheckRemoteBrief=function(){ toast("環境認識を取りに行っています"); checkRemoteBrief(true); };
+function remoteBriefBanner(){
+  if(!REMOTE.pending) return "";
+  return "<div class='card' style='border-color:color-mix(in srgb,var(--blue2) 40%,transparent)'><div style='display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap'>"+
+         "<span>今日の環境認識が届いています（"+esc(fmtWhen(REMOTE.pending.asOf||""))+"）。いまの入力の、取得できた項目を置き換えます。</span>"+
+         "<button class='btn primary inline' onclick='applyRemoteBrief()'>反映する</button></div></div>";
+}
 /* ---------- ホーム用の要約カード ---------- */
 function homeBriefCard(){
   var raw=todayBrief();
+  var banner=remoteBriefBanner();
   if(!raw){
-    var h0="<div class='card'>";
+    var h0=banner+"<div class='card'>";
     h0+="<div class='smallnote' style='margin:0 0 11px'>今日の環境認識はまだありません。先に相場を整理しておくと、あとで「どんな環境なら勝てているか」を振り返れます。</div>";
     h0+="<button class='btn ghost sm' style='width:auto;display:inline-block;padding:8px 14px' onclick='gotoBriefToday()'>環境認識をつくる</button>";
     h0+="</div>";
@@ -2941,7 +3020,7 @@ function homeBriefCard(){
   }
   var b=normalizeBrief(raw);
   var pill=function(lab,v){ return "<span class='pill'>"+esc(lab)+" "+esc(arrowTrend(v))+"</span>"; };
-  var h="<div class='card' style='cursor:pointer' onclick='gotoBriefToday()'>";
+  var h=banner+"<div class='card' style='cursor:pointer' onclick='gotoBriefToday()'>";
   // 上段：見方＋時間足の向き（左）、直近の指標（右）
   var ev=eventsSorted(b.events);
   h+="<div style='display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap'>";
@@ -2951,9 +3030,13 @@ function homeBriefCard(){
   h+="</div>";
   // 中段：意識される数字
   var ti=function(k,v){ return "<div class='ti'><div class='k'>"+esc(k)+"</div><div class='v tabular'>"+(isNum(v)?fmtMoney(v,1):"—")+"</div></div>"; };
-  h+="<div class='tgrid'>"+ti("前日高値",b.levels.prevHigh)+ti("前日安値",b.levels.prevLow)+ti("EMA75",b.ema.e75)+ti("EMA200",b.ema.e200)+ti("週足高値",b.levels.weekHigh)+ti("週足安値",b.levels.weekLow)+"</div>";
+  var be=b.bobEdge&&b.bobEdge.m15;
+  var tiRaw=function(k,v){ return "<div class='ti'><div class='k'>"+esc(k)+"</div><div class='v tabular'>"+v+"</div></div>"; };
+  h+="<div class='tgrid'>"+ti("前日高値",b.levels.prevHigh)+ti("前日安値",b.levels.prevLow)+ti("EMA75",b.ema.e75)+ti("EMA200",b.ema.e200)+
+     (be?tiRaw("紫の広がり（15M）",isNum(be.spread)?be.spread.toFixed(1)+(be.trend==="up"?" ↑":be.trend==="down"?" ↓":" →"):"—"):ti("週足高値",b.levels.weekHigh))+
+     (be?tiRaw("水色（15M）",isNum(be.b)?be.b.toFixed(0):"—"):ti("週足安値",b.levels.weekLow))+"</div>";
   // 下段：ひとこと（シナリオ or メモ or 見送り条件）
-  var line=(b.memo||b.aiSummary||"").trim();
+  var line=(b.aiSummary||b.memo||"").trim();
   if(!line){ var parts=[]; if(b.scenarios.bull) parts.push("↑ "+b.scenarios.bull); if(b.scenarios.bear) parts.push("↓ "+b.scenarios.bear); if(b.scenarios.noTrade) parts.push("見送り："+b.scenarios.noTrade); line=parts.join("　"); }
   if(line) h+="<div class='muted' style='font-size:13px;margin-top:10px;white-space:pre-wrap'>"+esc(line.length>160?line.slice(0,160)+"…":line)+"</div>";
   h+="</div>";
@@ -4857,8 +4940,9 @@ function boot(){
   bindBriefLiveSync();
   // 画面に戻ってきたら、期限が切れていればレートを取り直す
   document.addEventListener("visibilitychange",function(){
-    if(!document.hidden) ensureFxRate();
+    if(!document.hidden){ ensureFxRate(); checkRemoteBrief(); }
   });
+  checkRemoteBrief(true);
   window.addEventListener("beforeunload",function(e){
     // 保存していない環境認識があるまま閉じる／再読込するのを止める
     if(!briefDirty()) return;

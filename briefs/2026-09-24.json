@@ -1,0 +1,139 @@
+{
+ "symbol": "XAUUSD",
+ "date": "2026-09-24",
+ "source": "claude-code",
+ "asOf": "2026-09-24T06:42:30+00:00",
+ "price": 4279.05,
+ "trend": {
+  "daily": "range",
+  "h4": "range",
+  "h1": "down",
+  "m15": "down"
+ },
+ "ema": {
+  "tf": "h1",
+  "e10": 4282.24,
+  "e75": 4317.07,
+  "e200": 4338.85
+ },
+ "levels": {
+  "prevHigh": 4369.56,
+  "prevLow": 4274.745,
+  "weekHigh": 4383.385,
+  "weekLow": 4273.815,
+  "recentHigh": 4321.05,
+  "recentLow": 4269.25
+ },
+ "sessions": {
+  "asia": {
+   "high": 4299.25,
+   "low": 4269.25
+  },
+  "london": {
+   "high": null,
+   "low": null
+  },
+  "newyork": {
+   "high": null,
+   "low": null
+  }
+ },
+ "scenarios": {
+  "bull": "4273〜4275（週足安値・前日安値）を割らずに、15M で白が水色を 20〜35 の帯で上抜け、紫が上向きに広がり始めたらロング。目標は 1H の EMA75 4317 → EMA200 4339。SL は直近安値 4269 の下。",
+  "bear": "4273 を明確に割って戻りが 4275〜4285 で止まったらショート。目標は先週安値 4235。SL は 4300 の上。4H の紫が下向きに広がるのを確認してから。",
+  "noTrade": "15M の紫の広がり 6.4、4H も 17 で横ばい＝どちらも収束中。広がり始めるまで新規なし。21:30（新規失業保険）の前後 15 分は見送り。トランプ・習会談の見出しで急変しやすいのでロットは控えめ。4285〜4300 の中途半端な位置では入らない。"
+ },
+ "bias": "wait",
+ "summary": "日足・4H はレンジ、1H・15M は下向き。価格 4279 は週足安値 4273.8 と前日安値 4274.7 のすぐ上に乗っていて、紫は 15M・4H とも収束中。割れるか反発するかを待つ局面。",
+ "events": [
+  {
+   "time": "09:00",
+   "name": "UN General Assembly",
+   "importance": "mid"
+  },
+  {
+   "time": "09:00",
+   "name": "President Trump and President Xi Summit",
+   "importance": "high"
+  },
+  {
+   "time": "17:10",
+   "name": "Fed Williams Speech",
+   "importance": "mid"
+  },
+  {
+   "time": "21:00",
+   "name": "Fed Barkin Speech",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "Initial Jobless Claims",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "Current Account",
+   "importance": "mid"
+  },
+  {
+   "time": "21:50",
+   "name": "Fed Hammack Speech",
+   "importance": "mid"
+  },
+  {
+   "time": "23:00",
+   "name": "New Home Sales",
+   "importance": "mid"
+  },
+  {
+   "time": "23:00",
+   "name": "New Home Sales MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "23:10",
+   "name": "Fed Paulson Speech",
+   "importance": "mid"
+  }
+ ],
+ "bobEdge": {
+  "m15": {
+   "a": 23.9,
+   "b": 40.7,
+   "c": 48.0,
+   "purple": [
+    19.1,
+    15.1,
+    12.7,
+    14.3,
+    18.1
+   ],
+   "spread": 6.4,
+   "slope": -0.5,
+   "trend": "flat",
+   "cross": null,
+   "bar_t": 1790231400
+  },
+  "h4": {
+   "a": 19.4,
+   "b": 33.6,
+   "c": 62.5,
+   "purple": [
+    26.5,
+    21.4,
+    18.8,
+    22.3,
+    36.2
+   ],
+   "spread": 17.3,
+   "slope": -1.0,
+   "trend": "flat",
+   "cross": null,
+   "bar_t": 1790211600
+  }
+ },
+ "notes": [
+  "足は先物（GC=F）をスポットに合わせて -38.75 ずらしたもの"
+ ]
+}
