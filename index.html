@@ -693,6 +693,7 @@ function defaultResearch(){
 /* ---------- 口座（アカウント） ----------
    種別は3つだけ。旧データの自由文字列は typeNote に残し、type は未設定のままにする。
    開始日・終了日は持たない（最初と最後のトレードから決まるため）。 */
+var CURRENCIES=["JPY","USD"];   // 口座通貨の選択肢（2026-09-24 本人：この2つだけ）
 var ACCOUNT_TYPES=[["step1","ステップ1"],["step2","ステップ2"],["live","本番"]];
 var ACCOUNT_CLOSE_REASONS=[["pass","合格"],["fail","失格"],["expired","期限切れ"]];
 // 逸脱の中身（決済時に複数選ぶ）。SLなし・逆行中の追加・ロット増・停止ライン到達後はアプリが判定するので入れない
@@ -2026,6 +2027,7 @@ function ensureFxRate(force){
         f.source=res.snapshot.source||"";
         FX.lastError="";
         saveData();
+        resolvePendingFx();
       }
     }else{
       // 直近成功値はそのまま残す（消さない）
@@ -4169,7 +4171,7 @@ function newAccountBody(){
        ACCOUNT_TYPES.map(function(o){ return "<option value='"+o[0]+"'>"+esc(o[1])+"</option>"; }).join("")+
        "</select>")+"</div>";
   h+="<div class='row2'>"+field("初期残高","<input type='number' inputmode='decimal' step='any' id='a_init' placeholder='100000'>")+
-     field("通貨","<select id='a_cur'>"+["JPY","USD","EUR","GBP","AUD","CHF"].map(function(c){ return "<option value='"+c+"'"+(c===acctCurrency()?" selected":"")+">"+c+"</option>"; }).join("")+"</select>")+"</div>";
+     field("通貨","<select id='a_cur'>"+CURRENCIES.map(function(c){ return "<option value='"+c+"'"+(c===acctCurrency()?" selected":"")+">"+c+"</option>"; }).join("")+"</select>")+"</div>";
   h+="<button class='btn primary sm' onclick='addAccount()'>口座を追加して切り替える</button>";
   return h;
 }
@@ -4184,7 +4186,7 @@ function accountRulesForm(a){
      field("種別","<select id='ar_type_"+id+"'><option value=''"+(isAccountType(a.type)?"":" selected")+">未設定</option>"+
        ACCOUNT_TYPES.map(function(o){ return "<option value='"+o[0]+"'"+(a.type===o[0]?" selected":"")+">"+esc(o[1])+"</option>"; }).join("")+"</select>")+"</div>";
   h+="<div class='row2'>"+inp("init","初期残高",a.initialBalance)+
-     field("通貨","<select id='ar_cur_"+id+"'>"+["JPY","USD","EUR","GBP","AUD","CHF"].concat(a.currency&&["JPY","USD","EUR","GBP","AUD","CHF"].indexOf(a.currency)<0?[a.currency]:[]).map(function(c){ return "<option value='"+c+"'"+(c===a.currency?" selected":"")+">"+c+"</option>"; }).join("")+"</select>")+"</div>";
+     field("通貨","<select id='ar_cur_"+id+"'>"+CURRENCIES.concat(a.currency&&CURRENCIES.indexOf(a.currency)<0?[a.currency]:[]).map(function(c){ return "<option value='"+c+"'"+(c===a.currency?" selected":"")+">"+c+"</option>"; }).join("")+"</select>")+"</div>";
   h+=inp("target","目標(%)　空欄＝目標なし",r.targetPct);
   h+="<div class='sect-title' style='margin:10px 0 8px'>この口座のルール</div>";
   h+="<div class='row2'>"+inp("daily","1日の最大損失(%)",r.dailyLossPct)+inp("max","全体の最大損失(%)",r.maxLossPct)+"</div>";
@@ -4198,6 +4200,27 @@ function accountRulesForm(a){
   h+="<div class='btnrow'><button class='btn sm' onclick=\"saveAccountRules('"+id+"')\">この口座を保存</button>"+
      "<button class='btn ghost sm' onclick=\"closeAccount('"+id+"')\">この口座を終了する</button></div>";
   return h;
+}
+
+// 口座の通貨を変えたとき。記録の金額はそのまま、通貨の表示だけ新しい通貨に揃える（本人が通貨を間違えて口座を作った場合の直し）。
+// USD建て銘柄の予定損失・R は換算レートが要るので、いま分かるレートを入れる。まだ無ければ印を付け、取得できたときに入れる
+function relabelAccountCurrency(acc, newCur){
+  var n=0;
+  DB.trades.forEach(function(t){
+    if((t.accountId||"")!==acc.id) return;
+    if((t.acctCurrency||"")===newCur) return;
+    t.acctCurrency=newCur; n++;
+    if(quoteCurrencyOf(t.symbol)===newCur){ t.fxRate=1; delete t.fxPending; }
+    else { var r=usdToAcctRate(); if(isNum(r)&&r>0){ t.fxRate=r; delete t.fxPending; } else { t.fxRate=1; t.fxPending=true; } }
+  });
+  return n;
+}
+// レートが取れたら、待っていた記録に入れる
+function resolvePendingFx(){
+  var r=usdToAcctRate(), cur=acctCurrency(); if(!isNum(r)||r<=0) return;
+  var changed=false;
+  DB.trades.forEach(function(t){ if(t.fxPending && (t.acctCurrency||"")===cur){ t.fxRate=r; delete t.fxPending; changed=true; } });
+  if(changed) saveData();
 }
 window.saveAccountRules=function(id){
   var a=findAccount(id); if(!a) return;
@@ -4218,8 +4241,8 @@ window.saveAccountRules=function(id){
     if(a.type) a.typeNote="";
   }
   if(initEl){ var iv=toNum(initEl.value); if(isNum(iv)) a.initialBalance=iv; }
-  var curEl=document.getElementById("ar_cur_"+id);
-  if(curEl && curEl.value){ a.currency=String(curEl.value).toUpperCase(); }
+  var curEl=document.getElementById("ar_cur_"+id), curChanged=false;
+  if(curEl && curEl.value && String(curEl.value).toUpperCase()!==(a.currency||"")){ a.currency=String(curEl.value).toUpperCase(); curChanged=true; }
   var prevTarget=(a.rules||{}).targetPct;
   a.rules={
     targetPct:(g("target")===""&&typeEl&&a.type!==prevType)?prevTarget:num("target",null),
@@ -4232,6 +4255,11 @@ window.saveAccountRules=function(id){
     profitSplitPct:num("split",null)
   };
   if(id===currentAccountId()) applyAccountToSettings(a);
+  if(curChanged){
+    var nRel=relabelAccountCurrency(a, a.currency);
+    if(id===currentAccountId()) ensureFxRate(true);
+    saveData(); toast("「"+a.name+"」を "+a.currency+" にしました"+(nRel?"（記録 "+nRel+"件の通貨表示も揃えました）":"")); render(); return;
+  }
   saveData(); toast("「"+a.name+"」を保存しました"); render();
 };
 window.switchAccount=function(id){
@@ -4304,7 +4332,7 @@ function viewSettings(){
 
   // ---- 右：たまに使う ----
   // 口座通貨と為替レート
-  var curOpts=["JPY","USD","EUR","GBP","AUD","CHF"];
+  var curOpts=CURRENCIES.slice();
   if(curOpts.indexOf(acctCurrency())<0) curOpts.unshift(acctCurrency());
   var fxs=fxSettings();
   var fxNow=acctCurrency()+(acctCurrency()==="USD"?"・換算なし":"・自動取得 "+(fxs.auto?"ON":"OFF")+(isNum(fxs.rate)&&fxs.rate>0?"・"+fxs.rate+(fxs.at||fxs.rateAt?"（"+fmtWhen(fxs.at||fxs.rateAt)+"）":""):(isNum(fxs.manual)&&fxs.manual>0?"・手動 "+fxs.manual:"")));
@@ -4371,8 +4399,10 @@ window.saveSettings=function(){
   // 口座名・種別・初期残高は設定の「口座」の欄で保存する（saveAccountRules）。ここでは通貨だけ、いまの口座に反映
   var accNow=currentAccount();
   if(accNow){
+    var accCurChanged=(s.currency && s.currency!==accNow.currency);
     accNow.currency=s.currency||accNow.currency;
     applyAccountToSettings(accNow);
+    if(accCurChanged){ relabelAccountCurrency(accNow, accNow.currency); ensureFxRate(true); }
   }
   s.balanceMode=g("s_balmode"); s.manualBalance=g("s_manual")===""?null:toNum(g("s_manual"));
   s.internalRiskPct=toNum(g("s_irisk"))||1; s.baseLot=toNum(g("s_blot")); s.lossStreakWarn=toNum(g("s_streak"))||4;
