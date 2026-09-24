@@ -4160,7 +4160,7 @@ function accountsBody(){
     h+="</div>";
     if(!a.closedReason && on) h+="<div style='padding:4px 0 14px'>"+accountRulesForm(a)+"</div>";
   });
-  // 追加は右の列の「新しい口座を作る」。ここからも開けるようにしておく（一覧の下まで見ると右上が視界から外れるため）
+  // 追加はすぐ上の「新しい口座を作る」欄。ここからも開ける
   h+="<button class='btn ghost' style='margin-top:12px' onclick='openNewAccount()'>＋ 新しい口座を作る</button>";
   return h;
 }
@@ -4376,17 +4376,18 @@ function viewSettings(){
      "<button class='btn ghost' onclick='wipeAll()'>全データを削除</button>"+
      "<div class='smallnote'>削除は二段階確認します。事前にバックアップ推奨。</div>";
 
+  // 並び（2026-09-24 本人指定）左：新しい口座／口座／計算／内部ルール／口座通貨とレート、右：取り込み／表示／版番号／同期／データ
   h+="<div class='sgrid'><div>";
-  h+=settingsItem("import","取引履歴の取り込み",impNow,impBody);
-  h+=settingsItem("accounts","口座",accNow,accountsBody());
-  h+=settingsItem("sync","端末間の同期（PC ⇔ スマホ）",ls?("最終同期 "+fmtWhen(ls)):"まだ同期していません",syncBody);
-  h+=settingsItem("rules","内部ルール（自主設定）",rulesNow,rulesBody);
-  h+=settingsItem("versions","版番号",verNow,verBody);
-  h+="</div><div>";
   h+=settingsItem("newacc","新しい口座を作る","ひな形から作れます",newAccountBody());
-  h+=settingsItem("fx","口座通貨と為替レート",fxNow,fxBody);
+  h+=settingsItem("accounts","口座",accNow,accountsBody());
   h+=settingsItem("calc","計算",calcNow,calcBody);
+  h+=settingsItem("rules","内部ルール（自主設定）",rulesNow,rulesBody);
+  h+=settingsItem("fx","口座通貨と為替レート",fxNow,fxBody);
+  h+="</div><div>";
+  h+=settingsItem("import","取引履歴の取り込み",impNow,impBody);
   h+=settingsItem("display","表示",dispNow,dispBody);
+  h+=settingsItem("versions","版番号",verNow,verBody);
+  h+=settingsItem("sync","端末間の同期（PC ⇔ スマホ）",ls?("最終同期 "+fmtWhen(ls)):"まだ同期していません",syncBody);
   h+=settingsItem("data","データ（バックアップ・復元・削除）","JSON・CSV の出力、復元、全データ削除",dataBody);
   h+="</div></div>";
   h+="<button class='btn primary' style='margin-top:8px' onclick='saveSettings()'>設定を保存</button>";
