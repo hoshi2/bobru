@@ -566,7 +566,7 @@ html[data-theme="light"] .filterbar button.on{color:#fff;background:var(--blue)}
 /* =========================================================================
    ぼぶる  — トレード計画・記録・分析・ルールブック（単一HTML / 依存なし）
    保存: localStorage（同一オリジン衝突回避のため専用キー）
-   同期: 既存アプリと同じ base64 スナップショット方式（BOB1.）
+   同期: クラウド同期（Firebase Firestore・記録単位で新しい方が勝つ）＋手動の base64 スナップショット（BOB1.）
    ========================================================================= */
 
 /* ---------- storageAdapter（保存責務を集約） ---------- */
@@ -764,7 +764,8 @@ function makeAccount(o){
     closedReason:o.closedReason||null,
     template:findTemplate(o.template)?o.template:"",
     brokerIds:Array.isArray(o.brokerIds)?o.brokerIds.slice():[],
-    rules:normalizeRules(o.rules, isAccountType(t)?t:"", o.template, o._fin)
+    rules:normalizeRules(o.rules, isAccountType(t)?t:"", o.template, o._fin),
+    _m:isNum(o._m)?o._m:undefined   // クラウド同期の「最後に変えた時刻」。無ければ JSON で消える
   };
 }
 function accountFromSettings(s){
@@ -1023,7 +1024,7 @@ function defaultDB(){
     ruleHistory:[],  // 変更履歴（rules内 isHistory とは別に生ログも保持）
     researchItems:defaultResearch(),
     tags:[],
-    syncMetadata:{lastSync:null, lastExport:null, deviceCreated:now()}
+    syncMetadata:{lastSync:null, lastExport:null, deviceCreated:now(), deleted:{}}   // deleted: 消した記録の墓標 {id: 消した時刻ms}
   };
 }
 
@@ -1076,6 +1077,7 @@ function loadData(){
   }
   var iraw=storageAdapter.loadImgRaw();
   if(iraw){ try{ IMG=JSON.parse(iraw)||{}; }catch(e){ IMG={}; } } else { IMG={}; }
+  cloudSeenReset();
 }
 function migrate(p){
   var base=defaultDB();
@@ -1124,8 +1126,10 @@ function mergeSettings(def,s){
   return out;
 }
 function saveData(){
+  cloudStamp();   // 変わった記録に時刻を押す（クラウド同期で新しい方が勝つため）
   var ok=storageAdapter.saveRaw(JSON.stringify(DB));
   if(!ok) toast("保存に失敗しました（容量制限の可能性）");
+  else cloudPushSoon();
   return ok;
 }
 function saveImg(){ storageAdapter.saveImgRaw(JSON.stringify(IMG)); }
@@ -1181,6 +1185,303 @@ function syncData(mode, code){
     }catch(e){ return {ok:false,msg:"コードを読み込めませんでした。コピーし直して下さい"}; }
   }
 }
+/* ---------- クラウド同期（Firebase Firestore。習慣・お金・ロイログと同じ方式） ---------- */
+// 自分の Firebase プロジェクトの設定＋合言葉（同期コード）を各端末に貼ると、
+// boburu/{同期コード} の1件に記録を丸ごと置き、両方の端末がそれを見張る。画像は含めない。
+// 記録ごとに _m（最後に変えた時刻）を持ち、合わせるときは記録単位で新しい方が勝つ。
+// 消した記録は syncMetadata.deleted に墓標（id → 消した時刻）を残し、相手側でも消す。
+var KEY_CLOUD="boburu_v1_cloud";     // 端末内だけ：{config, code}。DB には入れない
+var CLOUD_COLLECTION="boburu";
+var CLOUD_SDK=["https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.js",
+               "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"];
+var CLOUD_COLS=["trades","tradePlans","briefs","accounts","researchItems","rules"];
+var CLOUD_DOC_LIMIT=900000;          // Firestore の1件上限（1MiB）の手前で知らせる
+var CLOUD={db:null,unsub:null,ready:false,error:"",lastData:null,lastAt:null,timer:0,renderPending:false,pushing:false,dirty:false};
+var _cloudSeen={};   // 前回保存時の記録の姿 {col:{id:json}}。変わった記録に _m を押すために持つ
+
+function loadCloudCfg(){ try{ var v=JSON.parse(localStorage.getItem(KEY_CLOUD)||"null"); return (v&&v.config&&v.code)?v:null; }catch(e){ return null; } }
+function saveCloudCfg(v){ try{ localStorage.setItem(KEY_CLOUD, JSON.stringify(v)); }catch(e){} }
+function clearCloudCfg(){ try{ localStorage.removeItem(KEY_CLOUD); }catch(e){} }
+function cloudOn(){ return !!loadCloudCfg(); }
+
+// 記録の「最後に変えた時刻」（ms）。_m が無い古い記録は、持っている日時から推定
+function recMs(r){
+  if(!r||typeof r!=="object") return 0;
+  if(isNum(r._m)) return r._m;
+  var t=Date.parse(r.updatedAt||r.savedAt||r.createdAt||r.created||r.at||"");
+  return isNaN(t)?0:t;
+}
+// open（ルール帳の折り畳み）は画面の状態なので比べない
+function cloudRecJson(r){ var o={}; for(var k in r){ if(k!=="_m"&&k!=="open") o[k]=r[k]; } return JSON.stringify(o); }
+// 設定は「いまの口座」と為替レートを除いて比べる（どちらも端末ごとの状態）
+function cloudSettingsJson(s){ var o={}; for(var k in s){ if(k!=="_m"&&k!=="currentAccountId"&&k!=="fx") o[k]=s[k]; } return JSON.stringify(o); }
+function cloudDead(){ if(!DB.syncMetadata||typeof DB.syncMetadata!=="object") DB.syncMetadata={}; var d=DB.syncMetadata.deleted; if(!d||typeof d!=="object") d=DB.syncMetadata.deleted={}; return d; }
+// いまの DB の姿を覚える（読み込み直後・保存直後・合わせた直後）
+function cloudSeenReset(){
+  _cloudSeen={};
+  if(!DB) return;
+  CLOUD_COLS.forEach(function(col){ var m={}; (DB[col]||[]).forEach(function(r){ if(r&&r.id) m[r.id]=cloudRecJson(r); }); _cloudSeen[col]=m; });
+  _cloudSeen.settings=cloudSettingsJson(DB.settings||{});
+}
+// 保存のたびに、変わった記録に _m を押し、消えた記録を墓標に残す
+function cloudStamp(){
+  if(!DB) return;
+  var t=Date.now(), dead=cloudDead();
+  CLOUD_COLS.forEach(function(col){
+    var seen=_cloudSeen[col]||{}, live={};
+    (DB[col]||[]).forEach(function(r){
+      if(!r||!r.id) return;
+      var j=cloudRecJson(r); live[r.id]=1;
+      if(seen[r.id]!==j){ r._m=t; delete dead[r.id]; }
+    });
+    for(var id in seen){ if(!live[id]) dead[id]=t; }
+  });
+  if(cloudSettingsJson(DB.settings||{})!==_cloudSeen.settings) DB.settings._m=t;
+  for(var d in dead){ if(t-dead[d]>90*86400000) delete dead[d]; }   // 90日より古い墓標は捨てる
+  cloudSeenReset();
+}
+// 相手の DB を自分の DB に合わせ込む。戻り値 {local: 自分が変わった, remote: 相手に無い物を自分が持っている}
+function cloudMerge(remote){
+  var out={local:false,remote:false};
+  if(!remote||typeof remote!=="object") return out;
+  var dead=cloudDead(), rdead=(remote.syncMetadata&&remote.syncMetadata.deleted)||{}, id, old=Date.now()-90*86400000;
+  for(id in rdead){ if(rdead[id]>old && !(dead[id]>=rdead[id])){ dead[id]=rdead[id]; out.local=true; } }
+  for(id in dead){ if(dead[id]>old && !(rdead[id]>=dead[id])) out.remote=true; }
+  CLOUD_COLS.forEach(function(col){
+    var local=Array.isArray(DB[col])?DB[col]:[], rl=Array.isArray(remote[col])?remote[col]:[];
+    var byId={}, rById={};
+    local.forEach(function(r){ if(r&&r.id) byId[r.id]=r; });
+    rl.forEach(function(r){ if(r&&r.id) rById[r.id]=r; });
+    var merged=local.slice();
+    rl.forEach(function(rr){
+      if(!rr||!rr.id) return;
+      var lr=byId[rr.id];
+      if(!lr){ if(dead[rr.id]>=recMs(rr)) return; merged.push(rr); byId[rr.id]=rr; out.local=true; return; }
+      var rm=recMs(rr), lm=recMs(lr), take=false;
+      if(rm>lm) take=true;
+      else if(rm<lm) out.remote=true;
+      else { var rj=cloudRecJson(rr), lj=cloudRecJson(lr); if(rj!==lj){ if(rj>lj) take=true; else out.remote=true; } }   // 同時刻で中身が違う：両端末で同じ側が勝つように文字列で決める
+      if(take){ if(lr.open!==undefined) rr.open=lr.open; merged[merged.indexOf(lr)]=rr; byId[rr.id]=rr; out.local=true; }
+    });
+    local.forEach(function(lr){ if(lr&&lr.id&&!rById[lr.id]&&!(rdead[lr.id]>=recMs(lr))) out.remote=true; });
+    var kept=merged.filter(function(r){ return !(r&&r.id&&dead[r.id]>=recMs(r)); });
+    if(kept.length!==merged.length) out.local=true;
+    DB[col]=kept;
+  });
+  // 設定：新しい方が丸ごと勝つ。ただし「いまの口座」と為替レートは端末のものを残す
+  var rs=remote.settings;
+  if(rs&&typeof rs==="object"){
+    if(recMs(rs)>recMs(DB.settings)){
+      var keepId=DB.settings.currentAccountId, keepFx=DB.settings.fx;
+      DB.settings=mergeSettings(defaultSettings(), rs);
+      DB.settings.currentAccountId=keepId; DB.settings.fx=keepFx; DB.settings._m=rs._m;
+      out.local=true;
+    } else if(recMs(rs)<recMs(DB.settings)) out.remote=true;
+  }
+  // タグと変更履歴は足し合わせる
+  var tags=Array.isArray(DB.tags)?DB.tags:(DB.tags=[]);
+  (Array.isArray(remote.tags)?remote.tags:[]).forEach(function(t){ if(t&&tags.indexOf(t)<0){ tags.push(t); out.local=true; } });
+  if(tags.length>(Array.isArray(remote.tags)?remote.tags.length:0)) out.remote=true;
+  var hist=Array.isArray(DB.ruleHistory)?DB.ruleHistory:(DB.ruleHistory=[]);
+  var hKeys={}; hist.forEach(function(h){ hKeys[JSON.stringify(h)]=1; });
+  var rKeys={}; (Array.isArray(remote.ruleHistory)?remote.ruleHistory:[]).forEach(function(h){ var k=JSON.stringify(h); rKeys[k]=1; if(!hKeys[k]){ hist.push(h); hKeys[k]=1; out.local=true; } });
+  for(var hk in hKeys){ if(!rKeys[hk]) out.remote=true; }
+  hist.sort(function(a,b){ return String(a.at||"").localeCompare(String(b.at||"")); });
+  if(!Array.isArray(DB.accounts)||!DB.accounts.length) DB.accounts=[accountFromSettings(DB.settings)];
+  if(!findAccountIn(DB.accounts,DB.settings.currentAccountId)) DB.settings.currentAccountId=DB.accounts[0].id;
+  return out;
+}
+function cloudPayload(){ return JSON.stringify(DB); }
+
+/* --- Firebase とのやり取り --- */
+function cloudLoadSdk(){
+  if(window.firebase&&window.firebase.firestore) return Promise.resolve();
+  return CLOUD_SDK.reduce(function(p,src){
+    return p.then(function(){ return new Promise(function(res,rej){
+      var s=document.createElement("script"); s.src=src; s.onload=res; s.onerror=function(){ rej(new Error("Firebase の部品を読み込めませんでした（ネット接続を確認）")); };
+      document.head.appendChild(s);
+    }); });
+  }, Promise.resolve());
+}
+function cloudRef(){ var cfg=loadCloudCfg(); return CLOUD.db.collection(CLOUD_COLLECTION).doc(cfg.code); }
+function cloudErrText(e){
+  var code=(e&&e.code)||"", msg=(e&&e.message)||String(e||"");
+  if(/permission-denied|insufficient permissions/i.test(code+" "+msg)) return "Firebase の許可設定で「"+CLOUD_COLLECTION+"」が許されていません（設定の直し方は Claude に聞いて下さい）";
+  if(/unavailable|network|offline/i.test(code+" "+msg)) return "ネットにつながっていません（つながれば自動で再開）";
+  return msg||"不明なエラー";
+}
+function cloudSetError(e){ CLOUD.error=e?cloudErrText(e):""; if(e) console.error("cloud",e); cloudRefreshStatus(); }
+// 設定画面を開いていれば、状態の文字だけ差し替える
+function cloudRefreshStatus(){
+  var el=document.getElementById("cloudstatus"); if(el) el.innerHTML=cloudStatusHtml();
+  var sm=document.querySelector("#st_sync .now"); if(sm) sm.textContent=cloudSummary();
+}
+function cloudSummary(){
+  if(!cloudOn()) return "未接続（手動の同期コードのみ）";
+  if(CLOUD.error) return "エラー："+CLOUD.error;
+  if(!CLOUD.ready) return "接続中…";
+  return "● 接続済み"+(CLOUD.lastAt?"・最終同期 "+fmtWhen(CLOUD.lastAt):"");
+}
+function cloudStatusHtml(){
+  var cfg=loadCloudCfg(); if(!cfg) return "";
+  var h="<div class='smallnote' style='margin:0 0 6px'>同期コード <b>"+esc(cfg.code)+"</b>・保存先 "+esc(cfg.config.projectId||"")+"</div>";
+  if(CLOUD.error) h+="<div class='smallnote' style='color:var(--red);margin:0 0 6px'>"+esc(CLOUD.error)+"</div>";
+  else h+="<div class='smallnote' style='margin:0 0 6px'>"+(CLOUD.ready?"● 接続済み。保存するたびに自動で送り、相手の変更は自動で届きます":"接続中…")+(CLOUD.lastAt?"（最終同期 "+esc(fmtWhen(CLOUD.lastAt))+"）":"")+"</div>";
+  return h;
+}
+// 起動時：設定があればつなぐ。クラウドが空なら自分を送り、有れば合わせてから見張る
+function initCloud(){
+  var cfg=loadCloudCfg(); if(!cfg||CLOUD.connecting) return;
+  CLOUD.connecting=true; CLOUD.ready=false; CLOUD.error=""; cloudRefreshStatus();
+  cloudLoadSdk().then(function(){
+    var app=firebase.apps.length?firebase.app():null;
+    if(app && app.options && app.options.projectId!==cfg.config.projectId){ return app.delete().then(function(){ return firebase.initializeApp(cfg.config); }); }
+    return app||firebase.initializeApp(cfg.config);
+  }).then(function(app){
+    CLOUD.db=firebase.firestore(app);
+    return cloudRef().get();
+  }).then(function(snap){
+    var d=snap.exists?snap.data():null;
+    if(d&&d.data){ cloudApplyRemote(d,true); }
+    else { CLOUD.dirty=true; }
+    CLOUD.ready=true; CLOUD.connecting=false; cloudSetError(null);
+    if(CLOUD.dirty) cloudPushSoon();
+    if(CLOUD.unsub){ CLOUD.unsub(); CLOUD.unsub=null; }
+    CLOUD.unsub=cloudRef().onSnapshot(function(s){
+      if(s.metadata&&s.metadata.hasPendingWrites) return;   // 自分の書き込みの返り
+      if(!s.exists) return;
+      var dd=s.data(); if(!dd||!dd.data||dd.data===CLOUD.lastData) return;
+      cloudApplyRemote(dd,false);
+    }, function(err){ cloudSetError(err); });
+  }).catch(function(e){ CLOUD.connecting=false; cloudSetError(e); });
+}
+// まだ何も記録していない端末か（初回接続なら、合わせるのではなくクラウドの写しをそのまま使う。
+// 既定の口座・ルール帳・研究テーマは端末ごとに別の id を持つので、合わせると二重になるため）
+function cloudIsPristine(){
+  var dead=DB.syncMetadata&&DB.syncMetadata.deleted;
+  return !(DB.trades||[]).length && !(DB.tradePlans||[]).length && !(DB.briefs||[]).length && (DB.accounts||[]).length<=1 &&
+         !(DB.tags||[]).length && !(DB.ruleHistory||[]).length && !DB.settings._m && !(dead&&Object.keys(dead).length);
+}
+// 届いた相手の記録を合わせ込む
+function cloudApplyRemote(d,first){
+  var remote;
+  try{ remote=migrate(JSON.parse(d.data)); }catch(e){ console.warn("cloud data parse failed",e); return; }
+  var r;
+  var cfg=loadCloudCfg();
+  if(first&&cfg&&cfg.first&&cloudIsPristine()){ var keepTheme=DB.settings.theme; DB=remote; if(keepTheme) DB.settings.theme=keepTheme; applyTheme(); r={local:true,remote:false}; }
+  else r=cloudMerge(remote);
+  if(first&&cfg&&cfg.first){ cfg.first=false; saveCloudCfg(cfg); }   // 「初回接続」は一度きり
+  cloudSeenReset();
+  CLOUD.lastData=d.data; CLOUD.lastAt=now();
+  if(r.local){ storageAdapter.saveRaw(JSON.stringify(DB)); cloudRenderSoon(); }
+  if(r.remote){ CLOUD.dirty=true; if(!first) cloudPushSoon(); }
+  cloudRefreshStatus();
+}
+// 保存のたびに呼ばれる。連打は1秒にまとめる
+function cloudPushSoon(){
+  if(!cloudOn()) return;
+  CLOUD.dirty=true;
+  if(!CLOUD.ready) return;
+  clearTimeout(CLOUD.timer);
+  CLOUD.timer=setTimeout(cloudPushNow, 1000);
+}
+function cloudPushNow(){
+  if(!CLOUD.ready) return Promise.resolve();
+  if(CLOUD.pushing){ CLOUD.dirty=true; clearTimeout(CLOUD.timer); CLOUD.timer=setTimeout(cloudPushNow,1000); return Promise.resolve(); }   // 送信中なら、終わってから送り直す
+  var data=cloudPayload();
+  if(data===CLOUD.lastData){ CLOUD.dirty=false; return Promise.resolve(); }
+  if(data.length>CLOUD_DOC_LIMIT && !CLOUD.warnedSize){ CLOUD.warnedSize=true; toast("記録がクラウドの1件上限に近づいています。Claude に相談して下さい"); }
+  CLOUD.pushing=true;
+  return cloudRef().set({data:data, updatedAt:Date.now(), app:"boburu", v:3}).then(function(){
+    CLOUD.pushing=false; CLOUD.lastData=data; CLOUD.lastAt=now(); cloudSetError(null);
+    if(cloudPayload()!==data) cloudPushSoon(); else CLOUD.dirty=false;   // 送っている間に変わっていたら続けて送る
+  }).catch(function(e){ CLOUD.pushing=false; CLOUD.dirty=true; cloudSetError(e); });
+}
+// 相手の変更が届いたあとの描き直し。入力中・フォームを開いている間は待ち、次の自然な描き直しに任せる
+function cloudRenderSoon(){
+  var typing=false; try{ var ae=document.activeElement; typing=!!(ae&&/^(INPUT|TEXTAREA|SELECT)$/.test(ae.tagName)); }catch(e){}
+  var modal=false; try{ var mr=document.getElementById("modalRoot"); modal=!!(mr&&mr.innerHTML); }catch(e){}
+  var formTab=(TAB==="plan"||TAB==="brief"||TAB==="settings");
+  if(typing||modal||formTab||(typeof briefDirty==="function"&&briefDirty())){ CLOUD.renderPending=true; return; }
+  CLOUD.renderPending=false; render();
+}
+setInterval(function(){ if(CLOUD.renderPending) cloudRenderSoon(); }, 3000);
+
+/* --- 設定画面から --- */
+// 公開ページ（hoshi2.github.io）では習慣・お金・ロイログと保存領域が同じなので、そこに貼ってある Firebase の設定を使い回せる
+var SIBLING_CLOUD_KEYS=[["royCloud","ロイログ"],["stella-cloud","お金アプリ"],["p26-cloud","習慣アプリ"]];
+function siblingCloudCfg(){
+  for(var i=0;i<SIBLING_CLOUD_KEYS.length;i++){
+    try{ var v=JSON.parse(localStorage.getItem(SIBLING_CLOUD_KEYS[i][0])||"null"); if(v&&v.config&&v.config.projectId&&v.config.apiKey) return {config:v.config, from:SIBLING_CLOUD_KEYS[i][1]}; }catch(e){}
+  }
+  return null;
+}
+window.useSiblingCloudCfg=function(){
+  var sc=siblingCloudCfg(), ta=document.getElementById("cloudcfg"), msg=document.getElementById("cloudmsg");
+  if(!sc){ if(msg) msg.textContent="この端末の他のアプリに Firebase の設定が見つかりません。Firebase の画面からコピーして貼って下さい"; return; }
+  if(ta) ta.value=JSON.stringify(sc.config,null,2);
+  if(msg) msg.textContent=sc.from+"の設定を入れました。あとは同期コードを決めて「接続する」";
+};
+function parseFirebaseConfig(text){
+  var m=String(text||"").match(/\{[\s\S]*\}/);
+  if(!m) throw new Error("設定が見つかりません。firebaseConfig = { … } をまるごと貼って下さい");
+  var obj;
+  try{ obj=Function("return ("+m[0]+")")(); }catch(e){ throw new Error("設定の形が読めません"); }
+  if(!obj||!obj.projectId||!obj.apiKey) throw new Error("projectId か apiKey がありません");
+  var out={}; ["apiKey","authDomain","projectId","storageBucket","messagingSenderId","appId"].forEach(function(k){ if(obj[k]) out[k]=String(obj[k]); });
+  return out;
+}
+window.connectCloudUI=function(){
+  var g=function(x){ var e=document.getElementById(x); return e?e.value:""; };
+  var msg=document.getElementById("cloudmsg");
+  var config;
+  try{ config=parseFirebaseConfig(g("cloudcfg")); }
+  catch(e){ if(msg) msg.innerHTML="<span style='color:var(--red)'>"+esc(e.message)+"</span>"; return; }
+  var code=String(g("cloudcode")||"").trim();
+  if(code.length<4){ if(msg) msg.innerHTML="<span style='color:var(--red)'>同期コードは4文字以上にして下さい</span>"; return; }
+  if(/[\/.]/.test(code)){ if(msg) msg.innerHTML="<span style='color:var(--red)'>同期コードに / と . は使えません</span>"; return; }
+  saveCloudCfg({config:config, code:code, first:true});
+  UI.settingsOpen.sync=true;
+  toast("クラウド同期をオンにしました");
+  render(); initCloud();
+};
+window.disconnectCloudUI=function(){
+  if(!confirm("クラウド同期を解除しますか？（この端末の記録は残ります。クラウド上の記録も消えません）")) return;
+  if(CLOUD.unsub){ try{ CLOUD.unsub(); }catch(e){} CLOUD.unsub=null; }
+  clearTimeout(CLOUD.timer);
+  CLOUD.ready=false; CLOUD.connecting=false; CLOUD.error=""; CLOUD.lastData=null; CLOUD.lastAt=null; CLOUD.dirty=false; CLOUD.db=null;
+  try{ if(window.firebase&&firebase.apps.length) firebase.app().delete(); }catch(e){}
+  clearCloudCfg();
+  UI.settingsOpen.sync=true;
+  toast("クラウド同期を解除しました"); render();
+};
+window.cloudSyncNowUI=function(){
+  if(!cloudOn()) return;
+  if(!CLOUD.ready){ initCloud(); return; }
+  cloudRef().get().then(function(snap){
+    var d=snap.exists?snap.data():null;
+    if(d&&d.data&&d.data!==CLOUD.lastData) cloudApplyRemote(d,false);
+    CLOUD.dirty=true;
+    return cloudPushNow();
+  }).then(function(){ if(!CLOUD.error) toast("同期しました"); cloudRefreshStatus(); }).catch(function(e){ cloudSetError(e); });
+};
+function cloudSettingsBody(){
+  var h="";
+  if(cloudOn()){
+    h+="<div id='cloudstatus'>"+cloudStatusHtml()+"</div>";
+    h+="<div class='btnrow'><button class='btn' onclick='cloudSyncNowUI()'>いま同期</button><button class='btn ghost' onclick='disconnectCloudUI()'>解除</button></div>";
+  } else {
+    h+="<div class='smallnote' style='margin:0 0 10px'>習慣・お金・ロイログと同じ仕組みです。同じ Firebase の設定と、自分で決めた合言葉（同期コード）を PC とスマホの両方に貼ると、保存するたびに自動で相手にも届きます。画像は端末内のみで同期しません。</div>";
+    var sc=siblingCloudCfg();
+    h+=field("① Firebase の設定を貼り付け","<textarea id='cloudcfg' rows='4' placeholder='const firebaseConfig = { apiKey: \"…\", projectId: \"…\", … } をまるごと'></textarea>"+
+       (sc?"<div class='btnrow' style='margin-top:6px'><button type='button' class='btn ghost' onclick='useSiblingCloudCfg()'>"+esc(sc.from)+"の設定を使う</button></div>":""));
+    h+=field("② 同期コード（合言葉・4文字以上。両方の端末で同じもの）","<input type='text' id='cloudcode' autocomplete='off' autocapitalize='off' placeholder='例：bob-2026-xxxx'>");
+    h+="<div id='cloudmsg' class='smallnote'></div>";
+    h+="<div class='btnrow'><button class='btn primary' onclick='connectCloudUI()'>接続する</button></div>";
+  }
+  return h;
+}
+
 function tradesToCSV(){
   var cols=["id","status","createdAt","closedAt","symbol","dir","pattern","h4env","m15purple","trigger",
     "entry","sl","tp","lot","contractSize","balanceAtEntry","plannedLoss","plannedProfit","plannedRR",
@@ -1591,6 +1892,7 @@ window.addEventListener("popstate",function(e){
   _fromHistory=true; TAB=t; try{ render(); } finally { _fromHistory=false; }
 });
 function render(){
+  CLOUD.renderPending=false;
   var app=document.getElementById("app");
   var sameTab=(_renderedTab===TAB);
   // 同じタブの描き直し（チップを押した等）は今の位置のまま。
@@ -4414,7 +4716,7 @@ window.closeAccount=function(id){
 
 function viewSettings(){
   var s=DB.settings;
-  var h=topbar("設定","ぼぶる v1・データはこの端末に保存");
+  var h=topbar("設定","ぼぶる v1・"+(cloudOn()?(CLOUD.error?"クラウド同期エラー":(CLOUD.ready?"クラウド同期中":"クラウドに接続中…")):"データはこの端末に保存"));
   var cur=currentAccount();
 
   // ---- 左：よく使う順 ----
@@ -4433,9 +4735,10 @@ function viewSettings(){
   var accNow=acts+"口座 稼働中"+(cur?"（いまの口座："+cur.name+"）":"")+(closedN>0?"・"+closedN+"口座 終了":"");
   // 同期
   var ls=DB.syncMetadata&&DB.syncMetadata.lastSync;
-  var syncBody="<div class='smallnote' style='margin:0 0 11px'>進めた端末で「同期コードをコピー」→ もう一方の端末で「取り込み」に貼ると、記録がそのまま移ります。取り込みは<b>丸ごと上書き</b>なので「最後に使った端末→次に使う端末」の一方通行で運用して下さい。画像は端末内のみで同期対象外です。</div>"+
-     "<div class='btnrow'><button class='btn' id='synccopy' onclick='copySyncCode()'>同期コードをコピー</button>"+
-     "<button class='btn ghost' onclick='importSyncCode()'>同期コードを取り込み</button></div>";
+  var syncBody=cloudSettingsBody()+
+     "<div class='smallnote' style='margin:14px 0 8px;padding-top:10px;border-top:1px solid var(--line)'><b>手動の同期コード（旧方式）</b>"+(ls?"・最終 "+esc(fmtWhen(ls)):"")+"<br>進めた端末で「コピー」→ もう一方で「取り込み」。取り込みは<b>丸ごと上書き</b>なので、クラウド同期が使えない時だけ、一方通行で使って下さい。</div>"+
+     "<div class='btnrow'><button class='btn ghost' id='synccopy' onclick='copySyncCode()'>コピー</button>"+
+     "<button class='btn ghost' onclick='importSyncCode()'>取り込み</button></div>";
   // 内部ルール
   var rulesNow="リスク "+fmtPct(toNum(s.internalRiskPct),1).replace(".0%","%")+"・基本 "+(isNum(toNum(s.baseLot))?toNum(s.baseLot):"—")+" ロット・連敗 "+(toNum(s.lossStreakWarn)||4)+"・日次停止 −"+ownStopPct()+"%";
   var rulesBody="<div class='row2'>"+field("1トレード内部リスク率(%)","<input type='number' inputmode='decimal' step='any' id='s_irisk' value='"+esc(s.internalRiskPct)+"'>")+
@@ -4502,7 +4805,7 @@ function viewSettings(){
   h+=settingsItem("import","取引履歴の取り込み",impNow,impBody);
   h+=settingsItem("display","表示",dispNow,dispBody);
   h+=settingsItem("versions","版番号",verNow,verBody);
-  h+=settingsItem("sync","端末間の同期（PC ⇔ スマホ）",ls?("最終同期 "+fmtWhen(ls)):"まだ同期していません",syncBody);
+  h+=settingsItem("sync","端末間の同期（PC ⇔ スマホ）",cloudSummary(),syncBody);
   h+=settingsItem("data","データ（バックアップ・復元・削除）","JSON・CSV の出力、復元、全データ削除",dataBody);
   h+="</div></div>";
   h+="<button class='btn primary' style='margin-top:8px' onclick='saveSettings()'>設定を保存</button>";
@@ -4541,12 +4844,13 @@ window.saveSettings=function(){
 };
 window.copySyncCode=function(){
   var code=syncData("export");
-  var done=function(){ var b=document.getElementById("synccopy"); if(b){ b.textContent="コピーしました。もう一方で取り込み"; setTimeout(function(){ b.textContent="同期コードをコピー"; },2500);} };
+  var done=function(){ var b=document.getElementById("synccopy"); if(b){ b.textContent="コピーしました。もう一方で取り込み"; setTimeout(function(){ b.textContent="コピー"; },2500);} };
   if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(code).then(done).catch(function(){ promptCopy(code); }); }
   else promptCopy(code);
 };
 function promptCopy(code){ window.prompt("このコードをコピーして下さい",code); }
 window.importSyncCode=function(){
+  if(cloudOn()){ toast("クラウド同期中は手動の取り込みはできません。先に設定で同期を解除して下さい"); return; }
   var code=window.prompt("同期コードを貼り付けて下さい");
   if(!code) return;
   if(!confirm("この端末の記録をコードの内容で丸ごと置き換えます。よろしいですか？")) return;
@@ -4559,6 +4863,7 @@ window.doExport=function(){
   toast("バックアップを出力しました");
 };
 window.doImport=function(){
+  if(cloudOn()){ toast("クラウド同期中は復元できません（丸ごと置き換えると相手の端末の記録も消えます）。先に設定で同期を解除して下さい"); return; }
   var inp=document.createElement("input"); inp.type="file"; inp.accept=".json,application/json";
   inp.onchange=function(e){
     var f=e.target.files&&e.target.files[0]; if(!f) return;
@@ -4744,6 +5049,7 @@ window.wipeTrades=function(){
   saveData(); saveImg(); toast("記録 "+n+"件を削除しました"); TAB="home"; render();
 };
 window.wipeAll=function(){
+  if(cloudOn()){ toast("クラウド同期中は消せません（相手の端末から戻ってきます）。先に設定で同期を解除して下さい"); return; }
   if(!confirm("全データを削除します。よろしいですか？（1/2）")) return;
   if(!confirm("本当に削除しますか？この操作は取り消せません。（2/2）")) return;
   try{ localStorage.removeItem(KEY_DATA); localStorage.removeItem(KEY_IMG); }catch(e){}
@@ -4971,9 +5277,10 @@ function boot(){
   bindBriefLiveSync();
   // 画面に戻ってきたら、期限が切れていればレートを取り直す
   document.addEventListener("visibilitychange",function(){
-    if(!document.hidden){ ensureFxRate(); checkRemoteBrief(); }
+    if(!document.hidden){ ensureFxRate(); checkRemoteBrief(); if(cloudOn()&&!CLOUD.ready) initCloud(); else if(CLOUD.dirty) cloudPushSoon(); }
   });
   checkRemoteBrief(true);
+  window.addEventListener("pagehide",function(){ if(CLOUD.dirty&&CLOUD.ready){ clearTimeout(CLOUD.timer); cloudPushNow(); } });
   window.addEventListener("beforeunload",function(e){
     // 保存していない環境認識があるまま閉じる／再読込するのを止める
     if(!briefDirty()) return;
@@ -4983,6 +5290,7 @@ function boot(){
     try{ window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change",function(){ if(DB.settings.theme==="system") applyTheme(); }); }catch(e){}
   }
   render();
+  initCloud();   // クラウド同期の設定があればつなぐ（無ければ何もしない）
 }
 window.addEventListener("resize",function(){ if(TAB==="growth") drawGrowthCharts(); });
 document.addEventListener("DOMContentLoaded",boot);
