@@ -4373,6 +4373,7 @@ function viewSettings(){
   var dataBody="<div class='btnrow'><button class='btn' onclick='doExport()'>JSON バックアップを出力</button>"+
      "<button class='btn ghost' onclick='doImport()'>JSON から復元</button></div>"+
      "<button class='btn ghost' onclick='doCSV()'>CSV を出力</button>"+
+     "<button class='btn ghost' onclick='wipeTrades()'>記録だけを削除（口座・設定・環境認識は残す）</button>"+
      "<button class='btn ghost' onclick='wipeAll()'>全データを削除</button>"+
      "<div class='smallnote'>削除は二段階確認します。事前にバックアップ推奨。</div>";
 
@@ -4619,6 +4620,15 @@ window.ctiApply=function(){
   UI.tradeTab="closed"; render();
 };
 
+// 記録（保有中・下書き・決済済み・取消）と画像だけ消す。口座・設定・環境認識・ルールブックは残す
+window.wipeTrades=function(){
+  var n=(DB.trades||[]).length+(DB.tradePlans||[]).length;
+  if(!n){ toast("消す記録がありません"); return; }
+  if(!confirm("記録 "+n+"件（保有中・下書き・決済済み・取消）と画像を削除します。口座・設定・環境認識は残ります。よろしいですか？（1/2）")) return;
+  if(!confirm("本当に削除しますか？この操作は取り消せません。（2/2）")) return;
+  DB.trades=[]; DB.tradePlans=[]; IMG={}; UI.tradeOpen={};
+  saveData(); saveImg(); toast("記録 "+n+"件を削除しました"); TAB="home"; render();
+};
 window.wipeAll=function(){
   if(!confirm("全データを削除します。よろしいですか？（1/2）")) return;
   if(!confirm("本当に削除しますか？この操作は取り消せません。（2/2）")) return;
