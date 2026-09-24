@@ -228,6 +228,12 @@ html[data-theme="light"] .cal .d.p2{background:var(--blue)}
 .cal .w .pl{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cal .w .s{color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
+/* ---- 今日：環境認識カードの中のシナリオと指標 ---- */
+.scen3{display:grid;grid-template-columns:1fr;gap:10px 14px;margin-top:12px}
+.scen3 .scen{margin:0;padding-left:12px}
+.scen3 .sv{font-size:13px;color:var(--txt);line-height:1.55}
+.evrow{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+
 /* meter */
 .meter{margin-top:9px}
 .meter .lab{display:flex;justify-content:space-between;font-size:11.5px;color:var(--txt2);margin-bottom:5px}
@@ -523,6 +529,7 @@ html[data-theme="light"] .filterbar button.on{color:#fff;background:var(--blue)}
   #app.tab-growth .chartgrid > .card,#app.tab-growth .tablegrid > .card{ min-width:0; }
   #app.tab-growth .tiles{ grid-template-columns:repeat(6,1fr); }
   .cal .d,.cal .w{ min-height:78px; }
+  .scen3{ grid-template-columns:1fr 1fr 1fr; }
 
   /* トーストはサイドバーと重ならないよう右下へ */
   .toast{ left:auto; right:26px; bottom:26px; transform:none; }
@@ -3026,7 +3033,7 @@ function homeBriefCard(){
   h+="<div style='display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap'>";
   h+="<div class='pillrow'><span class='pill "+(b.bias==="long"?"blue":b.bias==="short"?"red":"")+"'>"+esc(labelBias(b.bias))+"</span>"+
      pill("日足",b.trend.daily)+pill("4H",b.trend.h4)+pill("1H",b.trend.h1)+pill("15M",b.trend.m15)+"</div>";
-  if(ev.length) h+="<span class='muted' style='font-size:12px'>"+esc((ev[0].time||"--:--")+" "+(ev[0].name||"")+"（重要度 "+labelImp(ev[0].importance)+"）")+(ev.length>1?" ほか"+(ev.length-1)+"件":"")+"</span>";
+  if(b.analysis&&b.analysis.source==="claude-code"&&b.analysis.at) h+="<span class='muted' style='font-size:12px'>AI が "+esc(fmtWhen(b.analysis.at).slice(5))+" に作成</span>";
   h+="</div>";
   // 中段：意識される数字
   var ti=function(k,v){ return "<div class='ti'><div class='k'>"+esc(k)+"</div><div class='v tabular'>"+(isNum(v)?fmtMoney(v,1):"—")+"</div></div>"; };
@@ -3035,10 +3042,21 @@ function homeBriefCard(){
   h+="<div class='tgrid'>"+ti("前日高値",b.levels.prevHigh)+ti("前日安値",b.levels.prevLow)+ti("EMA75",b.ema.e75)+ti("EMA200",b.ema.e200)+
      (be?tiRaw("紫の広がり（15M）",isNum(be.spread)?be.spread.toFixed(1)+(be.trend==="up"?" ↑":be.trend==="down"?" ↓":" →"):"—"):ti("週足高値",b.levels.weekHigh))+
      (be?tiRaw("水色（15M）",isNum(be.b)?be.b.toFixed(0):"—"):ti("週足安値",b.levels.weekLow))+"</div>";
-  // 下段：ひとこと（シナリオ or メモ or 見送り条件）
+  // 要約（AI の見立て。無ければ自分のメモ）
   var line=(b.aiSummary||b.memo||"").trim();
-  if(!line){ var parts=[]; if(b.scenarios.bull) parts.push("↑ "+b.scenarios.bull); if(b.scenarios.bear) parts.push("↓ "+b.scenarios.bear); if(b.scenarios.noTrade) parts.push("見送り："+b.scenarios.noTrade); line=parts.join("　"); }
-  if(line) h+="<div class='muted' style='font-size:13px;margin-top:10px;white-space:pre-wrap'>"+esc(line.length>160?line.slice(0,160)+"…":line)+"</div>";
+  if(line) h+="<div style='font-size:13.5px;margin-top:12px;white-space:pre-wrap'>"+esc(line)+"</div>";
+  // シナリオ2本＋見送り条件は開かなくても読めるように常時出す（2026-09-24 本人）
+  var sc=b.scenarios||{};
+  if(sc.bull||sc.bear||sc.noTrade){
+    var box=function(cls,lab,txt){ if(!txt) return ""; return "<div class='scen "+cls+"'><div class='sl'>"+lab+"</div><div class='sv'>"+esc(txt)+"</div></div>"; };
+    h+="<div class='scen3'>"+box("bull","ロング案",sc.bull)+box("bear","ショート案",sc.bear)+box("nt","見送り条件",sc.noTrade)+"</div>";
+  }
+  // 今日の指標は重要度「高」だけ（2026-09-24 本人）。全部は環境認識の画面で
+  var evHigh=ev.filter(function(e){ return e.importance==="high"; });
+  if(evHigh.length){
+    h+="<div class='evrow'><span class='muted' style='font-size:12px;align-self:center'>重要指標</span>"+evHigh.map(function(e){ return "<span class='pill red'>"+esc((e.time||"--:--")+" "+(e.name||""))+"</span>"; }).join("")+"</div>";
+  }
+  if(b.memo && b.aiSummary) h+="<div class='muted' style='font-size:12.5px;margin-top:10px;white-space:pre-wrap'>メモ：" +esc(b.memo)+"</div>";
   h+="</div>";
   return h;
 }
