@@ -211,7 +211,7 @@ details.st .body .btn{margin-top:10px}
 .scope{display:inline-flex;border:1px solid var(--line2);border-radius:20px;padding:2px;background:var(--card2);flex:0 0 auto}
 .scope button{background:none;border:0;color:var(--txt3);font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:16px}
 .scope button.on{background:var(--blue-dim);color:var(--blue2)}
-.cal{display:grid;grid-template-columns:repeat(7,minmax(0,1fr)) minmax(0,1.15fr);gap:5px}
+.cal{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) minmax(0,1.15fr);gap:5px}
 .cal .d{min-height:54px;border-radius:9px;padding:6px 6px;text-align:left;border:1px solid var(--line);background:#05080e;color:var(--txt);font:inherit;display:flex;flex-direction:column;justify-content:space-between;font-size:11.5px}
 html[data-theme="light"] .cal .d{background:var(--card)}
 .cal .d.off{opacity:.3;border-color:var(--line)}
@@ -599,6 +599,7 @@ function defaultSettings(){
     baseLot:1.00,            // 内部: 基本ロット目安
     lossStreakWarn:4,        // 内部: 連敗注意ライン
     ownDailyStopPct:2,       // 内部: 自分の日次停止ライン（規約の日次上限とは別に持つ）
+    timeInput:"jst",         // 日時の入力欄：jst＝日本時間 / mt5＝MT5 のサーバー時刻で入力（保存は常に日本時間）
     versions:{               // 記録に焼き込む版番号。変えた前後のデータが混ざらないように
       strategy:"NEW_STRATEGY_V1",
       rules:"rules-v1",
@@ -766,6 +767,7 @@ function makeAccount(o){
     closedReason:o.closedReason||null,
     template:findTemplate(o.template)?o.template:"",
     brokerIds:Array.isArray(o.brokerIds)?o.brokerIds.slice():[],
+    mt5Offset:["auto","3","2","0"].indexOf(String(o.mt5Offset))>=0?String(o.mt5Offset):"auto",   // MT5 のサーバー時刻（入力の変換に使う）
     rules:normalizeRules(o.rules, isAccountType(t)?t:"", o.template, o._fin),
     _m:isNum(o._m)?o._m:undefined   // クラウド同期の「最後に変えた時刻」。無ければ JSON で消える
   };
@@ -796,7 +798,8 @@ function accountTrades(){ return Array.isArray(DB.trades)?DB.trades.filter(isOfC
 function tradesOfAccount(id){ return Array.isArray(DB.trades)?DB.trades.filter(function(t){return t.accountId===id;}):[]; }
 // 口座の期間は入力させない。その口座の最初と最後のトレードから決まる。
 function accountPeriod(id){
-  var ds=tradesOfAccount(id).map(function(t){ return localDateOf(t.closedAt||t.createdAt); })
+  var acc0=findAccount(id);
+  var ds=tradesOfAccount(id).map(function(t){ return tradeDayOf(t.closedAt||t.createdAt, acc0); })
                             .filter(function(d){ return !!d; }).sort();
   return ds.length?{first:ds[0], last:ds[ds.length-1]}:null;
 }
@@ -824,10 +827,10 @@ function balanceOf(acc){
   return b;
 }
 function todayPLOf(acc){
-  var td=today(), pl=0;
+  var td=tradeDay(acc), pl=0;
   tradesOfAccount(acc.id).forEach(function(t){
     if(t.status!=="closed") return;
-    if(localDateOf(t.closedAt||t.createdAt)!==td) return;
+    if(tradeDayOf(t.closedAt||t.createdAt, acc)!==td) return;
     var p=toNum(t.realizedPL); if(isNum(p)) pl+=p;
   });
   return pl;
@@ -872,7 +875,7 @@ function tradingDaysOf(acc){
   var seen={};
   tradesOfAccount(acc.id).forEach(function(t){
     if(t.status==="cancelled") return;
-    var d=localDateOf(t.createdAt); if(d) seen[d]=1;
+    var d=tradeDayOf(t.createdAt, acc); if(d) seen[d]=1;
   });
   return Object.keys(seen).length;
 }
@@ -885,9 +888,11 @@ function consistencyOf(acc){
   return {value:((wins[1]||0)+(wins[2]||0))/wins[0], wins:wins.length};
 }
 // 次の「1日の区切り」までの時計。警告ではなく、ただの時刻。
+var _dtfCache={};
 function tzOffsetMin(date,tz){
-  var o={}; new Intl.DateTimeFormat("en-US",{timeZone:tz,hourCycle:"h23",year:"numeric",month:"2-digit",day:"2-digit",
-    hour:"2-digit",minute:"2-digit",second:"2-digit"}).formatToParts(date).forEach(function(x){ o[x.type]=x.value; });
+  var f=_dtfCache[tz]||(_dtfCache[tz]=new Intl.DateTimeFormat("en-US",{timeZone:tz,hourCycle:"h23",year:"numeric",month:"2-digit",day:"2-digit",
+    hour:"2-digit",minute:"2-digit",second:"2-digit"}));
+  var o={}; f.formatToParts(date).forEach(function(x){ o[x.type]=x.value; });
   return Math.round((Date.UTC(+o.year,+o.month-1,+o.day,+o.hour,+o.minute,+o.second)-date.getTime())/60000);
 }
 function nextResetAt(now,tz,hour){
@@ -1039,6 +1044,100 @@ function isoDate(d){ // ローカル日付 YYYY-MM-DD
   return y+"-"+m+"-"+dd;
 }
 function localDateOf(iso){ if(!iso) return null; var d=new Date(iso); if(isNaN(d)) return null; return isoDate(d); }
+
+/* ---------- 取引日（口座の区切りで1日を切る。本人指定 2026-09-28） ----------
+   プロップの1日は「区切り（Fintokei は NY17時＝日本の朝6〜7時）から次の区切りまで」。
+   その期間を、始まった日の日本時間の日付で呼ぶ。金曜26時（土曜2時）の決済は「金曜」。
+   区切りの設定が無い口座も同じ NY17時を使う。記録の日時そのものは書き換えない。 */
+var DEFAULT_DAY_RESET={tz:"America/New_York",hour:17};
+function dayResetFor(acc){ var tpl=acc&&findTemplate(acc.template); return (tpl&&tpl.dayReset)||DEFAULT_DAY_RESET; }
+var _tdCache={};
+function tradeDayOf(iso, acc, noCache){
+  if(!iso) return null; var d=(iso instanceof Date)?iso:new Date(iso); if(isNaN(d)) return null;
+  var r=dayResetFor(acc||currentAccount()), key=r.tz+"|"+r.hour+"|"+d.getTime();
+  if(!noCache && _tdCache[key]) return _tdCache[key];
+  var prev=nextResetAt(d,r.tz,r.hour)-86400000;   // 直前の区切り（夏時間の切替日は±1時間ずれるが日付は変わらない）
+  var out=isoDate(new Date(prev));
+  if(!noCache) _tdCache[key]=out;
+  return out;
+}
+function tradeDay(acc){ return tradeDayOf(new Date(), acc, true); }
+function accountOfTrade(t){ return (t&&findAccount(t.accountId))||currentAccount(); }
+function tradeDayOfTrade(t){ return tradeDayOf(t.closedAt||t.createdAt, accountOfTrade(t)); }
+
+/* ---------- MT5 の時刻で入力（本人指定 2026-09-28） ----------
+   MT5 のサーバー時刻は多くの業者で「ニューヨーク時間＋7時間」＝夏 UTC+3／冬 UTC+2。口座ごとに固定もできる。
+   入力欄の値を MT5 時刻として読み、日本時間（ISO）で保存する。既存の記録は触らない。 */
+var MT5_OFFSETS=[["auto","自動（夏 UTC+3 ／ 冬 UTC+2）"],["3","UTC+3 固定"],["2","UTC+2 固定"],["0","UTC+0"]];
+// 米国夏時間か（その瞬間で判定）：3月第2日曜 2:00 EST（07:00Z）〜 11月第1日曜 2:00 EDT（06:00Z）
+function usDstAt(ms){
+  var y=new Date(ms).getUTCFullYear();
+  var nth=function(mm,n){ var first=new Date(Date.UTC(y,mm-1,1)).getUTCDay(); return 1+((7-first)%7)+7*(n-1); };
+  var start=Date.UTC(y,2,nth(3,2),7), end=Date.UTC(y,10,nth(11,1),6);
+  return ms>=start && ms<end;
+}
+function mt5OffsetHoursAt(acc,ms){
+  var mode=String((acc&&acc.mt5Offset)||"auto");
+  if(mode==="auto") return usDstAt(ms)?3:2;
+  var n=+mode; return isNum(n)?n:0;
+}
+function inputTimeMode(){ return DB&&DB.settings&&DB.settings.timeInput==="mt5"?"mt5":"jst"; }
+// datetime-local の値（YYYY-MM-DDTHH:MM）を MT5 サーバー時刻として読み、ISO に直す
+function mt5LocalToISO(s,acc){
+  var m=String(s||"").match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2})/); if(!m) return null;
+  var base=Date.UTC(+m[1],+m[2]-1,+m[3],+m[4],+m[5]);
+  var mode=String((acc&&acc.mt5Offset)||"auto"), t;
+  if(mode==="auto"){   // 夏なら UTC+3、それ以外は UTC+2（その瞬間で判定）。11月の戻る1時間は同じ表示が2回あるので冬側に寄せる
+    var t2=base-2*3600000, t3=base-3*3600000;
+    t = !usDstAt(t2) ? t2 : (usDstAt(t3) ? t3 : t2);
+  }
+  else { var n=+mode; t=base-(isNum(n)?n:0)*3600000; }
+  return new Date(t).toISOString();
+}
+// 入力欄の値 → 保存する ISO（いまのモードに従う）
+function inputToISO(s,acc){
+  if(!s) return null;
+  if(inputTimeMode()==="mt5") return mt5LocalToISO(s,acc);
+  var d=new Date(s); return isNaN(d)?null:d.toISOString();
+}
+// 保存された ISO → 入力欄の値（MT5 モードなら MT5 時刻で見せる）
+function isoToInput(iso,acc){
+  var d=new Date(iso); if(isNaN(d)) return nowInput(acc);
+  if(inputTimeMode()==="mt5"){
+    var off=mt5OffsetHoursAt(acc,d.getTime());
+    return new Date(d.getTime()+off*3600000).toISOString().slice(0,16);
+  }
+  return toLocalInput(iso);
+}
+function nowInput(acc){ return inputTimeMode()==="mt5"?isoToInput(now(),acc):nowLocalInput(); }
+var _dtAccs={};   // 日時欄 id → 口座 id（変換に使う）
+function dtAcc(id){ return findAccount(_dtAccs[id])||currentAccount(); }
+function dtHintText(value,acc){
+  if(inputTimeMode()!=="mt5") return "";
+  var iso=mt5LocalToISO(value,acc); if(!iso) return "";
+  var off=mt5OffsetHoursAt(acc,new Date(iso).getTime());
+  return "→ 日本時間 "+fmtWhen(iso)+"（MT5 は UTC+"+off+"）";
+}
+// 日時の入力欄＋「MT5 の時刻で入力」の切替＋日本時間の確認表示
+function dtField(label,id,value,acc){
+  _dtAccs[id]=acc?acc.id:null;
+  var mt5=inputTimeMode()==="mt5";
+  return field(label,"<input type='datetime-local' id='"+id+"' value='"+esc(value)+"' oninput=\"dtHint('"+id+"')\">"+
+    "<div style='display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:6px;flex-wrap:wrap'>"+
+    "<label class='chk'><input type='checkbox' id='"+id+"_mt5'"+(mt5?" checked":"")+" onchange=\"toggleTimeInput('"+id+"',this.checked)\"> MT5 の時刻で入力</label>"+
+    "<span class='smallnote tabular' id='"+id+"_hint' style='margin:0'>"+esc(dtHintText(value,acc))+"</span></div>");
+}
+window.dtHint=function(id){ var el=document.getElementById(id), hint=document.getElementById(id+"_hint"); if(el&&hint) hint.textContent=dtHintText(el.value,dtAcc(id)); };
+// 切り替えても「同じ瞬間」を指すように、入力欄の値を変換して差し替える
+window.toggleTimeInput=function(id,on){
+  var el=document.getElementById(id), acc=dtAcc(id);
+  var iso=el?inputToISO(el.value,acc):null;
+  DB.settings.timeInput=on?"mt5":"jst"; saveData();
+  if(el&&iso) el.value=isoToInput(iso,acc);
+  var cb=document.getElementById(id+"_mt5"); if(cb) cb.checked=on;
+  window.dtHint(id);
+  if(id==="p_dt" && typeof syncPlanFromDOM==="function") syncPlanFromDOM();
+};
 function nowLocalInput(){ // datetime-local 用（ローカル）
   var d=new Date(); var off=d.getTimezoneOffset(); var l=new Date(d.getTime()-off*60000);
   return l.toISOString().slice(0,16);
@@ -1799,8 +1898,8 @@ function closedTradesSorted(){
     .slice().sort(function(a,b){ return new Date(a.closedAt||a.createdAt)-new Date(b.closedAt||b.createdAt); });
 }
 function inPeriod(t, period, custom){
-  var d=localDateOf(t.closedAt||t.createdAt); if(!d) return false;
-  var td=today();
+  var d=tradeDayOfTrade(t); if(!d) return false;
+  var td=tradeDay(accountOfTrade(t));
   if(period==="all") return true;
   if(period==="today") return d===td;
   if(period==="7d"){ return dayDiff(d,td)<7; }
@@ -1873,10 +1972,10 @@ function currentStreak(){
   return {type:type, wins:w, losses:l};
 }
 function todayPL(){
-  var td=today(), pl=0, n=0, rr=0, rc=0;
+  var td=tradeDay(), pl=0, n=0, rr=0, rc=0;
   accountTrades().forEach(function(t){
     if(t.status!=="closed") return;
-    if(localDateOf(t.closedAt||t.createdAt)!==td) return;
+    if(tradeDayOfTrade(t)!==td) return;
     var p=toNum(t.realizedPL); if(isNum(p)) pl+=p; n++;
     var c=calcTrade(t); if(isNum(c.realizedR)){ rr+=c.realizedR; rc++; }
   });
@@ -2759,7 +2858,7 @@ function normalizeBrief(b){
   return f;
 }
 function briefOn(date){ for(var i=0;i<DB.briefs.length;i++){ if(DB.briefs[i].date===date) return DB.briefs[i]; } return null; }
-function todayBrief(){ return briefOn(today()); }
+function todayBrief(){ return briefOn(tradeDay()); }
 function findBrief(id){ for(var i=0;i<DB.briefs.length;i++){ if(DB.briefs[i].id===id) return DB.briefs[i]; } return null; }
 // 銘柄の一致判定。どちらかが未記入なら一致とみなす
 function sameSymbol(a,b){
@@ -2778,7 +2877,7 @@ function briefFor(date,symbol){
 function briefOfTrade(t){
   if(!t) return null;
   if(t.briefId!==undefined && t.briefId!==null) return findBrief(t.briefId);
-  var d=localDateOf(t.createdAt); if(!d) return null;
+  var d=tradeDayOf(t.createdAt, accountOfTrade(t)); if(!d) return null;
   return briefFor(d,t.symbol);
 }
 var BIAS_OPTS=[["long","ロング優勢"],["short","ショート優勢"],["wait","様子見"]];
@@ -2835,11 +2934,11 @@ function briefTrendText(raw){
 
 /* ---------- Brief 画面 ---------- */
 function viewBrief(){
-  if(!UI.briefDate) UI.briefDate=today();
+  if(!UI.briefDate) UI.briefDate=tradeDay();
   if(!BRIEF) BRIEF=normalizeBrief(briefOn(UI.briefDate)||{date:UI.briefDate});
   BRIEF.date=UI.briefDate;
   var saved=briefOn(UI.briefDate);
-  var isToday=UI.briefDate===today();
+  var isToday=UI.briefDate===tradeDay();
 
   var h=topbar(isToday?"今日の環境認識":"過去の環境認識");
 
@@ -3076,9 +3175,13 @@ window.goBack=function(){
   TAB=to; render();
 };
 window.gotoBriefToday=function(){
-  if(UI.briefDate===today() && TAB==="brief") return;
-  if(TAB==="brief"){ switchBriefDate(today()); return; }
-  UI.briefDate=today(); BRIEF=null; TAB="brief"; render();
+  if(UI.briefDate===tradeDay() && TAB==="brief") return;
+  if(TAB==="brief"){ switchBriefDate(tradeDay()); return; }
+  UI.briefDate=tradeDay(); BRIEF=null; TAB="brief"; render();
+};
+window.gotoBriefDate=function(d){
+  if(TAB==="brief"){ switchBriefDate(d); return; }
+  UI.briefDate=d; BRIEF=null; TAB="brief"; render();
 };
 window.saveBrief=function(){
   if(_briefSaving) return; _briefSaving=true; setTimeout(function(){_briefSaving=false;},400);
@@ -3292,7 +3395,7 @@ function checkRemoteBrief(force){
   fetch(remoteBriefUrl(),{cache:"no-store"}).then(function(r){ if(!r.ok) throw new Error("HTTP "+r.status); return r.json(); }).then(function(snap){
     REMOTE.lastError="";
     if(!snap||typeof snap!=="object"||!snap.date) return;
-    if(snap.date!==today()){ REMOTE.pending=null; return; }          // 今日のぶんだけ扱う
+    if(snap.date!==tradeDay()){ REMOTE.pending=null; return; }       // いまの取引日のぶんだけ扱う（深夜0〜6時は前日の取引日）
     var rec=briefOn(snap.date);
     if(rec && remoteAlreadyApplied(rec,snap)){ REMOTE.pending=null; return; }
     if(!rec){ applyRemoteSnapshot(snap); return; }                    // 今日の環境認識がまだ無い → そのまま入れる
@@ -3325,7 +3428,12 @@ function remoteBriefBanner(){
 }
 /* ---------- ホーム用の要約カード ---------- */
 function homeBriefCard(){
-  var raw=todayBrief();
+  var raw=todayBrief(), stale=false;
+  if(!raw){ // 今日の取引日のぶんがまだ無い → 直前のもの（2日以内）を「昨日の」と札を付けて出す。朝7:30の自動生成で切り替わる
+    var td0=tradeDay();
+    var cands=DB.briefs.filter(function(b){ return b&&b.date&&b.date<td0&&dayDiff(b.date,td0)<=2; }).sort(function(a,b){ return String(b.date).localeCompare(String(a.date)); });
+    if(cands.length){ raw=cands[0]; stale=true; }
+  }
   var banner=remoteBriefBanner();
   if(!raw){
     var h0=banner+"<div class='card'>";
@@ -3336,7 +3444,8 @@ function homeBriefCard(){
   }
   var b=normalizeBrief(raw);
   var pill=function(lab,v){ return "<span class='pill'>"+esc(lab)+" "+esc(arrowTrend(v))+"</span>"; };
-  var h=banner+"<div class='card' style='cursor:pointer' onclick='gotoBriefToday()'>";
+  var h=banner+"<div class='card' style='cursor:pointer' onclick=\""+(stale?"gotoBriefDate('"+esc(raw.date)+"')":"gotoBriefToday()")+"\">";
+  if(stale) h+="<div class='smallnote' style='margin:0 0 9px;color:var(--gold)'>"+esc(raw.date.slice(5).replace("-","/"))+" の環境認識（今日のぶんはまだ。朝 7:30 ごろに自動で来ます）</div>";
   // 上段：見方＋時間足の向き（左）、直近の指標（右）
   var ev=eventsSorted(b.events);
   h+="<div style='display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap'>";
@@ -3380,7 +3489,7 @@ function freshPlan(){
   var s=DB.settings;
   return {
     id:null, editId:null,
-    datetime:nowLocalInput(), symbol:"XAUUSD", dir:"long",
+    datetime:nowInput(currentAccount()), timeMode:inputTimeMode(), symbol:"XAUUSD", dir:"long",
     h4env:"", m15purple:"", trigger:"", pattern:"", emaPos:"", crossB:"", purpleSpread:"",
     entry:"", sl:"", tp:"", lot:(s.baseLot!=null?String(s.baseLot):"1.00"),
     balance:String(Math.round(currentBalance())), contractSize:String(s.contractSize),
@@ -3419,7 +3528,12 @@ function viewPlan(){
   h+="<div class='plan'><div class='plan-a'>";
   h+=planAccountBar();
   h+="<div class='card'>";
-  h+=field("日時","<input type='datetime-local' id='p_dt' value='"+esc(PLAN.datetime)+"'>");
+  if(PLAN.timeMode && PLAN.timeMode!==inputTimeMode()){   // 別の画面で「MT5 の時刻で入力」が切り替わっていたら、同じ瞬間を指すように値を直す
+    var pIso=(PLAN.timeMode==="mt5")?mt5LocalToISO(PLAN.datetime,currentAccount()):(PLAN.datetime&&!isNaN(new Date(PLAN.datetime))?new Date(PLAN.datetime).toISOString():null);
+    if(pIso) PLAN.datetime=isoToInput(pIso,currentAccount());
+  }
+  PLAN.timeMode=inputTimeMode();
+  h+=dtField("日時","p_dt",PLAN.datetime,currentAccount());
   h+=field("銘柄","<input type='text' id='p_sym' value='"+esc(PLAN.symbol)+"' autocomplete='off'>");
   h+="<div class='field'><label>方向</label><div class='seg ls'>"+
      segBtn("p_dir","long","ロング",PLAN.dir)+segBtn("p_dir","short","ショート",PLAN.dir)+"</div></div>";
@@ -3508,7 +3622,7 @@ function initPlan(){
 }
 function syncPlanFromDOM(){
   var g=function(id){var e=document.getElementById(id);return e?e.value:"";};
-  PLAN.datetime=g("p_dt"); PLAN.symbol=g("p_sym");
+  PLAN.datetime=g("p_dt"); PLAN.timeMode=inputTimeMode(); PLAN.symbol=g("p_sym");
   PLAN.entry=g("p_entry"); PLAN.sl=g("p_sl"); PLAN.tp=g("p_tp");
   PLAN.lot=g("p_lot");
   PLAN.balance=String(Math.round(currentBalance())); PLAN.contractSize=String(DB.settings.contractSize);
@@ -3519,9 +3633,9 @@ function syncPlanFromDOM(){
 // 計画の日時・銘柄に対応する環境認識を1行で示す（紐付け先と一致させる）
 function renderPlanBriefHint(){
   var box=document.getElementById("p_briefhint"); if(!box) return;
-  var d=PLAN.datetime?localDateOf(new Date(PLAN.datetime).toISOString()):today();
+  var d=tradeDayOf(inputToISO(PLAN.datetime,currentAccount())||now());
   var b=briefFor(d,PLAN.symbol);
-  var isToday=(d===today());
+  var isToday=(d===tradeDay());
   if(b){
     box.innerHTML="この日の環境認識："+esc(briefTrendText(b))+"（"+esc(b.date)+"／"+esc(b.symbol)+"・このシナリオに紐付きます）";
   }else{
@@ -3649,10 +3763,10 @@ function validatePlanForEntry(){
   return c;
 }
 function planToRecord(status){
-  var createdAt = PLAN.datetime ? new Date(PLAN.datetime).toISOString() : now();
+  var createdAt = inputToISO(PLAN.datetime,currentAccount()) || now();
   var symbol = PLAN.symbol||"XAUUSD";
   // 紐付け先は「保存した日」ではなく「計画した日時の日付」＋銘柄で決める
-  var brief = briefFor(localDateOf(createdAt), symbol);
+  var brief = briefFor(tradeDayOf(createdAt), symbol);
   return {
     id:uid(), status:status,
     accountId:currentAccountId(),
@@ -3923,9 +4037,9 @@ var EDIT={};
 function editForm(t,isDraft){
   EDIT={id:t.id,isDraft:isDraft,dir:t.dir,h4env:t.h4env,m15purple:t.m15purple,trigger:t.trigger,pattern:t.pattern,sawLower:t.sawLower,emaPos:t.emaPos||"",
         fxRate:isNum(toNum(t.fxRate))?toNum(t.fxRate):1};
-  var dtLocal = t.createdAt ? toLocalInput(t.createdAt) : nowLocalInput();
+  var dtLocal = t.createdAt ? isoToInput(t.createdAt,accountOfTrade(t)) : nowInput(accountOfTrade(t));
   var h="<h3>"+(isDraft?"下書きを編集":"トレードを編集")+"</h3>";
-  h+=field("日時","<input type='datetime-local' id='e_dt' value='"+esc(dtLocal)+"'>");
+  h+=dtField("日時","e_dt",dtLocal,accountOfTrade(t));
   h+=field("銘柄","<input type='text' id='e_sym' value='"+esc(t.symbol)+"'>");
   h+="<div class='field'><label>方向</label><div class='seg ls'>"+editSeg("dir","long","ロング")+editSeg("dir","short","ショート")+"</div></div>";
   h+=field("エントリー価格","<input type='number' inputmode='decimal' step='any' id='e_entry' value='"+esc(t.entry)+"'>");
@@ -3982,7 +4096,7 @@ window.saveEdit=function(){
   if(c.errSL){ setErr("e_sl_err","e_sl",c.errSL); return; } else setErr("e_sl_err","e_sl",null);
   if(c.errTP){ setErr("e_tp_err","e_tp",c.errTP); return; } else setErr("e_tp_err","e_tp",null);
   t.dir=EDIT.dir; t.symbol=g("e_sym")||t.symbol;
-  var dt=g("e_dt"); if(dt) t.createdAt=new Date(dt).toISOString();
+  var dt=g("e_dt"); if(dt){ var dtIso=inputToISO(dt,accountOfTrade(t)); if(dtIso) t.createdAt=dtIso; }
   t.entry=entry; t.sl=sl; t.tp=tp;
   t.lot=toNum(g("e_lot")); t.balanceAtEntry=toNum(g("e_bal")); t.contractSize=toNum(g("e_cs"));
   t.h4env=EDIT.h4env; t.m15purple=EDIT.m15purple; t.trigger=EDIT.trigger; t.pattern=EDIT.pattern; t.sawLower=EDIT.sawLower;
@@ -4009,7 +4123,7 @@ window.openCloseModal=function(id){
   h+="<div class='smallnote' style='margin-bottom:12px'>"+esc(t.symbol)+" "+(t.dir==="long"?"ロング":"ショート")+
      "｜エントリー "+ (isNum(t.entry)?t.entry:"—") +
      "｜予定損失 "+(isNum(c.plannedLoss)?esc(fmtMoneyCur(c.plannedLoss,t)):"—")+"</div>";
-  h+=field("決済日時","<input type='datetime-local' id='c_dt' value='"+esc(t.closedAt?toLocalInput(t.closedAt):nowLocalInput())+"'>");
+  h+=dtField("決済日時","c_dt",t.closedAt?isoToInput(t.closedAt,accountOfTrade(t)):nowInput(accountOfTrade(t)),accountOfTrade(t));
   h+=field("決済価格（任意）","<input type='number' inputmode='decimal' step='any' id='c_price' value='"+esc(t.closePrice)+"' placeholder='0.00'>");
   h+="<div class='field'><label>実現損益額（これを正とします）</label>";
   h+="<div class='seg pl' id='c_plsign'>"+
@@ -4151,7 +4265,7 @@ window.saveClose=function(id){
   var t=findTrade(id); if(!t) return;
   var g=function(x){var e=document.getElementById(x);return e?e.value:"";};
   var dt=g("c_dt");
-  t.closedAt = dt ? new Date(dt).toISOString() : now();
+  t.closedAt = inputToISO(dt,accountOfTrade(t)) || now();
   t.closePrice=toNum(g("c_price"));
   t.realizedPL=closePLValue();
   t.fee=toNum(g("c_fee")); t.swap=toNum(g("c_swap"));
@@ -4171,7 +4285,7 @@ window.saveClose=function(id){
 
 /* ---------- 成長 ---------- */
 function viewGrowth(){
-  var month=UI.calMonth||today().slice(0,7);
+  var month=UI.calMonth||tradeDay().slice(0,7);
   var h=topbar("分析", (+month.slice(0,4))+"年"+(+month.slice(5,7))+"月");
   // 期間フィルタ（左）＋ この口座／全体（右）
   h+="<div class='filterrow'><div class='filterbar'>";
@@ -4321,7 +4435,7 @@ function dailyResults(){
     .sort(function(a,b){ return new Date(a.closedAt||a.createdAt)-new Date(b.closedAt||b.createdAt); });
   var days={}, order=[];
   list.forEach(function(t){
-    var d=localDateOf(t.closedAt||t.createdAt); if(!d) return;
+    var d=tradeDayOfTrade(t); if(!d) return;
     if(!days[d]){ days[d]={date:d, start:bal, pl:0, trades:[]}; order.push(d); }
     var p=toNum(t.realizedPL); if(isNum(p)){ days[d].pl+=p; bal+=p; }
     days[d].trades.push(t);
@@ -4331,8 +4445,8 @@ function dailyResults(){
   return {days:days, order:order, currency:va?(va.currency||""):(DB.settings.currency||"")};
 }
 function calendarCard(){
-  var r=dailyResults(), month=UI.calMonth||today().slice(0,7);
-  var y=+month.slice(0,4), m=+month.slice(5,7), td=today();
+  var r=dailyResults(), month=UI.calMonth||tradeDay().slice(0,7);
+  var y=+month.slice(0,4), m=+month.slice(5,7), td=tradeDay();
   var inMonth=r.order.filter(function(d){ return d.slice(0,7)===month; });
   var h="<div class='card'>";
   h+="<div class='calnav'><button onclick='moveCalMonth(-1)' aria-label='前の月'>‹</button>"+
@@ -4350,21 +4464,24 @@ function calendarCard(){
   var strong=gains.length?gains[Math.max(0,Math.ceil(gains.length/3)-1)]:0;
   var compact=function(v){ return (v>0?"+":"")+abbr(v); };
   h+="<div class='cal'>";
-  ["月","火","水","木","金","土","日","週"].forEach(function(w){ h+="<div class='wd'>"+w+"</div>"; });
+  // 月〜金だけ（本人指定 2026-09-28）。取引日は口座の区切りで切るので、土日に載る決済は本来無い
+  ["月","火","水","木","金","週"].forEach(function(w){ h+="<div class='wd'>"+w+"</div>"; });
   var first=new Date(y,m-1,1), lead=(first.getDay()+6)%7, last=new Date(y,m,0).getDate();
-  var cells=[];
-  for(var i=0;i<lead;i++) cells.push({html:"<div class='d off'></div>"});
+  var cells=[], weekend=[];
+  if(lead<5) for(var i=0;i<lead;i++) cells.push({html:"<div class='d off'></div>"});
   for(var dd=1; dd<=last; dd++){
     var key=month+"-"+(dd<10?"0":"")+dd, x=r.days[key], isT=(key===td);
+    var dow=(new Date(y,m-1,dd).getDay()+6)%7;
+    if(dow>=5){ if(x) weekend.push(x); continue; }
     if(!x){ cells.push({html:"<div class='d"+(isT?" today":"")+"'><span class='n'>"+dd+"</span></div>"}); continue; }
     var cls=x.pl>0?(x.pl>=strong&&strong>0?"p2":"p1"):x.pl<0?"down":"flat";
     cells.push({key:key, html:"<button class='d "+cls+(UI.calDay===key?" sel":"")+(isT?" today":"")+"' onclick=\"pickCalDay('"+key+"')\">"+
        "<span class='n'>"+dd+"</span><span class='p "+(x.pl<0?"neg":"")+" tabular'>"+esc(compact(x.pl))+"</span></button>"});
   }
-  while(cells.length%7) cells.push({html:"<div class='d off'></div>"});
-  for(var row=0; row<cells.length/7; row++){
+  while(cells.length%5) cells.push({html:"<div class='d off'></div>"});
+  for(var row=0; row<cells.length/5; row++){
     var wkPl=0, wkN=0, wkW=0, wkAny=false;
-    cells.slice(row*7,row*7+7).forEach(function(c){
+    cells.slice(row*5,row*5+5).forEach(function(c){
       h+=c.html;
       if(c.key&&r.days[c.key]){ var dx=r.days[c.key]; wkAny=true; wkPl+=dx.pl; dx.trades.forEach(function(t){ wkN++; var p=toNum(t.realizedPL); if(isNum(p)&&p>0) wkW++; }); }
     });
@@ -4372,7 +4489,9 @@ function calendarCard(){
        "<span class='s'>"+(wkAny?(wkN+"件・"+(wkN?Math.round(wkW/wkN*100):0)+"%"):"取引なし")+"</span></div>";
   }
   h+="</div>";
-  h+="<div class='smallnote' style='margin-top:8px'>青の濃さ＝その日の利益の大きさ。赤い文字＝負けた日。右端＝その週のまとめ。</div>";
+  h+="<div class='smallnote' style='margin-top:8px'>青の濃さ＝その日の利益の大きさ。赤い文字＝負けた日。右端＝その週のまとめ。1日は口座の区切り（NY17時）で切ります。</div>";
+  if(weekend.length){ var wpl=0, wn=0; weekend.forEach(function(x){ wpl+=x.pl; wn+=x.trades.length; });
+    h+="<div class='smallnote' style='margin-top:4px;color:var(--gold)'>土日に付いた決済 "+wn+"件（"+esc(fmtSigned(wpl))+"）は表に出していません。決済日時が合っているか確かめて下さい。</div>"; }
   var sel=UI.calDay&&UI.calDay.slice(0,7)===month?r.days[UI.calDay]:null;
   if(sel){
     h+="<div style='margin:12px 0 0;border-top:1px solid var(--line);padding-top:10px'>"+
@@ -4392,7 +4511,7 @@ function calendarCard(){
   return h;
 }
 window.moveCalMonth=function(k){
-  var mo=UI.calMonth||today().slice(0,7), d=new Date(+mo.slice(0,4), +mo.slice(5,7)-1+k, 1);
+  var mo=UI.calMonth||tradeDay().slice(0,7), d=new Date(+mo.slice(0,4), +mo.slice(5,7)-1+k, 1);
   UI.calMonth=d.getFullYear()+"-"+(d.getMonth()<9?"0":"")+(d.getMonth()+1); UI.calDay=""; render();
 };
 window.pickCalDay=function(d){ UI.calDay=(UI.calDay===d)?"":d; render(); };
@@ -4619,6 +4738,8 @@ function accountRulesForm(a){
   h+="<div class='row2'>"+inp("init","初期残高",a.initialBalance)+
      field("通貨","<select id='ar_cur_"+id+"'>"+CURRENCIES.concat(a.currency&&CURRENCIES.indexOf(a.currency)<0?[a.currency]:[]).map(function(c){ return "<option value='"+c+"'"+(c===a.currency?" selected":"")+">"+c+"</option>"; }).join("")+"</select>")+"</div>";
   h+=inp("target","目標(%)　空欄＝目標なし",r.targetPct);
+  h+=field("MT5 のサーバー時刻（「MT5 の時刻で入力」の変換に使う）","<select id='ar_mt5_"+id+"'>"+MT5_OFFSETS.map(function(o){
+       return "<option value='"+o[0]+"'"+((a.mt5Offset||"auto")===o[0]?" selected":"")+">"+esc(o[1])+"</option>"; }).join("")+"</select>");
   h+="<div class='sect-title' style='margin:10px 0 8px'>この口座のルール</div>";
   h+="<div class='row2'>"+inp("daily","1日の最大損失(%)",r.dailyLossPct)+inp("max","全体の最大損失(%)",r.maxLossPct)+"</div>";
   h+="<div class='row2'>"+inp("open","保有中の最大リスク(%)",r.openRiskPct)+
@@ -4660,6 +4781,7 @@ window.saveAccountRules=function(id){
   var dd=(document.getElementById("ar_dd_"+id)||{}).value;
   var nameEl=document.getElementById("ar_name_"+id), typeEl=document.getElementById("ar_type_"+id), initEl=document.getElementById("ar_init_"+id);
   if(nameEl){ var nm=String(nameEl.value||"").trim(); if(nm) a.name=nm; }
+  var mt5El=document.getElementById("ar_mt5_"+id); if(mt5El&&mt5El.value) a.mt5Offset=mt5El.value;
   if(typeEl){
     var tsel=typeEl.value, prevType=a.type;
     a.type=isAccountType(tsel)?tsel:"";
