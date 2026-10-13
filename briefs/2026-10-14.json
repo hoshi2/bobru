@@ -1,0 +1,141 @@
+{
+ "symbol": "XAUUSD",
+ "date": "2026-10-14",
+ "source": "claude-code",
+ "asOf": "2026-10-13T22:34:14+00:00",
+ "price": 4160.93,
+ "trend": {
+  "daily": "range",
+  "h4": "down",
+  "h1": "down",
+  "m15": "down"
+ },
+ "ema": {
+  "tf": "h1",
+  "e10": 4163.34,
+  "e75": 4170.14,
+  "e200": 4175.08
+ },
+ "levels": {
+  "prevHigh": 4200.625,
+  "prevLow": 4147.0,
+  "weekHigh": 4217.395,
+  "weekLow": 4147.0,
+  "recentHigh": 4202.03,
+  "recentLow": 4146.93
+ },
+ "sessions": {
+  "asia": {
+   "high": null,
+   "low": null
+  },
+  "london": {
+   "high": 4195.13,
+   "low": 4159.83
+  },
+  "newyork": {
+   "high": 4191.83,
+   "low": 4146.93
+  }
+ },
+ "scenarios": {
+  "bull": "ロング案は逆張りになるので優先度は低い。4147を割っても戻って1Hが4175（EMA200）を上抜けて定着するなら、4200〜4217（前日高値〜今週高値）までの戻りを狙う。SLは4147割れの目安。根拠：4Hの紫5本が12〜23の低い位置にあり、傾きがわずかに上向き（slope +1.4）で、下げが一服すれば反発が出やすい形。ただしCPI通過後に判断したい。",
+  "bear": "基本は戻り売り目線。4170〜4175（1H EMA75〜200）への戻りで上値が重くなるか、4147を明確に下抜けてから戻りが4160前後で止まれば売りを検討。SLは4175超えの目安、下の目安は4147→4120前後。根拠：4H・1H・15分が下向き、15分のBOB EDGEは水色（b 75）が高い帯にいて白（a 48.7）が下抜けた順張り売りの形、紫も下向き。",
+  "noTrade": "21:30の米CPI（コア・総合、重要度高）の前後30分は新規を避け、結果後の最初の動きも追いかけない。18:40のボウマンFRB副議長発言も注意。4Hの紫の広がりが10.7とまだ小さく収束寄りなので、拡散が始まるまでは小さく。4147〜4175の間で上下しているうちは方向が出ていないので見送り。"
+ },
+ "bias": "wait",
+ "summary": "日足はレンジ、4H・1H・15分はそろって下向き。前日は4200.6まで戻したあと4147（今週安値）まで売られ、安値圏の4160.8で引けた。現値4161は1H EMA10（4163）・EMA75（4170）・EMA200（4175）のすべての下で、戻り売りが優勢。意識されるのは下が4147（前日安値＝今週安値）、上が4175（1H EMA200）〜4200（前日高値）。今夜21:30に米CPI（重要度高）があり、それまでは値幅が出にくい。",
+ "events": [
+  {
+   "time": "02:00",
+   "name": "Fed Barkin Speech",
+   "importance": "mid"
+  },
+  {
+   "time": "05:00",
+   "name": "Fed Collins Speech",
+   "importance": "mid"
+  },
+  {
+   "time": "18:40",
+   "name": "Fed Bowman Speech",
+   "importance": "mid"
+  },
+  {
+   "time": "20:00",
+   "name": "MBA 30-Year Mortgage Rate",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "CPI",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "CPI s.a",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "Core Inflation Rate MoM",
+   "importance": "high"
+  },
+  {
+   "time": "21:30",
+   "name": "Inflation Rate YoY",
+   "importance": "high"
+  },
+  {
+   "time": "21:30",
+   "name": "Core Inflation Rate YoY",
+   "importance": "high"
+  },
+  {
+   "time": "21:30",
+   "name": "Inflation Rate MoM",
+   "importance": "high"
+  }
+ ],
+ "bobEdge": {
+  "m15": {
+   "a": 48.7,
+   "b": 75.1,
+   "c": 23.1,
+   "purple": [
+    38.2,
+    42.8,
+    46.1,
+    41.1,
+    35.5
+   ],
+   "spread": 10.6,
+   "slope": -2.5,
+   "trend": "down",
+   "cross": null,
+   "bar_t": 1791929700
+  },
+  "h4": {
+   "a": 49.8,
+   "b": 52.5,
+   "c": 59.5,
+   "purple": [
+    23.1,
+    20.6,
+    18.5,
+    14.2,
+    12.4
+   ],
+   "spread": 10.7,
+   "slope": 1.4,
+   "trend": "flat",
+   "cross": null,
+   "bar_t": 1791910800
+  }
+ },
+ "notes": [
+  "足は先物（GC=F）をスポットに合わせて -22.77 ずらしたもの",
+  "アジアセッションの高安は未取得（null）",
+  "bob-bridge の共通ルールはこの環境では参照できなかった"
+ ]
+}
