@@ -1,0 +1,155 @@
+{
+ "symbol": "XAUUSD",
+ "date": "2026-10-15",
+ "source": "claude-code",
+ "asOf": "2026-10-14T22:33:58+00:00",
+ "price": 4109.065,
+ "trend": {
+  "daily": "down",
+  "h4": "down",
+  "h1": "down",
+  "m15": "down"
+ },
+ "ema": {
+  "tf": "h1",
+  "e10": 4107.05,
+  "e75": 4150.18,
+  "e200": 4167.46
+ },
+ "levels": {
+  "prevHigh": 4170.49,
+  "prevLow": 4073.545,
+  "weekHigh": 4217.395,
+  "weekLow": 4073.545,
+  "recentHigh": 4173.965,
+  "recentLow": 4075.465
+ },
+ "sessions": {
+  "asia": {
+   "high": null,
+   "low": null
+  },
+  "london": {
+   "high": 4161.365,
+   "low": 4082.065
+  },
+  "newyork": {
+   "high": 4160.365,
+   "low": 4075.465
+  }
+ },
+ "scenarios": {
+  "bull": "ロング案は逆張りになるので優先度は低い。4073.5を割らずに1Hが4150（EMA75）を上抜けて定着するなら、4170（前日高値〜1H EMA200）までの戻りを狙う。SLは直近安値4075割れの目安。根拠：4Hの紫5本が12〜24の低い位置で下げが伸びきった形、傾きもわずかに上向き（slope +0.3）。白（a 16.9）が水色（b 22.6）を20〜35の帯で上抜けるなら反発の合図。ただし21:30の指標を通過してから判断したい。",
+  "bear": "基本は戻り売り目線。4150（1H EMA75）前後への戻りで上値が重くなるか、戻りが4125〜4150で止まって15分が再び下向きになれば売りを検討。SLは4170.5（前日高値）超えの目安、下の目安は4073.5→4066.5（先週安値）。根拠：4つの時間足すべてが下向きで現値がEMAの下、15分のBOB EDGEは水色（b 84.7）が高い帯にいて白（a 62.8）がその下にある戻りの終わりかけの形。4073.5を明確に下抜けたら追わず、戻りを待つ。",
+  "noTrade": "21:30の米PPI・小売売上高（重要度高）の前後30分は新規を避け、結果後の最初の動きも追いかけない。11:55のボウマンFRB副議長発言も注意。15分の紫の広がりが2.8と小さく収束中なので、拡散が始まるまでは入らない。4Hの紫が12〜24と低い位置にあり下げが伸びているので、安値4073.5付近での新規売りは見送り。4100〜4150の間で上下しているうちは方向が出ていないので待つ。"
+ },
+ "bias": "short",
+ "summary": "日足・4H・1H・15分がそろって下向き。前日は4170.5まで戻したあと4073.5（今週安値）まで売られ、安値圏の4104.8で引けた。現値4109は1H EMA75（4150）・EMA200（4167）のはるか下で、戻り売りが優勢。意識されるのは下が4073.5（前日安値＝今週安値）、上が4150（1H EMA75）〜4170.5（前日高値）。今夜21:30に米PPIと小売売上高（重要度高）があり、それまでは値幅が出にくい。",
+ "events": [
+  {
+   "time": "00:00",
+   "name": "Atlanta Fed GDPNow",
+   "importance": "mid"
+  },
+  {
+   "time": "02:30",
+   "name": "Fed Barkin Speech",
+   "importance": "mid"
+  },
+  {
+   "time": "06:00",
+   "name": "API Crude Oil Stock Change",
+   "importance": "mid"
+  },
+  {
+   "time": "11:55",
+   "name": "Fed Bowman Speech",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "Initial Jobless Claims",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "Philadelphia Fed Manufacturing Index",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "Retail Sales Ex Autos MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "Retail Sales Control Group MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "NY Empire State Manufacturing Index",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "Core PPI MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "PPI MoM",
+   "importance": "high"
+  },
+  {
+   "time": "21:30",
+   "name": "Retail Sales MoM",
+   "importance": "high"
+  },
+  {
+   "time": "23:00",
+   "name": "Business Inventories MoM",
+   "importance": "mid"
+  }
+ ],
+ "bobEdge": {
+  "m15": {
+   "a": 62.8,
+   "b": 84.7,
+   "c": 21.1,
+   "purple": [
+    16.0,
+    14.0,
+    13.6,
+    15.6,
+    16.3
+   ],
+   "spread": 2.8,
+   "slope": 0.7,
+   "trend": "flat",
+   "cross": null,
+   "bar_t": 1792016100
+  },
+  "h4": {
+   "a": 16.9,
+   "b": 22.6,
+   "c": 61.9,
+   "purple": [
+    23.7,
+    21.2,
+    19.3,
+    14.9,
+    12.0
+   ],
+   "spread": 11.7,
+   "slope": 0.3,
+   "trend": "flat",
+   "cross": null,
+   "bar_t": 1791997200
+  }
+ },
+ "notes": [
+  "足は先物（GC=F）をスポットに合わせて -19.54 ずらしたもの",
+  "アジア時間の高安は取れていない。"
+ ]
+}
