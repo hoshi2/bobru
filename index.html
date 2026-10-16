@@ -1640,7 +1640,7 @@ window.useSiblingCloudCfg=function(){
   var sc=siblingCloudCfg(), ta=document.getElementById("cloudcfg"), msg=document.getElementById("cloudmsg");
   if(!sc){ if(msg) msg.textContent="この端末の他のアプリに Firebase の設定が見つかりません。Firebase の画面からコピーして貼って下さい"; return; }
   if(ta) ta.value=JSON.stringify(sc.config,null,2);
-  if(msg) msg.textContent=sc.from+"の設定を入れました。あとは同期コードを決めて「接続する」";
+  if(msg) msg.textContent="「"+sc.from+"」アプリと同じ Firebase の設定を①に入れました。あとは②に同期コード（合言葉）を入れて「接続する」を押して下さい";
 };
 function parseFirebaseConfig(text){
   var m=String(text||"").match(/\{[\s\S]*\}/);
@@ -1694,7 +1694,8 @@ function cloudSettingsBody(){
     h+="<div class='smallnote' style='margin:0 0 10px'>習慣・お金・ロイログと同じ仕組みです。同じ Firebase の設定と、自分で決めた合言葉（同期コード）を PC とスマホの両方に貼ると、保存するたびに自動で相手にも届きます。画像は端末内のみで同期しません。</div>";
     var sc=siblingCloudCfg();
     h+=field("① Firebase の設定を貼り付け","<textarea id='cloudcfg' rows='4' placeholder='const firebaseConfig = { apiKey: \"…\", projectId: \"…\", … } をまるごと'></textarea>"+
-       (sc?"<div class='btnrow' style='margin-top:6px'><button type='button' class='btn ghost' onclick='useSiblingCloudCfg()'>"+esc(sc.from)+"の設定を使う</button></div>":""));
+       (sc?"<div class='btnrow' style='margin-top:6px'><button type='button' class='btn ghost' onclick='useSiblingCloudCfg()'>貼り付けなしで入れる（この端末の「"+esc(sc.from)+"」アプリと同じ Firebase を使う）</button></div>"+
+           "<div class='smallnote' style='margin-top:4px'>すでに同じ Firebase を使っている別のアプリ（"+esc(sc.from)+"）の設定を、この欄に自動でコピーします。Firebase の画面を開く必要はありません。</div>":""));
     h+=field("② 同期コード（合言葉・4文字以上。両方の端末で同じもの）","<input type='text' id='cloudcode' autocomplete='off' autocapitalize='off' placeholder='例：bob-2026-xxxx'>");
     h+="<div id='cloudmsg' class='smallnote'></div>";
     h+="<div class='btnrow'><button class='btn primary' onclick='connectCloudUI()'>接続する</button></div>";
