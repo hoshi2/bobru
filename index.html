@@ -1508,7 +1508,7 @@ function cloudPushNow(){
    記録の丸ごとが入っている本体ドキュメント boburu/<同期コード> には触らない。
    口座が決まらない取引は勝手に入れず、既存の「どの口座の履歴ですか？」画面で選んでもらう。
    止めたいときは 設定 → 端末間の同期 → 「受信箱の自動取り込み」をオフ（DB.settings.inboxAuto=false）。 --- */
-var INBOX={checkedAt:0, busy:false, lastAt:null, lastImported:0, waiting:0, orphan:[], error:"", asked:false};
+var INBOX={checkedAt:0, busy:false, lastAt:null, lastImported:0, waiting:0, orphan:[], error:"", asked:false, createdAccounts:[]};
 function inboxOn(){ return cloudOn() && !(DB&&DB.settings&&DB.settings.inboxAuto===false); }
 function inboxRef(){ var cfg=loadCloudCfg(); return CLOUD.db.collection(CLOUD_COLLECTION).doc(cfg.code+"__inbox"); }
 // 受信箱の1件 → readMt5Report が返す deal と同じ形。dealId も HTML 取り込みと同じ作り方に揃える（両方やっても二重にならない）
@@ -1530,11 +1530,29 @@ function inboxDeal(it){
   d.currency=it.currency?String(it.currency).toUpperCase():null;
   return d;
 }
-// 口座を決める：記憶した口座番号 → 口座名（Dell の accounts.json の name と同じ）→ 決まらなければ null（勝手に入れない）
+// 口座を決める。無ければ作る（2026-10-17 優希：口座を買い直したときも手を動かしたくない）
+//  1. 記憶した口座番号 → その口座
+//  2. 同じ口座名（Dell の accounts.json の name）で、まだ口座番号が結び付いていない口座 → それを使い、口座番号を記憶
+//  3. それ以外（初めての口座名、または同じ名前でも別の口座番号＝新しい挑戦）→ 口座を自動で作る。
+//     種別・初期残高・ルール・通貨は、同じ名前の直近の口座（終了したものも含む）から引き継ぐ。無ければひな形（Fintokei / Funded7）。
+//     名前が重なるときは「Funded7 (口座番号)」。初期残高が分からないときは 0 で作り、設定 → 口座 で直してもらう
 function inboxAccountFor(d){
-  var acc=accountByBrokerId(d.brokerId); if(acc&&!acc.closedReason) return acc;
-  if(d.accountName){ var list=activeAccounts(); for(var i=0;i<list.length;i++){ if(String(list[i].name||"").trim()===d.accountName) return list[i]; } }
-  return null;
+  var acc=accountByBrokerId(d.brokerId); if(acc) return acc;   // 終了（失格など）にした口座でも、同じ口座番号の取引はその口座のもの
+  var name=(d.accountName||("MT5 "+(d.brokerId||""))).trim();
+  var list=Array.isArray(DB.accounts)?DB.accounts:[];
+  var same=list.filter(function(a){ var n=String(a.name||"").trim(); return n===name || n.indexOf(name+" (")===0; });
+  var free=same.filter(function(a){ return !a.closedReason && !(a.brokerIds||[]).length; });
+  if(free.length){ if(d.brokerId) free[0].brokerIds=[d.brokerId]; return free[0]; }
+  var prev=same.slice().sort(function(a,b){ return String(b.created||"").localeCompare(String(a.created||"")); })[0]||null;
+  var tpl=""; for(var i=0;i<ACCOUNT_TEMPLATES.length;i++){ if(name.toLowerCase().indexOf(ACCOUNT_TEMPLATES[i].id)===0) tpl=ACCOUNT_TEMPLATES[i].id; }
+  var na=makeAccount({name:same.length?name+" ("+(d.brokerId||(same.length+1))+")":name,
+                      type:prev?prev.type:"", typeNote:prev?prev.typeNote:"", initialBalance:prev?prev.initialBalance:0,
+                      template:prev?prev.template:tpl, currency:d.currency||(prev?prev.currency:undefined),
+                      rules:prev?JSON.parse(JSON.stringify(prev.rules||{})):undefined, mt5Offset:prev?prev.mt5Offset:"auto",
+                      brokerIds:d.brokerId?[d.brokerId]:[]});
+  DB.accounts.push(na);
+  INBOX.createdAccounts.push(na.name);
+  return na;
 }
 // 口座ごとにまとめ、手動取り込みの既定（近い保有中の計画があれば紐付け、無ければ計画なしの記録）で入れる
 function inboxImport(deals){
@@ -1584,9 +1602,12 @@ function inboxCheck(force){
       if(consumed[deal.dealId]) return;                                                      // 他の端末が取り込み済み（同期で届く）
       fresh.push(deal);
     });
+    INBOX.createdAccounts=[];
     var r=inboxImport(fresh);
     INBOX.orphan=r.orphan; INBOX.waiting=r.orphan.length; INBOX.lastImported=r.groups;
-    if(r.groups){ saveData(); cloudRenderSoon(); toast("MT5 から "+r.groups+"件を自動で取り込みました（紐付け "+r.linked+"・新規 "+r.created+"）"); }
+    if(r.groups||INBOX.createdAccounts.length){ saveData(); cloudRenderSoon(); }
+    if(r.groups) toast("MT5 から "+r.groups+"件を自動で取り込みました（紐付け "+r.linked+"・新規 "+r.created+"）");
+    if(INBOX.createdAccounts.length) setTimeout(function(){ toast("口座「"+INBOX.createdAccounts.join("」「")+"」を自動で作りました。設定 → 口座 で初期残高とルールを確認して下さい"); }, 2500);
     if(r.orphan.length && !INBOX.asked){ INBOX.asked=true; toast("MT5 の受信箱に、口座が決まらない取引が "+r.orphan.length+"件あります。設定 → 端末間の同期 → 受信箱を確認"); }
     cloudRefreshStatus();
     return inboxMarkConsumed(mark.concat(r.imported));

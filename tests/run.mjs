@@ -885,14 +885,17 @@ group("14. 受信箱の自動取り込み");
     const items = {};
     const i1 = mk("1001", { openedAt:openedA, closedAt:closedA }); items[i1.dealId] = i1;
     const i2 = mk("1002", { openedAt:"2026-10-01T01:00:00.000Z", closedAt:"2026-10-01T02:00:00.000Z", dir:"short", entry:4300, close:4290, net:50000, gross:50700 }); items[i2.dealId] = i2;
-    const i3 = mk("1003", { openedAt:"2026-10-02T01:00:00.000Z", closedAt:"2026-10-02T02:00:00.000Z", brokerId:"111", account:"Nope" }); items[i3.dealId] = i3;   // 口座が決まらない
+    const i3 = mk("1003", { openedAt:"2026-10-02T01:00:00.000Z", closedAt:"2026-10-02T02:00:00.000Z", brokerId:"111", account:"Nope", currency:"USD" }); items[i3.dealId] = i3;   // 知らない口座名 → 自動で作る
     items["bad"] = { posId:"1004", symbol:"GOLD", dir:"long", openedAt:"2026-10-03T01:00:00.000Z" };                                                          // 壊れた1件
     window.__fake.doc = { app:"boburu-inbox", v:1, items, consumed:{} };
     await inboxCheck(true);
     const tA = findTrade("openA");
+    const nope = DB.accounts.filter(a => a.name === "Nope")[0];
     const res1 = { trades:DB.trades.length, closed:DB.trades.filter(t => t.status === "closed").length, openA_status:tA.status, openA_pl:tA.realizedPL, openA_fee:tA.fee,
                    openA_deals:(tA.brokerDealIds || []).join(","), newNoPlan:DB.trades.filter(t => t.noPlan).length, brokerIds:acc.brokerIds.slice(),
-                   consumed:Object.keys(window.__fake.doc.consumed || {}).sort(), waiting:INBOX.waiting, orphanId:(INBOX.orphan[0] || {}).dealId, lastImported:INBOX.lastImported };
+                   consumed:Object.keys(window.__fake.doc.consumed || {}).sort(), waiting:INBOX.waiting, lastImported:INBOX.lastImported,
+                   nope:nope ? { brokerIds:nope.brokerIds.slice(), currency:nope.currency, closed:!!nope.closedReason, trades:DB.trades.filter(t => t.accountId === nope.id).length } : null,
+                   created:INBOX.createdAccounts.slice() };
     // 2回目：何も増えない
     INBOX.checkedAt = 0; await inboxCheck(true);
     const res2 = { trades:DB.trades.length, lastImported:INBOX.lastImported };
@@ -911,15 +914,17 @@ group("14. 受信箱の自動取り込み");
       "<tr><td>2026.10.01 04:00:00</td><td>1002</td><td>GOLD</td><td>sell</td><td>1.00</td><td>4300</td><td></td><td></td><td>2026.10.01 05:00:00</td><td>4290</td><td>-700.00</td><td>0.00</td><td>50700.00</td></tr></table>";
     const rep = ctraderImport.readMt5Report(html, "auto");
     const res5 = { same:rep.deals[0].dealId === i2.dealId, already:!!importedDealIds()[rep.deals[0].dealId] };
-    // 口座が決まらない分：既存の「どの口座の履歴ですか？」→ 紐付け → 取り込む
-    inboxOpenAccountModal();
-    const modal1 = !!document.getElementById("cti_acc") && !document.getElementById("cti_off");
-    document.getElementById("cti_acc").value = acc.id;
-    ctiPickAccount();
-    const modal2 = !!document.getElementById("cti_c_0");
-    ctiApply();
-    await new Promise(r => setTimeout(r, 50));
-    const res6 = { modal1, modal2, trades:DB.trades.length, remembered:acc.brokerIds.indexOf("111") >= 0, consumed1003:!!window.__fake.doc.consumed[i3.dealId], waiting:INBOX.waiting, modalClosed:!document.getElementById("cti_c_0") };
+    // 同じ名前（Funded7）で別の口座番号 ＝ 口座を買い直した → 別口座「Funded7 (222)」を作り、種別・初期残高・ルールを前の Funded7 から引き継ぐ
+    acc.initialBalance = 1234567; acc.type = "step1"; acc.rules.dailyLossPct = 4.5; acc.closedReason = "fail";
+    const i7 = mk("1007", { openedAt:"2026-10-06T01:00:00.000Z", closedAt:"2026-10-06T02:00:00.000Z", brokerId:"222" }); window.__fake.doc.items[i7.dealId] = i7;
+    INBOX.checkedAt = 0; await inboxCheck(true);
+    const f2 = DB.accounts.filter(a => a.name === "Funded7 (222)")[0];
+    const res6 = { trades:DB.trades.length, made:!!f2, brokerIds:f2 ? f2.brokerIds.slice() : [], init:f2 ? f2.initialBalance : null, type:f2 ? f2.type : null,
+                   daily:f2 ? f2.rules.dailyLossPct : null, open:f2 ? !f2.closedReason : null, oldUntouched:acc.brokerIds.join() === "999",
+                   inNew:f2 ? DB.trades.filter(t => t.accountId === f2.id).length : 0, consumed1007:!!window.__fake.doc.consumed[i7.dealId],
+                   // 設定オフの間に届いていた 1006（口座番号 999）は、終了にした元の Funded7 に入る（別口座「Funded7 (999)」は作らない）
+                   extra:DB.accounts.filter(a => a.name === "Funded7 (999)").length, inOld:DB.trades.filter(t => t.accountId === acc.id).length };
+    acc.closedReason = null;
     // 設定 → 端末間の同期 に、オン/オフと「受信箱を確認」が出る
     TAB = "settings"; UI.settingsOpen.sync = true; render();
     const st = document.getElementById("cloudstatus");
@@ -927,18 +932,20 @@ group("14. 受信箱の自動取り込み");
                    button:Array.prototype.some.call(document.querySelectorAll("#st_sync button"), b => b.textContent === "受信箱を確認") };
     return { res1, res2, res3, res4, res5, res6, res7 };
   });
-  // 記録は 保有中だった openA（紐付けで決済済みに）＋ 計画なしの新規 1 件 ＝ 2 件。壊れた1件と口座不明の1件は入らない
-  ok("口座が分かる2件だけ入り、壊れた1件と口座不明の1件は入らない", r.res1.trades === 2 && r.res1.closed === 2 && r.res1.newNoPlan === 1);
+  // 記録は 保有中だった openA（紐付けで決済済みに）＋ 計画なしの新規 1 件 ＋ 自動で作った口座「Nope」に 1 件 ＝ 3 件。壊れた1件は入らない
+  ok("3件入り、壊れた1件は入らない", r.res1.trades === 3 && r.res1.closed === 3 && r.res1.newNoPlan === 2);
   ok("近い保有中の計画に紐付き、確定損益は手数料込みの net", r.res1.openA_status === "closed" && r.res1.openA_pl === 99300 && r.res1.openA_fee === -700 && r.res1.openA_deals.startsWith("mt5:1001:"));
   ok("口座番号を記憶する", r.res1.brokerIds.join() === "999");
-  ok("取り込んだ分だけ consumed に印が付く", r.res1.consumed.length === 2 && r.res1.consumed.every(k => /^mt5:100[12]:/.test(k)));
-  ok("口座が決まらない分は待ちとして数える", r.res1.waiting === 1 && String(r.res1.orphanId).startsWith("mt5:1003:") && r.res1.lastImported === 2);
-  ok("2回目は何も増えない", r.res2.trades === 2 && r.res2.lastImported === 0);
-  ok("他の端末が取り込み済みの分は入れない", r.res3.trades === 2);
-  ok("設定でオフにすると読まない", r.res4.trades === 2 && r.res4.on === false);
+  ok("知らない口座名は口座を自動で作って入れる（通貨・口座番号つき）", !!r.res1.nope && r.res1.nope.brokerIds.join() === "111" && r.res1.nope.currency === "USD" && !r.res1.nope.closed && r.res1.nope.trades === 1 && r.res1.created.join() === "Nope");
+  ok("取り込んだ分だけ consumed に印が付く", r.res1.consumed.length === 3 && r.res1.consumed.every(k => /^mt5:100[123]:/.test(k)) && r.res1.waiting === 0 && r.res1.lastImported === 3);
+  ok("2回目は何も増えない", r.res2.trades === 3 && r.res2.lastImported === 0);
+  ok("他の端末が取り込み済みの分は入れない", r.res3.trades === 3);
+  ok("設定でオフにすると読まない", r.res4.trades === 3 && r.res4.on === false);
   ok("HTML レポート取り込みと同じ dealId（二重防止が効く）", r.res5.same && r.res5.already);
-  ok("口座不明の分は既存の口座選択画面（時差の選択なし）→ 紐付け画面に乗る", r.res6.modal1 && r.res6.modal2);
-  ok("選んだ口座で取り込まれ、口座番号が記憶され、受信箱に印が付く", r.res6.trades === 3 && r.res6.remembered && r.res6.consumed1003 && r.res6.waiting === 0 && r.res6.modalClosed);
+  // 1006（オフの間に届いた分）は元の Funded7 へ、1007（別の口座番号）は新しい口座へ → 記録は 3 + 2 = 5
+  ok("同じ名前で別の口座番号は新しい口座「Funded7 (222)」になる", r.res6.made && r.res6.brokerIds.join() === "222" && r.res6.open && r.res6.oldUntouched && r.res6.inNew === 1 && r.res6.trades === 5 && r.res6.consumed1007);
+  ok("記憶済みの口座番号は、口座を終了にしていてもその口座に入る（別口座を作らない）", r.res6.extra === 0 && r.res6.inOld === 3);
+  ok("新しい口座は前の Funded7 から種別・初期残高・ルールを引き継ぐ", r.res6.init === 1234567 && r.res6.type === "step1" && r.res6.daily === 4.5);
   ok("設定の同期欄に 受信箱のオン/オフ・状態・「受信箱を確認」が出る", r.res7.status && r.res7.toggle && r.res7.text.includes("受信箱") && r.res7.text.includes("最終確認") && r.res7.button);
   await page.close();
 }
