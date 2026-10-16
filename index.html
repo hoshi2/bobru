@@ -212,11 +212,11 @@ details.st .body .btn{margin-top:10px}
 .scope button{background:none;border:0;color:var(--txt3);font-size:11.5px;font-weight:600;padding:4px 11px;border-radius:16px}
 .scope button.on{background:var(--blue-dim);color:var(--blue2)}
 .cal{display:grid;grid-template-columns:repeat(5,minmax(0,1fr)) minmax(0,1.15fr);gap:5px}
-.cal .d{min-height:54px;border-radius:9px;padding:6px 6px;text-align:left;border:1px solid var(--line);background:#05080e;color:var(--txt);font:inherit;display:flex;flex-direction:column;justify-content:space-between;font-size:11.5px}
+.cal .d{min-height:54px;border-radius:9px;padding:6px 4px;text-align:left;border:1px solid var(--line);background:#05080e;color:var(--txt);font:inherit;display:flex;flex-direction:column;justify-content:space-between;font-size:11.5px}
 html[data-theme="light"] .cal .d{background:var(--card)}
 .cal .d.off{opacity:.3;border-color:var(--line)}
 .cal .d .n{font-size:11px;color:var(--txt2);font-weight:700}
-.cal .d .p{font-size:11.5px;font-weight:700;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal .d .p{font-size:10.5px;letter-spacing:-.2px;font-weight:700;margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .cal .d.p1{background:var(--cal-up);border-color:color-mix(in srgb,var(--blue2) 35%,transparent);box-shadow:var(--cal-up-shadow)}
 .cal .d.p2{background:linear-gradient(160deg,#1aa5dc,#0d5f85);border-color:var(--blue2);box-shadow:var(--glow)}
 html:not([data-theme="light"]) .cal .d.p1{border-color:rgba(111,214,255,.35);background:linear-gradient(160deg,#0f4a66,#0a2f45);box-shadow:0 0 14px rgba(34,184,240,.16)}
@@ -226,9 +226,9 @@ html[data-theme="light"] .cal .d.p2{background:var(--blue)}
 .cal .d.flat{background:var(--card2)}
 .cal .d.sel{outline:1px solid var(--blue2);outline-offset:-1px}
 .cal .d.today{outline:1px solid var(--blue2);outline-offset:-1px;box-shadow:0 0 12px rgba(34,184,240,.35)}
-.cal .w{min-height:54px;background:var(--card2);border:1px dashed var(--line2);border-radius:9px;padding:6px 7px;font-size:11px;color:var(--txt2);display:flex;flex-direction:column;justify-content:space-between}
-.cal .w .pl{font-size:12px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.cal .w .s{color:var(--txt3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal .w{min-height:54px;background:var(--card2);border:1px dashed var(--line2);border-radius:9px;padding:6px 5px;font-size:11px;color:var(--txt2);display:flex;flex-direction:column;justify-content:space-between}
+.cal .w .pl{font-size:10.5px;letter-spacing:-.2px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cal .w .s{color:var(--txt3);font-size:9.5px;line-height:1.25;overflow:hidden}
 
 /* ---- 今日：環境認識カードの中のシナリオと指標 ---- */
 .scen3{display:grid;grid-template-columns:1fr;gap:10px 14px;margin-top:12px}
@@ -1624,8 +1624,17 @@ window.inboxCheckUI=function(){
   if(!cloudOn()){ toast("先にクラウド同期をオンにして下さい"); return; }
   if(!CLOUD.ready){ toast("接続中です。少し待ってからもう一度押して下さい"); initCloud(); return; }
   if(INBOX.orphan.length){ inboxOpenAccountModal(); return; }
-  inboxCheck(true).then(function(){ if(INBOX.orphan.length) inboxOpenAccountModal(); else if(!INBOX.lastImported&&!INBOX.error) toast("受信箱に新しい取引はありません"); });
+  inboxCheck(true).then(function(){ if(INBOX.orphan.length) inboxOpenAccountModal(); else if(!INBOX.lastImported&&!INBOX.error) toast("受信箱に新しい取引はありません"); if(TAB==="trades") render(); });
 };
+// 記録タブの先頭：受信箱の状態と「更新」。クラウド同期がオフのときは出さない
+function inboxRefreshBar(){
+  if(!cloudOn()) return "";
+  var st=INBOX.error?"エラー："+INBOX.error:INBOX.lastAt?"最終確認 "+fmtWhen(INBOX.lastAt).slice(11):"まだ確認していません";
+  if(INBOX.waiting) st+="・口座が決まらない "+INBOX.waiting+"件";
+  return "<div class='card' id='inboxbar' style='display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 14px'>"+
+    "<span class='smallnote' style='margin:0;flex:1 1 auto'>MT5 の受信箱（Dell）："+esc(st)+"</span>"+
+    "<button class='btn sm' onclick='inboxCheckUI()' style='flex:0 0 auto;width:auto'>更新</button></div>";
+}
 window.inboxToggleUI=function(on){ DB.settings.inboxAuto=!!on; saveData(); cloudRefreshStatus(); if(on) inboxCheck(true); };
 function inboxStatusHtml(){
   if(!cloudOn()) return "";
@@ -3964,6 +3973,7 @@ function collectTags(tags){
 function viewTrades(){
   var mine=DB.trades.filter(function(t){ return inViewAcct(t,false); });
   var h=topbar("記録", "決済済み "+mine.filter(function(t){return t.status==="closed";}).length+"件");
+  h+=inboxRefreshBar();   // Dell の MT5 履歴を、自動を待たずにその場で取りに行く（hoshi2/bob-bridge#22）
   var plans=DB.tradePlans.filter(function(t){ return inViewAcct(t,false); });
   var openN=mine.filter(function(t){return t.status==="open";}).length;
   var planN=plans.length;
@@ -5499,7 +5509,7 @@ function hexA(c,a){
   return c;
 }
 
-function abbr(v){ var a=Math.abs(v); if(a>=1000000) return (v/1000000).toFixed(1)+"M"; if(a>=1000) return Math.round(v/1000)+"k"; return Math.round(v).toString(); }
+function abbr(v){ var a=Math.abs(v); if(a>=10000000) return Math.round(v/1000000)+"M"; if(a>=1000000) return (v/1000000).toFixed(1)+"M"; if(a>=1000) return Math.round(v/1000)+"k"; return Math.round(v).toString(); }
 
 function drawGrowthCharts(){
   var list=DB.trades.filter(function(t){return t.status==="closed"&&inViewAcct(t,true)&&inPeriod(t,UI.growthPeriod,UI.growthCustom);})

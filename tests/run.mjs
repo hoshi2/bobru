@@ -930,7 +930,16 @@ group("14. 受信箱の自動取り込み");
     const st = document.getElementById("cloudstatus");
     const res7 = { status:!!st, toggle:!!(st && st.querySelector("input[type=checkbox]")), text:(st && st.textContent) || "",
                    button:Array.prototype.some.call(document.querySelectorAll("#st_sync button"), b => b.textContent === "受信箱を確認") };
-    return { res1, res2, res3, res4, res5, res6, res7 };
+    // 記録タブの先頭に「更新」（受信箱を手で取りに行く）。同期オフでは出ない（hoshi2/bob-bridge#22）
+    TAB = "trades"; render();
+    const bar = document.getElementById("inboxbar");
+    const res8 = { bar:!!bar, text:(bar && bar.textContent) || "", button:!!(bar && Array.prototype.some.call(bar.querySelectorAll("button"), b => b.textContent === "更新")) };
+    const before = INBOX.checkedAt; INBOX.checkedAt = 0; inboxCheckUI(); await new Promise(r => setTimeout(r, 50));
+    res8.checked = INBOX.checkedAt > before;
+    const keepCfg = loadCloudCfg; loadCloudCfg = () => null; render();
+    res8.offHidden = !document.getElementById("inboxbar");
+    loadCloudCfg = keepCfg;
+    return { res1, res2, res3, res4, res5, res6, res7, res8 };
   });
   // 記録は 保有中だった openA（紐付けで決済済みに）＋ 計画なしの新規 1 件 ＋ 自動で作った口座「Nope」に 1 件 ＝ 3 件。壊れた1件は入らない
   ok("3件入り、壊れた1件は入らない", r.res1.trades === 3 && r.res1.closed === 3 && r.res1.newNoPlan === 2);
@@ -946,6 +955,7 @@ group("14. 受信箱の自動取り込み");
   ok("同じ名前で別の口座番号は新しい口座「Funded7 (222)」になる", r.res6.made && r.res6.brokerIds.join() === "222" && r.res6.open && r.res6.oldUntouched && r.res6.inNew === 1 && r.res6.trades === 5 && r.res6.consumed1007);
   ok("記憶済みの口座番号は、口座を終了にしていてもその口座に入る（別口座を作らない）", r.res6.extra === 0 && r.res6.inOld === 3);
   ok("新しい口座は前の Funded7 から種別・初期残高・ルールを引き継ぐ", r.res6.init === 1234567 && r.res6.type === "step1" && r.res6.daily === 4.5);
+  ok("記録タブの先頭に受信箱の状態と「更新」が出て、押すと受信箱を確認する。同期オフでは出ない", r.res8.bar && r.res8.text.includes("最終確認") && r.res8.button && r.res8.checked && r.res8.offHidden);
   ok("設定の同期欄に 受信箱のオン/オフ・状態・「受信箱を確認」が出る", r.res7.status && r.res7.toggle && r.res7.text.includes("受信箱") && r.res7.text.includes("最終確認") && r.res7.button);
   await page.close();
 }
