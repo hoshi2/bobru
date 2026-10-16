@@ -920,19 +920,26 @@ group("14. 受信箱の自動取り込み");
     ctiApply();
     await new Promise(r => setTimeout(r, 50));
     const res6 = { modal1, modal2, trades:DB.trades.length, remembered:acc.brokerIds.indexOf("111") >= 0, consumed1003:!!window.__fake.doc.consumed[i3.dealId], waiting:INBOX.waiting, modalClosed:!document.getElementById("cti_c_0") };
-    return { res1, res2, res3, res4, res5, res6 };
+    // 設定 → 端末間の同期 に、オン/オフと「受信箱を確認」が出る
+    TAB = "settings"; UI.settingsOpen.sync = true; render();
+    const st = document.getElementById("cloudstatus");
+    const res7 = { status:!!st, toggle:!!(st && st.querySelector("input[type=checkbox]")), text:(st && st.textContent) || "",
+                   button:Array.prototype.some.call(document.querySelectorAll("#st_sync button"), b => b.textContent === "受信箱を確認") };
+    return { res1, res2, res3, res4, res5, res6, res7 };
   });
-  ok("口座が分かる2件だけ入り、壊れた1件と口座不明の1件は入らない", r.res1.trades === 3 && r.res1.closed === 2 && r.res1.newNoPlan === 1);
+  // 記録は 保有中だった openA（紐付けで決済済みに）＋ 計画なしの新規 1 件 ＝ 2 件。壊れた1件と口座不明の1件は入らない
+  ok("口座が分かる2件だけ入り、壊れた1件と口座不明の1件は入らない", r.res1.trades === 2 && r.res1.closed === 2 && r.res1.newNoPlan === 1);
   ok("近い保有中の計画に紐付き、確定損益は手数料込みの net", r.res1.openA_status === "closed" && r.res1.openA_pl === 99300 && r.res1.openA_fee === -700 && r.res1.openA_deals.startsWith("mt5:1001:"));
   ok("口座番号を記憶する", r.res1.brokerIds.join() === "999");
   ok("取り込んだ分だけ consumed に印が付く", r.res1.consumed.length === 2 && r.res1.consumed.every(k => /^mt5:100[12]:/.test(k)));
   ok("口座が決まらない分は待ちとして数える", r.res1.waiting === 1 && String(r.res1.orphanId).startsWith("mt5:1003:") && r.res1.lastImported === 2);
-  ok("2回目は何も増えない", r.res2.trades === 3 && r.res2.lastImported === 0);
-  ok("他の端末が取り込み済みの分は入れない", r.res3.trades === 3);
-  ok("設定でオフにすると読まない", r.res4.trades === 3 && r.res4.on === false);
+  ok("2回目は何も増えない", r.res2.trades === 2 && r.res2.lastImported === 0);
+  ok("他の端末が取り込み済みの分は入れない", r.res3.trades === 2);
+  ok("設定でオフにすると読まない", r.res4.trades === 2 && r.res4.on === false);
   ok("HTML レポート取り込みと同じ dealId（二重防止が効く）", r.res5.same && r.res5.already);
   ok("口座不明の分は既存の口座選択画面（時差の選択なし）→ 紐付け画面に乗る", r.res6.modal1 && r.res6.modal2);
-  ok("選んだ口座で取り込まれ、口座番号が記憶され、受信箱に印が付く", r.res6.trades === 4 && r.res6.remembered && r.res6.consumed1003 && r.res6.waiting === 0 && r.res6.modalClosed);
+  ok("選んだ口座で取り込まれ、口座番号が記憶され、受信箱に印が付く", r.res6.trades === 3 && r.res6.remembered && r.res6.consumed1003 && r.res6.waiting === 0 && r.res6.modalClosed);
+  ok("設定の同期欄に 受信箱のオン/オフ・状態・「受信箱を確認」が出る", r.res7.status && r.res7.toggle && r.res7.text.includes("受信箱") && r.res7.text.includes("最終確認") && r.res7.button);
   await page.close();
 }
 
