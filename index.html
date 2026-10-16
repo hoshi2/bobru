@@ -1428,6 +1428,7 @@ function cloudStatusHtml(){
   var h="<div class='smallnote' style='margin:0 0 6px'>同期コード <b>"+esc(cfg.code)+"</b>・保存先 "+esc(cfg.config.projectId||"")+"</div>";
   if(CLOUD.error) h+="<div class='smallnote' style='color:var(--red);margin:0 0 6px'>"+esc(CLOUD.error)+"</div>";
   else h+="<div class='smallnote' style='margin:0 0 6px'>"+(CLOUD.ready?"● 接続済み。保存するたびに自動で送り、相手の変更は自動で届きます":"接続中…")+(CLOUD.lastAt?"（最終同期 "+esc(fmtWhen(CLOUD.lastAt))+"）":"")+"</div>";
+  h+=inboxStatusHtml();
   return h;
 }
 // 起動時：設定があればつなぐ。クラウドが空なら自分を送り、有れば合わせてから見張る
@@ -1447,6 +1448,7 @@ function initCloud(){
     else { CLOUD.dirty=true; }
     CLOUD.ready=true; CLOUD.connecting=false; cloudSetError(null);
     if(CLOUD.dirty) cloudPushSoon();
+    inboxCheck(true);   // Dell の MT5 履歴が受信箱に届いていれば入れる（設定で止められる）
     if(CLOUD.unsub){ CLOUD.unsub(); CLOUD.unsub=null; }
     CLOUD.unsub=cloudRef().onSnapshot(function(s){
       if(s.metadata&&s.metadata.hasPendingWrites) return;   // 自分の書き込みの返り
@@ -1497,6 +1499,123 @@ function cloudPushNow(){
     CLOUD.pushing=false; CLOUD.lastData=data; CLOUD.lastAt=now(); cloudSetError(null);
     if(cloudPayload()!==data) cloudPushSoon(); else CLOUD.dirty=false;   // 送っている間に変わっていたら続けて送る
   }).catch(function(e){ CLOUD.pushing=false; CLOUD.dirty=true; cloudSetError(e); });
+}
+
+/* --- 受信箱：Dell が貯めた MT5 の決済済み取引を、手を動かさずに「記録」へ入れる（Issue: hoshi2/bob-bridge#21）
+   Dell の hoshi2/bob-edge tools/mt5_history/push_inbox.py が、同じコレクションの別ドキュメント
+   boburu/<同期コード>__inbox に {items:{dealId:{...}}} を置く。ここではそれを読み、まだ入っていない分だけを
+   手動の「取引履歴を取り込む」と同じ処理（ctiCommit）で入れ、{consumed:{dealId:時刻}} を書き戻す。
+   記録の丸ごとが入っている本体ドキュメント boburu/<同期コード> には触らない。
+   口座が決まらない取引は勝手に入れず、既存の「どの口座の履歴ですか？」画面で選んでもらう。
+   止めたいときは 設定 → 端末間の同期 → 「受信箱の自動取り込み」をオフ（DB.settings.inboxAuto=false）。 --- */
+var INBOX={checkedAt:0, busy:false, lastAt:null, lastImported:0, waiting:0, orphan:[], error:"", asked:false};
+function inboxOn(){ return cloudOn() && !(DB&&DB.settings&&DB.settings.inboxAuto===false); }
+function inboxRef(){ var cfg=loadCloudCfg(); return CLOUD.db.collection(CLOUD_COLLECTION).doc(cfg.code+"__inbox"); }
+// 受信箱の1件 → readMt5Report が返す deal と同じ形。dealId も HTML 取り込みと同じ作り方に揃える（両方やっても二重にならない）
+function inboxDeal(it){
+  if(!it||typeof it!=="object") return null;
+  var n=ctraderImport.num;
+  var opened=Date.parse(it.openedAt||""), closed=Date.parse(it.closedAt||"");
+  if(isNaN(opened)||isNaN(closed)) return null;
+  var d={orderId:null, posId:(it.posId!==undefined&&it.posId!==null)?String(it.posId):null,
+         symbol:ctraderImport.symbolOf(it.symbol), dir:(it.dir==="long"||it.dir==="short")?it.dir:ctraderImport.dirOf(it.dir),
+         openedAt:new Date(opened).toISOString(), closedAt:new Date(closed).toISOString(),
+         entry:n(it.entry), close:n(it.close), lot:n(it.lot), sl:n(it.sl), tp:n(it.tp),
+         swap:n(it.swap)||0, fee:n(it.fee)||0, gross:n(it.gross), net:n(it.net), balance:null};
+  if(!d.symbol||!d.dir||d.entry===null||d.lot===null||d.net===null) return null;
+  if(d.gross===null) d.gross=d.net-d.fee-d.swap;
+  d.dealId="mt5:"+(d.posId||(d.openedAt+":"+d.entry+":"+d.lot))+":"+d.closedAt;
+  d.brokerId=(it.brokerId!==undefined&&it.brokerId!==null)?String(it.brokerId):null;
+  d.accountName=it.account?String(it.account).trim():null;
+  d.currency=it.currency?String(it.currency).toUpperCase():null;
+  return d;
+}
+// 口座を決める：記憶した口座番号 → 口座名（Dell の accounts.json の name と同じ）→ 決まらなければ null（勝手に入れない）
+function inboxAccountFor(d){
+  var acc=accountByBrokerId(d.brokerId); if(acc&&!acc.closedReason) return acc;
+  if(d.accountName){ var list=activeAccounts(); for(var i=0;i<list.length;i++){ if(String(list[i].name||"").trim()===d.accountName) return list[i]; } }
+  return null;
+}
+// 口座ごとにまとめ、手動取り込みの既定（近い保有中の計画があれば紐付け、無ければ計画なしの記録）で入れる
+function inboxImport(deals){
+  var out={imported:[], groups:0, linked:0, created:0, orphan:[]};
+  if(!deals.length) return out;
+  var byAcc={}, order=[];
+  deals.forEach(function(d){
+    var acc=inboxAccountFor(d); if(!acc){ out.orphan.push(d); return; }
+    if(!byAcc[acc.id]){ byAcc[acc.id]={acc:acc,deals:[]}; order.push(acc.id); }
+    byAcc[acc.id].deals.push(d);
+  });
+  order.forEach(function(id){
+    var acc=byAcc[id].acc, ds=byAcc[id].deals;
+    var groups=ctraderImport.groupDeals(ds);
+    var open=DB.trades.filter(function(t){ return t.status==="open" && (t.accountId||currentAccountId())===acc.id; });
+    var taken={}, choices={};
+    groups.forEach(function(g,i){
+      var free=ctraderImport.matchCandidates(g,open).filter(function(c){ return !taken[c.trade.id]; });
+      choices[i]=free.length?("link:"+free[0].trade.id):"new";
+      if(free.length) taken[free[0].trade.id]=true;
+    });
+    var r=ctiCommit({accountId:acc.id, groups:groups, choices:choices, stmt:{platform:"mt5", brokerId:ds[0].brokerId}, remember:!!ds[0].brokerId});
+    out.groups+=groups.length; out.linked+=r.nLink; out.created+=r.nNew; out.imported=out.imported.concat(r.dealIds);
+  });
+  return out;
+}
+function inboxMarkConsumed(ids){
+  if(!ids||!ids.length||!cloudOn()||!CLOUD.db) return Promise.resolve();
+  var mark={}; ids.forEach(function(id){ mark[id]=Date.now(); });
+  INBOX.orphan=INBOX.orphan.filter(function(d){ return ids.indexOf(d.dealId)<0; }); INBOX.waiting=INBOX.orphan.length;
+  return inboxRef().set({consumed:mark, app:"boburu-inbox", v:1},{merge:true}).catch(function(e){ INBOX.error=cloudErrText(e); cloudRefreshStatus(); });
+}
+// 起動時・画面に戻ったとき（5分に1回まで）・「受信箱を確認」で呼ぶ
+function inboxCheck(force){
+  if(!inboxOn()||!CLOUD.ready||!CLOUD.db||INBOX.busy) return Promise.resolve();
+  if(!force && Date.now()-INBOX.checkedAt<5*60*1000) return Promise.resolve();
+  INBOX.checkedAt=Date.now(); INBOX.busy=true;
+  return inboxRef().get().then(function(snap){
+    INBOX.busy=false; INBOX.error=""; INBOX.lastAt=now(); INBOX.lastImported=0;
+    var d=snap.exists?snap.data():null;
+    var items=(d&&d.items&&typeof d.items==="object")?d.items:{};
+    var consumed=(d&&d.consumed&&typeof d.consumed==="object")?d.consumed:{};
+    var done=importedDealIds(), fresh=[], mark=[];
+    Object.keys(items).forEach(function(k){
+      var deal=inboxDeal(items[k]); if(!deal) return;
+      if(done[deal.dealId]){ if(!consumed[deal.dealId]) mark.push(deal.dealId); return; }   // もう入っている → 受信箱に印だけ
+      if(consumed[deal.dealId]) return;                                                      // 他の端末が取り込み済み（同期で届く）
+      fresh.push(deal);
+    });
+    var r=inboxImport(fresh);
+    INBOX.orphan=r.orphan; INBOX.waiting=r.orphan.length; INBOX.lastImported=r.groups;
+    if(r.groups){ saveData(); cloudRenderSoon(); toast("MT5 から "+r.groups+"件を自動で取り込みました（紐付け "+r.linked+"・新規 "+r.created+"）"); }
+    if(r.orphan.length && !INBOX.asked){ INBOX.asked=true; toast("MT5 の受信箱に、口座が決まらない取引が "+r.orphan.length+"件あります。設定 → 端末間の同期 → 受信箱を確認"); }
+    cloudRefreshStatus();
+    return inboxMarkConsumed(mark.concat(r.imported));
+  }).catch(function(e){ INBOX.busy=false; INBOX.error=cloudErrText(e); cloudRefreshStatus(); });
+}
+// 口座が決まらなかった分を、既存の「どの口座の履歴ですか？」→ 紐付け画面に乗せる（選んだ口座番号は記憶され、次から自動）
+function inboxOpenAccountModal(){
+  var ds=INBOX.orphan||[]; if(!ds.length) return;
+  CTI={stmt:{platform:"mt5", brokerId:ds[0].brokerId, currency:ds[0].currency, deals:ds}, text:"", groups:ctraderImport.groupDeals(ds),
+       accountId:null, remember:true, choices:{}, fileName:"受信箱（Dell の MT5 履歴）", offset:"auto", inbox:true};
+  openCtiAccountModal();
+}
+window.inboxCheckUI=function(){
+  if(!cloudOn()){ toast("先にクラウド同期をオンにして下さい"); return; }
+  if(!CLOUD.ready){ toast("接続中です。少し待ってからもう一度押して下さい"); initCloud(); return; }
+  if(INBOX.orphan.length){ inboxOpenAccountModal(); return; }
+  inboxCheck(true).then(function(){ if(INBOX.orphan.length) inboxOpenAccountModal(); else if(!INBOX.lastImported&&!INBOX.error) toast("受信箱に新しい取引はありません"); });
+};
+window.inboxToggleUI=function(on){ DB.settings.inboxAuto=!!on; saveData(); cloudRefreshStatus(); if(on) inboxCheck(true); };
+function inboxStatusHtml(){
+  if(!cloudOn()) return "";
+  var on=inboxOn();
+  var h="<label class='chk' style='margin-top:6px'><input type='checkbox' onchange='inboxToggleUI(this.checked)'"+(on?" checked":"")+"> 受信箱の自動取り込み（Dell の MT5 履歴を開いたときに入れる）</label>";
+  if(on){
+    var s=INBOX.error?"エラー："+esc(INBOX.error):(INBOX.lastAt?"最終確認 "+esc(fmtWhen(INBOX.lastAt))+"・今回 "+INBOX.lastImported+"件":"未確認");
+    if(INBOX.waiting) s+="・口座が決まらない "+INBOX.waiting+"件（「受信箱を確認」で選ぶ）";
+    h+="<div class='smallnote' style='margin:4px 0 6px'>"+s+"</div>";
+  }
+  return h;
 }
 // 相手の変更が届いたあとの描き直し。入力中・フォームを開いている間は待ち、次の自然な描き直しに任せる
 function cloudRenderSoon(){
@@ -1570,7 +1689,7 @@ function cloudSettingsBody(){
   var h="";
   if(cloudOn()){
     h+="<div id='cloudstatus'>"+cloudStatusHtml()+"</div>";
-    h+="<div class='btnrow'><button class='btn' onclick='cloudSyncNowUI()'>いま同期</button><button class='btn ghost' onclick='disconnectCloudUI()'>解除</button></div>";
+    h+="<div class='btnrow'><button class='btn' onclick='cloudSyncNowUI()'>いま同期</button><button class='btn' onclick='inboxCheckUI()'>受信箱を確認</button><button class='btn ghost' onclick='disconnectCloudUI()'>解除</button></div>";
   } else {
     h+="<div class='smallnote' style='margin:0 0 10px'>習慣・お金・ロイログと同じ仕組みです。同じ Firebase の設定と、自分で決めた合言葉（同期コード）を PC とスマホの両方に貼ると、保存するたびに自動で相手にも届きます。画像は端末内のみで同期しません。</div>";
     var sc=siblingCloudCfg();
@@ -5057,7 +5176,7 @@ function openCtiAccountModal(){
      (CTI.stmt.currency?" ・ 通貨 "+esc(CTI.stmt.currency):"")+" ・ "+CTI.groups.length+"件</div>";
   h+=field("口座","<select id='cti_acc'>"+list.map(function(a){
     return "<option value='"+a.id+"'"+(a.id===cur?" selected":"")+">"+esc(a.name)+"（"+esc(a.currency||"")+"）</option>"; }).join("")+"</select>");
-  if(CTI.stmt.platform==="mt5"){
+  if(CTI.stmt.platform==="mt5" && !CTI.inbox){   // 受信箱の分は Dell 側で UTC に直してあるので時差の選択は出さない
     h+=field("MT5 のサーバー時刻","<select id='cti_off'><option value='auto' selected>自動（夏 UTC+3 ／ 冬 UTC+2。ニューヨーク時間＋7時間）</option><option value='3'>UTC+3 固定</option><option value='2'>UTC+2 固定</option><option value='0'>UTC+0</option></select>");
     h+="<div class='smallnote' style='margin:-2px 0 8px'>MT5 の時刻は業者のサーバー時間です。金の値動きと見比べてずれていたら固定に切り替えて下さい。</div>";
   }
@@ -5070,7 +5189,7 @@ window.ctiPickAccount=function(){
   var sel=document.getElementById("cti_acc"); if(!sel||!sel.value) return;
   var acc=findAccount(sel.value); if(!acc) return;
   var rem=document.getElementById("cti_rem"), off=document.getElementById("cti_off");
-  if(off && off.value!==CTI.offset){ // 時刻のずれを変えたら読み直す
+  if(off && off.value!==CTI.offset && !CTI.inbox){ // 時刻のずれを変えたら読み直す（受信箱の分には元のファイルが無い）
     var r2=ctraderImport.readAny(CTI.text, CTI.fileName, off.value); if(!r2.ok){ toast(r2.msg); return; }
     CTI.stmt=r2; CTI.groups=ctraderImport.groupDeals(r2.deals); CTI.offset=off.value; CTI.choices={};
   }
@@ -5123,16 +5242,18 @@ function openCtiLinkModal(){
   openModal(h);
 }
 window.ctiChoose=function(i,v){ if(CTI) CTI.choices[i]=v; };
-window.ctiApply=function(){
-  if(_saving||!CTI) return; _saving=true; setTimeout(function(){_saving=false;},800);
-  var acc=findAccount(CTI.accountId); if(!acc) return;
-  var nLink=0,nNew=0,nSkip=0, ts=now();
+// 取り込みの本体。S = {accountId, groups, choices, stmt:{platform, brokerId}, remember}。choices[i] は "link:<id>" / "new" / "skip"。
+// 保存（saveData）はしない。手動の取り込み（ctiApply）と受信箱の自動取り込み（inboxImport）の両方がここを通る。
+function ctiCommit(S){
+  var out={nLink:0,nNew:0,nSkip:0,dealIds:[]};
+  var acc=findAccount(S.accountId); if(!acc) return out;
+  var ts=now();
   var accCur=String(acc.currency||acctCurrency()).toUpperCase();
-  CTI.groups.forEach(function(g,i){
-    var ch=CTI.choices[i]||"skip";
-    if(ch==="skip"){ nSkip++; return; }
+  S.groups.forEach(function(g,i){
+    var ch=S.choices[i]||"skip";
+    if(ch==="skip"){ out.nSkip++; return; }
     var t=null;
-    if(ch.indexOf("link:")===0){ t=findTrade(ch.slice(5)); if(!t||t.status!=="open"){ nSkip++; return; } nLink++; }
+    if(ch.indexOf("link:")===0){ t=findTrade(ch.slice(5)); if(!t||t.status!=="open"){ out.nSkip++; return; } out.nLink++; }
     else{
       t={id:uid(), status:"open", accountId:acc.id, createdAt:g.openedAt, updatedAt:ts, savedAt:ts,
          symbol:g.symbol, dir:g.dir, h4env:"", m15purple:"", trigger:"", pattern:"", emaPos:"", crossB:null,
@@ -5145,7 +5266,7 @@ window.ctiApply=function(){
          result:null, ruleOk:null, closeSawLower:null, emotion:null, reviewMemo:"", learn:"",
          noPlan:true};
       stampVersions(t);
-      DB.trades.unshift(t); nNew++;
+      DB.trades.unshift(t); out.nNew++;
     }
     // 事実で上書き。計画の値と違うときは計画の値を残す
     if(isNum(toNum(t.entry)) && Math.abs(toNum(t.entry)-g.entry)>1e-9) t.plannedEntry=toNum(t.entry);
@@ -5154,17 +5275,25 @@ window.ctiApply=function(){
     t.closedAt=g.closedAt; t.closePrice=g.closePrice; t.realizedPL=g.net; t.fee=g.fee; t.swap=g.swap;
     if(!t.result) t.result=g.net>0?"win":g.net<0?"lose":"be";
     t.status="closed"; t.updatedAt=ts;
-    t.source=CTI.stmt.platform||"ctrader"; t.importedAt=ts;
+    t.source=(S.stmt&&S.stmt.platform)||"ctrader"; t.importedAt=ts;
     t.brokerDealIds=(t.brokerDealIds||[]).concat(g.dealIds);
     t.brokerOrderIds=(t.brokerOrderIds||[]).concat(g.orderIds);
     t.needsReview=true;
+    out.dealIds=out.dealIds.concat(g.dealIds);
   });
-  if(CTI.remember && CTI.stmt.brokerId){
+  if(S.remember && S.stmt && S.stmt.brokerId){
     acc.brokerIds=Array.isArray(acc.brokerIds)?acc.brokerIds:[];
-    if(acc.brokerIds.indexOf(CTI.stmt.brokerId)<0) acc.brokerIds.push(CTI.stmt.brokerId);
+    if(acc.brokerIds.indexOf(S.stmt.brokerId)<0) acc.brokerIds.push(S.stmt.brokerId);
   }
+  return out;
+}
+window.ctiApply=function(){
+  if(_saving||!CTI) return; _saving=true; setTimeout(function(){_saving=false;},800);
+  if(!findAccount(CTI.accountId)) return;
+  var r=ctiCommit(CTI);
+  if(CTI.inbox) inboxMarkConsumed(r.dealIds);   // 受信箱から来た分は、取り込んだ印を受信箱にも付ける
   saveData(); closeModal(); CTI=null;
-  toast("取り込みました：紐付け "+nLink+"件・新規 "+nNew+"件"+(nSkip?"・見送り "+nSkip+"件":""));
+  toast("取り込みました：紐付け "+r.nLink+"件・新規 "+r.nNew+"件"+(r.nSkip?"・見送り "+r.nSkip+"件":""));
   UI.tradeTab="closed"; render();
 };
 
@@ -5406,7 +5535,7 @@ function boot(){
   bindBriefLiveSync();
   // 画面に戻ってきたら、期限が切れていればレートを取り直す
   document.addEventListener("visibilitychange",function(){
-    if(!document.hidden){ ensureFxRate(); checkRemoteBrief(); if(cloudOn()&&!CLOUD.ready) initCloud(); else if(CLOUD.dirty) cloudPushSoon(); }
+    if(!document.hidden){ ensureFxRate(); checkRemoteBrief(); if(cloudOn()&&!CLOUD.ready) initCloud(); else { if(CLOUD.dirty) cloudPushSoon(); inboxCheck(); } }
   });
   checkRemoteBrief(true);
   window.addEventListener("pagehide",function(){ if(CLOUD.dirty&&CLOUD.ready){ clearTimeout(CLOUD.timer); cloudPushNow(); } });
