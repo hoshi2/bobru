@@ -857,6 +857,85 @@ group("13. 決済登録の符号と通貨");
   await page.close();
 }
 
+/* =======================================================================
+   14. 受信箱（Dell の MT5 履歴の自動取り込み。hoshi2/bob-bridge#21）
+   Firestore は偽物に差し替え、boburu/<code>__inbox の items を読んで記録に入れる流れを確かめる
+   ======================================================================= */
+group("14. 受信箱の自動取り込み");
+{
+  const page = await open();
+  const r = await page.evaluate(async () => {
+    window.__fake = { doc:null, sets:[] };
+    loadCloudCfg = () => ({ config:{ projectId:"test" }, code:"TESTCODE" });
+    CLOUD.db = { collection:() => ({ doc:id => ({
+      get: () => { const d = id === "TESTCODE__inbox" ? window.__fake.doc : null; return Promise.resolve({ exists:!!d, data:() => d }); },
+      set: (v, opt) => { window.__fake.sets.push({ id, merge:!!(opt && opt.merge) });
+        if (id === "TESTCODE__inbox") { let d = window.__fake.doc || {}; if (opt && opt.merge) d.consumed = Object.assign(d.consumed || {}, v.consumed || {}); else d = v; window.__fake.doc = d; }
+        return Promise.resolve(); },
+      onSnapshot: () => () => {} }) }) };
+    CLOUD.ready = true;
+    DB.trades = [];
+    let acc = DB.accounts.filter(a => a.name === "Funded7")[0];
+    if (!acc) { acc = JSON.parse(JSON.stringify(DB.accounts[0])); acc.id = "accF7"; acc.name = "Funded7"; acc.brokerIds = []; acc.currency = "JPY"; delete acc.closedReason; DB.accounts.push(acc); }
+    acc.brokerIds = [];
+    const nowMs = Date.now(), openedA = new Date(nowMs - 60 * 60000).toISOString(), closedA = new Date(nowMs - 30 * 60000).toISOString();
+    // 保有中の計画（受信箱の 1001 と同じ銘柄・方向・近い価格と時刻 → 紐付く）
+    DB.trades.push({ id:"openA", status:"open", accountId:acc.id, createdAt:openedA, updatedAt:openedA, savedAt:openedA, symbol:"XAUUSD", dir:"long", entry:4200, sl:4190, tp:4220, lot:1, tags:[] });
+    const mk = (posId, o) => { const b = { posId, symbol:"GOLD", dir:"long", entry:4200, close:4210, lot:1, sl:4190, tp:null, fee:-700, swap:0, gross:100000, net:99300, brokerId:"999", currency:"JPY", account:"Funded7", source:"mt5", ...o }; b.dealId = "mt5:" + posId + ":" + b.closedAt; return b; };
+    const items = {};
+    const i1 = mk("1001", { openedAt:openedA, closedAt:closedA }); items[i1.dealId] = i1;
+    const i2 = mk("1002", { openedAt:"2026-10-01T01:00:00.000Z", closedAt:"2026-10-01T02:00:00.000Z", dir:"short", entry:4300, close:4290, net:50000, gross:50700 }); items[i2.dealId] = i2;
+    const i3 = mk("1003", { openedAt:"2026-10-02T01:00:00.000Z", closedAt:"2026-10-02T02:00:00.000Z", brokerId:"111", account:"Nope" }); items[i3.dealId] = i3;   // 口座が決まらない
+    items["bad"] = { posId:"1004", symbol:"GOLD", dir:"long", openedAt:"2026-10-03T01:00:00.000Z" };                                                          // 壊れた1件
+    window.__fake.doc = { app:"boburu-inbox", v:1, items, consumed:{} };
+    await inboxCheck(true);
+    const tA = findTrade("openA");
+    const res1 = { trades:DB.trades.length, closed:DB.trades.filter(t => t.status === "closed").length, openA_status:tA.status, openA_pl:tA.realizedPL, openA_fee:tA.fee,
+                   openA_deals:(tA.brokerDealIds || []).join(","), newNoPlan:DB.trades.filter(t => t.noPlan).length, brokerIds:acc.brokerIds.slice(),
+                   consumed:Object.keys(window.__fake.doc.consumed || {}).sort(), waiting:INBOX.waiting, orphanId:(INBOX.orphan[0] || {}).dealId, lastImported:INBOX.lastImported };
+    // 2回目：何も増えない
+    INBOX.checkedAt = 0; await inboxCheck(true);
+    const res2 = { trades:DB.trades.length, lastImported:INBOX.lastImported };
+    // 他の端末が取り込み済み（consumed）の分は入れない
+    const i5 = mk("1005", { openedAt:"2026-10-04T01:00:00.000Z", closedAt:"2026-10-04T02:00:00.000Z" }); window.__fake.doc.items[i5.dealId] = i5; window.__fake.doc.consumed[i5.dealId] = 1;
+    INBOX.checkedAt = 0; await inboxCheck(true);
+    const res3 = { trades:DB.trades.length };
+    // 設定でオフにすると読まない
+    DB.settings.inboxAuto = false;
+    const i6 = mk("1006", { openedAt:"2026-10-05T01:00:00.000Z", closedAt:"2026-10-05T02:00:00.000Z" }); window.__fake.doc.items[i6.dealId] = i6;
+    INBOX.checkedAt = 0; await inboxCheck(true);
+    const res4 = { trades:DB.trades.length, on:inboxOn() };
+    DB.settings.inboxAuto = true;
+    // HTML レポート取り込みと同じ dealId になる（両方やっても二重にならない）
+    const html = "<table><tr><td>口座:</td><td>999 (JPY)</td></tr></table><table><tr><th>時間</th><th>ポジション情報</th><th>銘柄</th><th>タイプ</th><th>数量</th><th>価格</th><th>S / L</th><th>T / P</th><th>時間</th><th>価格</th><th>手数料</th><th>スワップ</th><th>損益</th></tr>" +
+      "<tr><td>2026.10.01 04:00:00</td><td>1002</td><td>GOLD</td><td>sell</td><td>1.00</td><td>4300</td><td></td><td></td><td>2026.10.01 05:00:00</td><td>4290</td><td>-700.00</td><td>0.00</td><td>50700.00</td></tr></table>";
+    const rep = ctraderImport.readMt5Report(html, "auto");
+    const res5 = { same:rep.deals[0].dealId === i2.dealId, already:!!importedDealIds()[rep.deals[0].dealId] };
+    // 口座が決まらない分：既存の「どの口座の履歴ですか？」→ 紐付け → 取り込む
+    inboxOpenAccountModal();
+    const modal1 = !!document.getElementById("cti_acc") && !document.getElementById("cti_off");
+    document.getElementById("cti_acc").value = acc.id;
+    ctiPickAccount();
+    const modal2 = !!document.getElementById("cti_c_0");
+    ctiApply();
+    await new Promise(r => setTimeout(r, 50));
+    const res6 = { modal1, modal2, trades:DB.trades.length, remembered:acc.brokerIds.indexOf("111") >= 0, consumed1003:!!window.__fake.doc.consumed[i3.dealId], waiting:INBOX.waiting, modalClosed:!document.getElementById("cti_c_0") };
+    return { res1, res2, res3, res4, res5, res6 };
+  });
+  ok("口座が分かる2件だけ入り、壊れた1件と口座不明の1件は入らない", r.res1.trades === 3 && r.res1.closed === 2 && r.res1.newNoPlan === 1);
+  ok("近い保有中の計画に紐付き、確定損益は手数料込みの net", r.res1.openA_status === "closed" && r.res1.openA_pl === 99300 && r.res1.openA_fee === -700 && r.res1.openA_deals.startsWith("mt5:1001:"));
+  ok("口座番号を記憶する", r.res1.brokerIds.join() === "999");
+  ok("取り込んだ分だけ consumed に印が付く", r.res1.consumed.length === 2 && r.res1.consumed.every(k => /^mt5:100[12]:/.test(k)));
+  ok("口座が決まらない分は待ちとして数える", r.res1.waiting === 1 && String(r.res1.orphanId).startsWith("mt5:1003:") && r.res1.lastImported === 2);
+  ok("2回目は何も増えない", r.res2.trades === 3 && r.res2.lastImported === 0);
+  ok("他の端末が取り込み済みの分は入れない", r.res3.trades === 3);
+  ok("設定でオフにすると読まない", r.res4.trades === 3 && r.res4.on === false);
+  ok("HTML レポート取り込みと同じ dealId（二重防止が効く）", r.res5.same && r.res5.already);
+  ok("口座不明の分は既存の口座選択画面（時差の選択なし）→ 紐付け画面に乗る", r.res6.modal1 && r.res6.modal2);
+  ok("選んだ口座で取り込まれ、口座番号が記憶され、受信箱に印が付く", r.res6.trades === 4 && r.res6.remembered && r.res6.consumed1003 && r.res6.waiting === 0 && r.res6.modalClosed);
+  await page.close();
+}
+
 /* ---------- 後始末 ---------- */
 await browser.close();
 server.close();
