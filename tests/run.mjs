@@ -1000,6 +1000,88 @@ group("15. 口座の削除と設定の並び");
   await page.close();
 }
 
+/* =======================================================================
+   16. 受信箱の open（Dell が送る建玉中 → 「保有中」に自動で出す。hoshi2/bob-bridge#28）
+   ======================================================================= */
+group("16. 受信箱の建玉中を保有中に出す");
+{
+  const page = await open();
+  const r = await page.evaluate(async () => {
+    window.__fake = { doc:null };
+    loadCloudCfg = () => ({ config:{ projectId:"test" }, code:"TESTCODE" });
+    CLOUD.db = { collection:() => ({ doc:id => ({
+      get: () => { const d = id === "TESTCODE__inbox" ? window.__fake.doc : null; return Promise.resolve({ exists:!!d, data:() => d }); },
+      set: (v, opt) => { if (id === "TESTCODE__inbox") { const d = window.__fake.doc || {}; d.consumed = Object.assign(d.consumed || {}, v.consumed || {}); window.__fake.doc = d; } return Promise.resolve(); },
+      onSnapshot: () => () => {} }) }) };
+    CLOUD.ready = true;
+    DB.trades = [];
+    DB.accounts.forEach(a => { a.brokerIds = []; });
+    let f7 = DB.accounts.filter(a => a.name === "Funded7")[0];
+    if (!f7) { f7 = makeAccount({ name:"Funded7", type:"step1", initialBalance:1000000, currency:"JPY" }); DB.accounts.push(f7); }
+    let fk = DB.accounts.filter(a => a.name === "Fintokei")[0];
+    if (!fk) { fk = makeAccount({ name:"Fintokei", type:"step1", initialBalance:2000000, currency:"JPY" }); DB.accounts.push(fk); }
+    delete f7.closedReason; delete fk.closedReason;
+    const nAcc = DB.accounts.length;
+    const nowMs = Date.now(), t1 = new Date(nowMs - 90 * 60000).toISOString(), t2 = new Date(nowMs - 20 * 60000).toISOString();
+    // 手で先に書いた保有中の計画（2002 と同じ銘柄・方向・近い価格と時刻 → 紐付く）
+    DB.trades.push({ id:"planB", status:"open", accountId:f7.id, createdAt:t2, updatedAt:t2, savedAt:t2, symbol:"XAUUSD", dir:"short", entry:4301, sl:4320, tp:4250, lot:0.5, h4env:"down", tags:[] });
+    const op = (posId, o) => ({ posId, symbol:"XAUUSD", dir:"long", openedAt:t1, openedAtServer:"x", entry:4200, lot:1, sl:4190, tp:null, swap:0,
+                                comment:null, magic:null, brokerId:"999", currency:"JPY", account:"Funded7", seenAt:t2, source:"mt5", ...o });
+    window.__fake.doc = { app:"boburu-inbox", v:1, items:{}, consumed:{}, open:{
+      "2001": op("2001", {}),
+      "2002": op("2002", { dir:"short", entry:4300, lot:0.5, openedAt:t2, sl:null, tp:4250 }),
+      "3001": op("3001", { brokerId:"555", account:"Fintokei", entry:4100, lot:0.2 }),
+      "bad":  { posId:"2009", symbol:"GOLD" } } };
+    await inboxCheck(true);
+    const a = findTrade("mt5o_999_2001"), b = findTrade("planB"), c = findTrade("mt5o_555_3001");
+    const res1 = { n:DB.trades.length, open:DB.trades.filter(t => t.status === "open").length,
+                   a:a && { st:a.status, noPlan:!!a.noPlan, pos:a.mt5PosId, sl:a.sl, acc:a.accountId === f7.id, created:a.createdAt, bal:a.balanceAtEntry },
+                   b:b && { pos:b.mt5PosId, entry:b.entry, planned:b.plannedEntry, sl:b.sl, h4:b.h4env, src:b.source },
+                   c:c && { acc:c.accountId === fk.id }, fkIds:(fk.brokerIds || []).join(), accs:DB.accounts.length - nAcc, lastOpen:INBOX.lastOpen };
+    // 記録タブの保有中に出る
+    TAB = "trades"; UI.tradeTab = "open"; render();
+    const txt = document.body.textContent;
+    res1.view = { hasMt5:txt.includes("MT5"), hasNoPlan:txt.includes("計画なし"), hasF7:txt.includes("XAUUSD") };
+    // 2回目：増えない
+    INBOX.checkedAt = 0; await inboxCheck(true);
+    const res2 = { n:DB.trades.length };
+    // MT5 で SL を建値へ動かした → 記録の sl は最初のまま、札で今の SL を見せる
+    window.__fake.doc.open["2001"].sl = 4200;
+    INBOX.checkedAt = 0; await inboxCheck(true);
+    const res3 = { sl:a.sl, mt5Sl:a.mt5Sl, pill:tradePills(a).some(p => p === "MT5 の今の SL 4200") };
+    // 消した記録は作り直さない
+    deleteTradeQuiet = id => { DB.trades = DB.trades.filter(t => t.id !== id); saveData(); };
+    deleteTradeQuiet("mt5o_555_3001");
+    INBOX.checkedAt = 0; await inboxCheck(true);
+    const res4 = { back:!!findTrade("mt5o_555_3001"), dead:!!cloudDead()["mt5o_555_3001"] };
+    // 決済：2001 が items に届き、open から消える → 同じ記録が決済済みになる（手で「決済登録」していても二重にしない）
+    a.status = "closed"; a.realizedPL = 1; a.result = "win";   // 手で決済登録した
+    delete window.__fake.doc.open["2001"];
+    const closedA = new Date(nowMs - 5 * 60000).toISOString();
+    const it = { posId:"2001", symbol:"GOLD", dir:"long", openedAt:t1, closedAt:closedA, entry:4200, close:4210, lot:1, sl:4190, tp:null,
+                 fee:-700, swap:0, gross:100000, net:99300, brokerId:"999", currency:"JPY", account:"Funded7", source:"mt5" };
+    it.dealId = "mt5:2001:" + closedA; window.__fake.doc.items[it.dealId] = it;
+    INBOX.checkedAt = 0; await inboxCheck(true);
+    const res5 = { n:DB.trades.length, st:a.status, pl:a.realizedPL, deals:(a.brokerDealIds || []).join(), consumed:!!window.__fake.doc.consumed[it.dealId] };
+    // 決済済みになったあとで古い open が届いても、保有中を作り直さない
+    window.__fake.doc.open["2001"] = op("2001", {});
+    INBOX.checkedAt = 0; await inboxCheck(true);
+    const res6 = { n:DB.trades.length, st:a.status };
+    return { res1, res2, res3, res4, res5, res6 };
+  });
+  ok("建玉中が「保有中」に入る（計画なし・決め打ち id・口座 Funded7・残高つき）", !!r.res1.a && r.res1.a.st === "open" && r.res1.a.noPlan && r.res1.a.pos === "2001" && r.res1.a.sl === 4190 && r.res1.a.acc && typeof r.res1.a.bal === "number");
+  ok("手で書いた近い計画には紐付ける（根拠は残り、事実で上書き・計画の値は plannedEntry）", !!r.res1.b && r.res1.b.pos === "2002" && r.res1.b.entry === 4300 && r.res1.b.planned === 4301 && r.res1.b.sl === 4320 && r.res1.b.h4 === "down" && r.res1.b.src === "mt5");
+  ok("Fintokei の建玉は既存の「Fintokei」口座に入り、口座番号を記憶（口座は増えない）", !!r.res1.c && r.res1.c.acc && r.res1.fkIds === "555" && r.res1.accs === 0);
+  ok("壊れた1件は入らず、件数が合う", r.res1.n === 3 && r.res1.open === 3 && r.res1.lastOpen === 3);
+  ok("2回目は増えない", r.res2.n === 3);
+  ok("MT5 で SL を動かしても記録の SL（R の元）は最初のまま、札で今の SL を出す", r.res3.sl === 4190 && r.res3.mt5Sl === 4200 && r.res3.pill);
+  ok("消した保有中は作り直さない（墓標）", !r.res4.back && r.res4.dead);
+  ok("決済が届くと同じ記録が決済済みになり、手の決済登録より事実が勝つ（二重にならない）", r.res5.n === 2 && r.res5.st === "closed" && r.res5.pl === 99300 && r.res5.deals.startsWith("mt5:2001:") && r.res5.consumed);
+  ok("決済済みのあとに古い建玉が届いても作り直さない", r.res6.n === 2 && r.res6.st === "closed");
+  ok("記録タブの保有中に MT5・計画なしの札で出る", r.res1.view.hasMt5 && r.res1.view.hasNoPlan && r.res1.view.hasF7);
+  await page.close();
+}
+
 /* ---------- 後始末 ---------- */
 await browser.close();
 server.close();

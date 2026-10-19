@@ -1494,7 +1494,7 @@ function cloudPushNow(){
    記録の丸ごとが入っている本体ドキュメント boburu/<同期コード> には触らない。
    口座が決まらない取引は勝手に入れず、既存の「どの口座の履歴ですか？」画面で選んでもらう。
    止めたいときは 設定 → 端末間の同期 → 「受信箱の自動取り込み」をオフ（DB.settings.inboxAuto=false）。 --- */
-var INBOX={checkedAt:0, busy:false, lastAt:null, lastImported:0, waiting:0, orphan:[], error:"", asked:false, createdAccounts:[]};
+var INBOX={checkedAt:0, busy:false, lastAt:null, lastImported:0, lastOpen:0, waiting:0, orphan:[], error:"", asked:false, createdAccounts:[]};
 function inboxOn(){ return cloudOn() && !(DB&&DB.settings&&DB.settings.inboxAuto===false); }
 function inboxRef(){ var cfg=loadCloudCfg(); return CLOUD.db.collection(CLOUD_COLLECTION).doc(cfg.code+"__inbox"); }
 // 受信箱の1件 → 取り込みの部品（ctraderImport.groupDeals）が読む deal の形。dealId は Dell 側（push_inbox.py）と同じ作り方
@@ -1556,12 +1556,89 @@ function inboxImport(deals){
     var open=DB.trades.filter(function(t){ return t.status==="open" && (t.accountId||currentAccountId())===acc.id; });
     var taken={}, choices={};
     groups.forEach(function(g,i){
-      var free=ctraderImport.matchCandidates(g,open).filter(function(c){ return !taken[c.trade.id]; });
+      // 受信箱の open から作った／紐付けた記録（同じ MT5 のポジション番号）が最優先。手で「決済登録」していても、事実で上書きして二重にしない
+      var mine=g.posId?inboxPosTrade(acc, g.posId):null;
+      if(mine && !(mine.brokerDealIds||[]).length && mine.status!=="cancelled"){
+        if(mine.status!=="open"){ mine.status="open"; }
+        choices[i]="link:"+mine.id; taken[mine.id]=true; return;
+      }
+      var free=ctraderImport.matchCandidates(g,open).filter(function(c){ return !taken[c.trade.id] && !c.trade.mt5PosId; });
       choices[i]=free.length?("link:"+free[0].trade.id):"new";
       if(free.length) taken[free[0].trade.id]=true;
     });
     var r=ctiCommit({accountId:acc.id, groups:groups, choices:choices, stmt:{platform:"mt5", brokerId:ds[0].brokerId}, remember:!!ds[0].brokerId});
     out.groups+=groups.length; out.linked+=r.nLink; out.created+=r.nNew; out.imported=out.imported.concat(r.dealIds);
+  });
+  return out;
+}
+// 受信箱の open（Dell が送る建玉中のスナップショット。hoshi2/bob-bridge#23 / #28）
+function inboxOpenDeal(it){
+  if(!it||typeof it!=="object") return null;
+  var n=ctraderImport.num, opened=Date.parse(it.openedAt||"");
+  if(isNaN(opened)||it.posId===undefined||it.posId===null) return null;
+  var d={posId:String(it.posId), symbol:ctraderImport.symbolOf(it.symbol), dir:(it.dir==="long"||it.dir==="short")?it.dir:ctraderImport.dirOf(it.dir),
+         openedAt:new Date(opened).toISOString(), entry:n(it.entry), lot:n(it.lot), sl:n(it.sl), tp:n(it.tp),
+         brokerId:(it.brokerId!==undefined&&it.brokerId!==null)?String(it.brokerId):null,
+         accountName:it.account?String(it.account).trim():null, currency:it.currency?String(it.currency).toUpperCase():null};
+  if(!d.symbol||!d.dir||d.entry===null||d.lot===null) return null;
+  if(!(d.sl>0)) d.sl=null; if(!(d.tp>0)) d.tp=null;
+  return d;
+}
+// その口座で、この MT5 ポジション番号を持つ記録（保有中・決済済み・取消のどれでも）
+function inboxPosTrade(acc, posId){
+  var id=String(posId);
+  for(var i=0;i<DB.trades.length;i++){
+    var t=DB.trades[i];
+    if(t.mt5PosId===id && (t.accountId||currentAccountId())===acc.id) return t;
+  }
+  return null;
+}
+// 建玉中を「保有中」に出す。戻り値 {created, linked, changed}
+//  - 同じポジションの記録がある → MT5 の今の SL/TP だけ覚える（記録の sl は R の計算に使うので最初の値のまま。空なら埋める）
+//  - 決済済みとして取り込み済み（mt5:<posId>:…）→ 何もしない
+//  - 近い保有中の計画（手で先に書いたもの）→ それに紐付け
+//  - 無ければ計画なしの保有中を作る。id を決め打ちにして、PC とスマホが同時に作っても同期で1件にまとまる。消した記録（墓標）は作り直さない
+function inboxOpenSync(openMap){
+  var out={created:0, linked:0, changed:false};
+  var keys=Object.keys(openMap||{}); if(!keys.length) return out;
+  var done=importedDealIds(), dead=cloudDead(), ts=now();
+  keys.forEach(function(k){
+    var d=inboxOpenDeal(openMap[k]); if(!d) return;
+    var acc=inboxAccountFor(d); if(!acc) return;
+    var t=inboxPosTrade(acc, d.posId);
+    if(!t){
+      var pre="mt5:"+d.posId+":";
+      for(var did in done){ if(did.indexOf(pre)===0) return; }   // もう決済済みとして入っている
+      var id="mt5o_"+(d.brokerId||acc.id)+"_"+d.posId;
+      if(dead[id]) return;                                       // 優希が消した
+      if(findTrade(id)) return;
+      var open=DB.trades.filter(function(x){ return x.status==="open" && !x.mt5PosId && (x.accountId||currentAccountId())===acc.id; });
+      var c=ctraderImport.matchCandidates(d, open);
+      if(c.length){
+        t=c[0].trade; out.linked++;
+        if(isNum(toNum(t.entry)) && Math.abs(toNum(t.entry)-d.entry)>1e-9) t.plannedEntry=toNum(t.entry);
+        if(isNum(toNum(t.lot)) && Math.abs(toNum(t.lot)-d.lot)>1e-9) t.plannedLot=toNum(t.lot);
+        t.entry=d.entry; t.lot=d.lot;
+      }else{
+        var accCur=String(acc.currency||acctCurrency()).toUpperCase();
+        t={id:id, status:"open", accountId:acc.id, createdAt:d.openedAt, updatedAt:ts, savedAt:ts,
+           symbol:d.symbol, dir:d.dir, h4env:"", m15purple:"", trigger:"", pattern:"", emaPos:"", crossB:null,
+           entry:d.entry, sl:d.sl, tp:d.tp, lot:d.lot,
+           balanceAtEntry:round2(balanceOf(acc)), contractSize:toNum(DB.settings.contractSize),
+           fxRate:(accCur===acctCurrency()?fxRateFor(d.symbol):(accCur===quoteCurrencyOf(d.symbol)?1:null)),
+           acctCurrency:accCur,
+           sawLower:"", memo:"", tags:[], scenarioMode:"join", briefId:null,
+           closedAt:null, closePrice:null, realizedPL:null, fee:null, swap:null,
+           result:null, ruleOk:null, closeSawLower:null, emotion:null, reviewMemo:"", learn:"",
+           noPlan:true};
+        DB.trades.unshift(t); out.created++;
+      }
+      t.mt5PosId=d.posId; t.source="mt5"; t.updatedAt=ts; out.changed=true;
+    }
+    if(t.status!=="open") return;
+    if(t.mt5Sl!==d.sl || t.mt5Tp!==d.tp){ t.mt5Sl=d.sl; t.mt5Tp=d.tp; out.changed=true; }
+    if(!isNum(toNum(t.sl)) && d.sl!==null){ t.sl=d.sl; out.changed=true; }
+    if(!isNum(toNum(t.tp)) && d.tp!==null){ t.tp=d.tp; out.changed=true; }
   });
   return out;
 }
@@ -1591,8 +1668,11 @@ function inboxCheck(force){
     INBOX.createdAccounts=[];
     var r=inboxImport(fresh);
     INBOX.orphan=r.orphan; INBOX.waiting=r.orphan.length; INBOX.lastImported=r.groups;
-    if(r.groups||INBOX.createdAccounts.length){ saveData(); cloudRenderSoon(); }
+    var op=inboxOpenSync((d&&d.open&&typeof d.open==="object")?d.open:{});   // 決済済みを先に入れてから建玉中（決済済みになった分を作らない）
+    INBOX.lastOpen=op.created+op.linked;
+    if(r.groups||op.changed||INBOX.createdAccounts.length){ saveData(); cloudRenderSoon(); }
     if(r.groups) toast("MT5 から "+r.groups+"件を自動で取り込みました（紐付け "+r.linked+"・新規 "+r.created+"）");
+    if(op.created||op.linked) setTimeout(function(){ toast("MT5 の建玉 "+(op.created+op.linked)+"件を「保有中」に入れました"+(op.linked?"（計画に紐付け "+op.linked+"）":"")+"。根拠を書き足して下さい"); }, r.groups?2500:0);
     if(INBOX.createdAccounts.length) setTimeout(function(){ toast("口座「"+INBOX.createdAccounts.join("」「")+"」を自動で作りました。設定 → 口座 で初期残高とルールを確認して下さい"); }, 2500);
     if(r.orphan.length && !INBOX.asked){ INBOX.asked=true; toast("MT5 の受信箱に、口座が決まらない取引が "+r.orphan.length+"件あります。設定 → 端末間の同期 → 受信箱を確認"); }
     cloudRefreshStatus();
@@ -1610,7 +1690,7 @@ window.inboxCheckUI=function(){
   if(!cloudOn()){ toast("先にクラウド同期をオンにして下さい"); return; }
   if(!CLOUD.ready){ toast("接続中です。少し待ってからもう一度押して下さい"); initCloud(); return; }
   if(INBOX.orphan.length){ inboxOpenAccountModal(); return; }
-  inboxCheck(true).then(function(){ if(INBOX.orphan.length) inboxOpenAccountModal(); else if(!INBOX.lastImported&&!INBOX.error) toast("受信箱に新しい取引はありません"); if(TAB==="trades") render(); });
+  inboxCheck(true).then(function(){ if(INBOX.orphan.length) inboxOpenAccountModal(); else if(!INBOX.lastImported&&!INBOX.lastOpen&&!INBOX.error) toast("受信箱に新しい取引はありません"); if(TAB==="trades") render(); });
 };
 // 記録タブの先頭：受信箱の状態と「更新」。クラウド同期がオフのときは出さない
 function inboxRefreshBar(){
@@ -1745,6 +1825,13 @@ function tradesToCSV(){
    1行＝1決済（取引）。分割決済は「ポジション番号」（無ければ新規時刻＋エントリー価格＋方向）が同じ行を1トレードにまとめる。
    名前は cTrader CSV を読んでいた頃の名残（2026-10-17 に読み手を外した）。 */
 var ctraderImport=(function(){
+  // 数字を読む（受信箱の値は数字のまま届くが、文字で来ても読めるように）。手動取り込みを外したとき（#25）に一緒に消え、受信箱が止まっていた
+  function num(v){
+    if(v===null||v===undefined) return null;
+    var s=String(v).replace(/[ \s]/g,"").replace(/ロット|lots?/ig,"").replace(/[^\d.\-]/g,"");
+    if(s===""||s==="-"||s===".") return null;
+    var n=parseFloat(s); return isFinite(n)?n:null;
+  }
   function dirOf(v){
     var s=String(v||"").trim().toLowerCase();
     if(s==="buy"||s==="買い"||s==="買") return "long";
@@ -1797,7 +1884,7 @@ var ctraderImport=(function(){
     out.sort(function(a,b){ return a.score-b.score; });
     return out;
   }
-  return {groupDeals:groupDeals, matchCandidates:matchCandidates, symbolOf:symbolOf, dirOf:dirOf};
+  return {groupDeals:groupDeals, matchCandidates:matchCandidates, symbolOf:symbolOf, dirOf:dirOf, num:num};
 })();
 /* ==== ctraderImport end ==== */
 
@@ -3919,6 +4006,10 @@ function tradePills(t){
   }
   if(t.afterOwnStop) pills.push("自分の停止ライン到達後");
   if(t.source==="ctrader") pills.push("cTrader"); else if(t.source==="mt5") pills.push("MT5");
+  if(t.status==="open"&&t.mt5PosId){
+    if(t.mt5Sl!==undefined && t.mt5Sl!==toNum(t.sl)) pills.push("MT5 の今の SL "+(t.mt5Sl===null?"なし":t.mt5Sl));
+    if(t.mt5Tp!==undefined && t.mt5Tp!==toNum(t.tp)) pills.push("MT5 の今の TP "+(t.mt5Tp===null?"なし":t.mt5Tp));
+  }
   if(t.noPlan) pills.push("計画なし");
   if(t.status==="closed"&&t.needsReview) pills.push("判断が未記入");
   if(isNum(toNum(t.plannedEntry))) pills.push("計画 "+toNum(t.plannedEntry));
