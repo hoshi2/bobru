@@ -1082,6 +1082,80 @@ group("16. 受信箱の建玉中を保有中に出す");
   await page.close();
 }
 
+/* =======================================================================
+   17. SL / TP の動き（Dell の見張り。hoshi2/bob-bridge#29）
+   ======================================================================= */
+group("17. SL / TP の動き");
+{
+  const page = await open(1200, 800);
+  const r = await page.evaluate(async () => {
+    window.__fake = { doc:null };
+    loadCloudCfg = () => ({ config:{ projectId:"test" }, code:"TESTCODE" });
+    CLOUD.db = { collection:() => ({ doc:id => ({
+      get: () => { const d = id === "TESTCODE__inbox" ? window.__fake.doc : null; return Promise.resolve({ exists:!!d, data:() => d }); },
+      set: (v, opt) => { if (id === "TESTCODE__inbox") { const d = window.__fake.doc || {}; d.consumed = Object.assign(d.consumed || {}, v.consumed || {}); window.__fake.doc = d; } return Promise.resolve(); },
+      onSnapshot: () => () => {} }) }) };
+    CLOUD.ready = true;
+    DB.trades = [];
+    DB.accounts.forEach(a => { a.brokerIds = []; });
+    let f7 = DB.accounts.filter(a => a.name === "Funded7")[0];
+    if (!f7) { f7 = makeAccount({ name:"Funded7", type:"step1", initialBalance:1000000, currency:"JPY" }); DB.accounts.push(f7); }
+    delete f7.closedReason; DB.settings.currentAccountId = f7.id;
+    const t1 = "2026-10-15T01:00:00.000Z", mv = (at, sl, tp) => ({ at, sl, tp });
+    const base = { symbol:"GOLD", dir:"long", openedAt:t1, entry:4200, close:4210, lot:1, fee:0, swap:0, gross:1000, net:1000, brokerId:"999", currency:"JPY", account:"Funded7", source:"mt5", closeReason:"client" };
+    const item = (posId, closedAt, o) => { const b = { posId, closedAt, ...base, ...o }; b.dealId = "mt5:" + posId + ":" + closedAt; return b; };
+    const items = {};
+    // 4001: 手で途中決済。注文時は SL なし → 後から 4190、建値 4200 へ
+    const a = item("4001", "2026-10-15T02:00:00.000Z", { sl:4190, tp:4250, slFirst:4190, tpFirst:4250, slLast:4200, tpLast:4250,
+      sltpMoves:[mv("2026-10-15T01:00:10.000Z", null, null), mv("2026-10-15T01:01:00.000Z", 4190, 4250), mv("2026-10-15T01:30:00.000Z", 4200, 4250)] });
+    // 4002: SL を広げた（4190 → 4180）
+    const b = item("4002", "2026-10-15T03:00:00.000Z", { openedAt:"2026-10-15T02:30:00.000Z", sl:4190, tp:null, slFirst:4190, slLast:4180, tpFirst:null, tpLast:null,
+      sltpMoves:[mv("2026-10-15T02:30:30.000Z", 4190, null), mv("2026-10-15T02:40:00.000Z", 4180, null)] });
+    // 4003: 見張りの記録なし（今までどおり）
+    const c = item("4003", "2026-10-15T04:00:00.000Z", { openedAt:"2026-10-15T03:30:00.000Z", sl:null, tp:null });
+    [a, b, c].forEach(x => { items[x.dealId] = x; });
+    window.__fake.doc = { app:"boburu-inbox", v:1, items, consumed:{}, open:{} };
+    await inboxCheck(true);
+    const tid = p => DB.trades.filter(t => (t.brokerDealIds || []).some(d => d.startsWith("mt5:" + p + ":")))[0];
+    const A = tid("4001"), B = tid("4002"), C = tid("4003");
+    const res1 = { n:DB.trades.length,
+      A:A && { sl:A.sl, tp:A.tp, last:A.slLast, moves:(A.sltpMoves || []).length, kind:slMoveKind(A), pills:tradePills(A), r:calcTrade(A).realizedR,
+           rFirst:calcTrade(Object.assign({}, A, { sl:4190 })).realizedR, rLast:calcTrade(Object.assign({}, A, { sl:4199.9 })).realizedR },
+      B:B && { sl:B.sl, kind:slMoveKind(B), pills:tradePills(B) },
+      C:C && { sl:C.sl, kind:slMoveKind(C), has:"sltpMoves" in C } };
+    // 計画に紐付く場合：計画の SL は残し、空なら最初の値で埋める
+    DB.trades.push({ id:"planP", status:"open", accountId:f7.id, createdAt:"2026-10-16T01:00:00.000Z", updatedAt:"x", savedAt:"x", symbol:"XAUUSD", dir:"short", entry:4300, sl:null, tp:4250, lot:1, tags:[] });
+    const p = item("4004", "2026-10-16T02:00:00.000Z", { openedAt:"2026-10-16T01:01:00.000Z", dir:"short", entry:4300, close:4290, sl:4310, slFirst:4310, slLast:4300, tpFirst:4250, tpLast:4250,
+      sltpMoves:[mv("2026-10-16T01:01:30.000Z", 4310, 4250), mv("2026-10-16T01:20:00.000Z", 4300, 4250)] });
+    window.__fake.doc.items[p.dealId] = p;
+    INBOX.checkedAt = 0; await inboxCheck(true);
+    const P = findTrade("planP");
+    const res2 = { st:P.status, sl:P.sl, tp:P.tp, kind:slMoveKind(P) };
+    // 建玉中：MT5 で SL を外した（一度は入っていた）→「外した」。まだ入れていないだけなら札なし
+    window.__fake.doc.open = {
+      "5001": { posId:"5001", symbol:"XAUUSD", dir:"long", openedAt:"2026-10-17T01:00:00.000Z", entry:4200, lot:1, sl:null, tp:null, swap:0, brokerId:"999", currency:"JPY", account:"Funded7", source:"mt5",
+                slFirst:4190, tpFirst:null, sltpMoves:[mv("2026-10-17T01:00:30.000Z", 4190, null), mv("2026-10-17T01:10:00.000Z", null, null)] },
+      "5002": { posId:"5002", symbol:"XAUUSD", dir:"long", openedAt:"2026-10-17T02:00:00.000Z", entry:4220, lot:1, sl:null, tp:null, swap:0, brokerId:"999", currency:"JPY", account:"Funded7", source:"mt5",
+                sltpMoves:[mv("2026-10-17T02:00:30.000Z", null, null)] } };
+    INBOX.checkedAt = 0; await inboxCheck(true);
+    const O1 = findTrade("mt5o_999_5001"), O2 = findTrade("mt5o_999_5002");
+    const res3 = { o1:O1 && { sl:O1.sl, kind:slMoveKind(O1) }, o2:O2 && { kind:slMoveKind(O2) } };
+    // 分析に「SL の動かし方」と、逸脱の中身に「SLを広げた・外した」
+    TAB = "growth"; UI.growthPeriod = "all"; render();
+    const txt = document.body.textContent;
+    const res4 = { table:txt.includes("SL の動かし方"), dev:txt.includes("SLを広げた・外した"), be:txt.includes("を建値へ") };
+    return { res1, res2, res3, res4 };
+  });
+  ok("途中決済でも SL/TP が入る（記録の SL は最初の 4190、最後 4200、動き 3）", !!r.res1.A && r.res1.A.sl === 4190 && r.res1.A.tp === 4250 && r.res1.A.last === 4200 && r.res1.A.moves === 3);
+  ok("建値へ動かした取引に「SL を建値へ」の札、R は最初の SL（4190）で計算", r.res1.A.kind === "be" && r.res1.A.pills.includes("SL を建値へ") && typeof r.res1.A.r === "number" && Math.abs(r.res1.A.r - r.res1.A.rFirst) < 1e-9 && r.res1.A.r !== r.res1.A.rLast);
+  ok("広げた取引に「SL を広げた」の札", !!r.res1.B && r.res1.B.sl === 4190 && r.res1.B.kind === "widen" && r.res1.B.pills.includes("SL を広げた"));
+  ok("見張りの記録が無い取引は今までどおり（札なし）", !!r.res1.C && r.res1.C.sl === null && r.res1.C.kind === null && !r.res1.C.has && r.res1.n === 3);
+  ok("計画に紐付く取引は、空の SL だけ最初の値で埋め、計画の TP は残す", r.res2.st === "closed" && r.res2.sl === 4310 && r.res2.tp === 4250 && r.res2.kind === "be");
+  ok("建玉中に SL を外すと「外した」、まだ入れていないだけなら札なし", !!r.res3.o1 && r.res3.o1.sl === 4190 && r.res3.o1.kind === "removed" && !!r.res3.o2 && r.res3.o2.kind === null);
+  ok("分析に「SL の動かし方」と「SLを広げた・外した」が出る", r.res4.table && r.res4.dev && r.res4.be);
+  await page.close();
+}
+
 /* ---------- 後始末 ---------- */
 await browser.close();
 server.close();

@@ -1514,6 +1514,7 @@ function inboxDeal(it){
   d.brokerId=(it.brokerId!==undefined&&it.brokerId!==null)?String(it.brokerId):null;
   d.accountName=it.account?String(it.account).trim():null;
   d.currency=it.currency?String(it.currency).toUpperCase():null;
+  d.raw=it;
   return d;
 }
 // 口座を決める。無ければ作る（2026-10-17 優希：口座を買い直したときも手を動かしたくない）
@@ -1567,9 +1568,50 @@ function inboxImport(deals){
       if(free.length) taken[free[0].trade.id]=true;
     });
     var r=ctiCommit({accountId:acc.id, groups:groups, choices:choices, stmt:{platform:"mt5", brokerId:ds[0].brokerId}, remember:!!ds[0].brokerId});
+    // SL/TP の最初・最後・動き（#29）。ctiCommit は紐付けた計画の sl を変えないので、空なら最初の値で埋める
+    var done=importedDealIds();
+    ds.forEach(function(d){ var t=d.raw&&findTrade(done[d.dealId]); if(t) inboxApplySltp(t, d.raw); });
     out.groups+=groups.length; out.linked+=r.nLink; out.created+=r.nNew; out.imported=out.imported.concat(r.dealIds);
   });
   return out;
+}
+// SL / TP の動き（Dell の見張りが送る。hoshi2/bob-bridge#29）
+function inboxMoves(v){
+  if(!Array.isArray(v)) return null;
+  var n=ctraderImport.num, out=[];
+  v.forEach(function(m){ if(m&&typeof m==="object"&&m.at) out.push({at:String(m.at), sl:n(m.sl), tp:n(m.tp)}); });
+  return out.length?out:null;
+}
+// 最初の SL（記録の sl）から最後の SL への動き。none / tighten（詰めた）/ be（建値へ）/ profit（利益側へ）/ widen（広げた）/ removed（外した）。分からなければ null
+function slMoveKind(t){
+  var first=toNum(t.sl), last=(t.status==="open")?(t.mt5Sl!==undefined?t.mt5Sl:t.slLast):t.slLast, e=toNum(t.entry);
+  if(last===undefined) return null;
+  if(!isNum(first)) return null;
+  if(last===null){   // MT5 に一度は SL が入っていたと分かるときだけ「外した」（まだ入れていないだけのことがある）
+    var had=Array.isArray(t.sltpMoves)&&t.sltpMoves.some(function(m){ return isNum(m.sl); });
+    return had?"removed":null;
+  }
+  last=toNum(last); if(!isNum(last)) return null;
+  var eps=isNum(e)?Math.max(e*0.0002,1e-9):1e-9;
+  if(Math.abs(last-first)<=eps) return "none";
+  var toward=(t.dir==="short")?(last<first):(last>first);   // 建値の方へ動かした
+  if(!toward) return "widen";
+  if(isNum(e) && Math.abs(last-e)<=eps) return "be";
+  if(isNum(e) && ((t.dir==="short")?(last<e):(last>e))) return "profit";
+  return "tighten";
+}
+var SL_MOVE_LABEL={none:"SL 動かさない", tighten:"SL を詰めた", be:"SL を建値へ", profit:"SL を利益側へ", widen:"SL を広げた", removed:"SL を外した"};
+// 受信箱の1件（決済済み・建玉中）から、SL/TP の最初・最後・動きを記録に写す。記録の sl は R の元なので、空のときだけ最初の値で埋める
+function inboxApplySltp(t, it){
+  var n=ctraderImport.num, ch=false;
+  var first=n(it.slFirst), tfirst=n(it.tpFirst);
+  if(!isNum(toNum(t.sl)) && isNum(first)){ t.sl=first; ch=true; }
+  if(!isNum(toNum(t.tp)) && isNum(tfirst)){ t.tp=tfirst; ch=true; }
+  if(it.slLast!==undefined && t.slLast!==n(it.slLast)){ t.slLast=n(it.slLast); ch=true; }
+  if(it.tpLast!==undefined && t.tpLast!==n(it.tpLast)){ t.tpLast=n(it.tpLast); ch=true; }
+  var mv=inboxMoves(it.sltpMoves);
+  if(mv && JSON.stringify(mv)!==JSON.stringify(t.sltpMoves||null)){ t.sltpMoves=mv; ch=true; }
+  return ch;
 }
 // 受信箱の open（Dell が送る建玉中のスナップショット。hoshi2/bob-bridge#23 / #28）
 function inboxOpenDeal(it){
@@ -1579,7 +1621,8 @@ function inboxOpenDeal(it){
   var d={posId:String(it.posId), symbol:ctraderImport.symbolOf(it.symbol), dir:(it.dir==="long"||it.dir==="short")?it.dir:ctraderImport.dirOf(it.dir),
          openedAt:new Date(opened).toISOString(), entry:n(it.entry), lot:n(it.lot), sl:n(it.sl), tp:n(it.tp),
          brokerId:(it.brokerId!==undefined&&it.brokerId!==null)?String(it.brokerId):null,
-         accountName:it.account?String(it.account).trim():null, currency:it.currency?String(it.currency).toUpperCase():null};
+         accountName:it.account?String(it.account).trim():null, currency:it.currency?String(it.currency).toUpperCase():null,
+         slFirst:n(it.slFirst), tpFirst:n(it.tpFirst)};
   if(!d.symbol||!d.dir||d.entry===null||d.lot===null) return null;
   if(!(d.sl>0)) d.sl=null; if(!(d.tp>0)) d.tp=null;
   return d;
@@ -1623,7 +1666,7 @@ function inboxOpenSync(openMap){
         var accCur=String(acc.currency||acctCurrency()).toUpperCase();
         t={id:id, status:"open", accountId:acc.id, createdAt:d.openedAt, updatedAt:ts, savedAt:ts,
            symbol:d.symbol, dir:d.dir, h4env:"", m15purple:"", trigger:"", pattern:"", emaPos:"", crossB:null,
-           entry:d.entry, sl:d.sl, tp:d.tp, lot:d.lot,
+           entry:d.entry, sl:(isNum(d.slFirst)?d.slFirst:d.sl), tp:(isNum(d.tpFirst)?d.tpFirst:d.tp), lot:d.lot,
            balanceAtEntry:round2(balanceOf(acc)), contractSize:toNum(DB.settings.contractSize),
            fxRate:(accCur===acctCurrency()?fxRateFor(d.symbol):(accCur===quoteCurrencyOf(d.symbol)?1:null)),
            acctCurrency:accCur,
@@ -1636,6 +1679,7 @@ function inboxOpenSync(openMap){
       t.mt5PosId=d.posId; t.source="mt5"; t.updatedAt=ts; out.changed=true;
     }
     if(t.status!=="open") return;
+    if(inboxApplySltp(t, {slFirst:openMap[k].slFirst, tpFirst:openMap[k].tpFirst, sltpMoves:openMap[k].sltpMoves})) out.changed=true;
     if(t.mt5Sl!==d.sl || t.mt5Tp!==d.tp){ t.mt5Sl=d.sl; t.mt5Tp=d.tp; out.changed=true; }
     if(!isNum(toNum(t.sl)) && d.sl!==null){ t.sl=d.sl; out.changed=true; }
     if(!isNum(toNum(t.tp)) && d.tp!==null){ t.tp=d.tp; out.changed=true; }
@@ -4006,6 +4050,10 @@ function tradePills(t){
   }
   if(t.afterOwnStop) pills.push("自分の停止ライン到達後");
   if(t.source==="ctrader") pills.push("cTrader"); else if(t.source==="mt5") pills.push("MT5");
+  var smk=slMoveKind(t); if(smk&&smk!=="none") pills.push(SL_MOVE_LABEL[smk]);
+  if(Array.isArray(t.sltpMoves)&&t.sltpMoves.length>1){
+    var tps=t.sltpMoves.map(function(m){return m.tp;}); if(tps.some(function(v){return v!==tps[0];})) pills.push("TP を動かした");
+  }
   if(t.status==="open"&&t.mt5PosId){
     if(t.mt5Sl!==undefined && t.mt5Sl!==toNum(t.sl)) pills.push("MT5 の今の SL "+(t.mt5Sl===null?"なし":t.mt5Sl));
     if(t.mt5Tp!==undefined && t.mt5Tp!==toNum(t.tp)) pills.push("MT5 の今の TP "+(t.mt5Tp===null?"なし":t.mt5Tp));
@@ -4458,11 +4506,16 @@ function viewGrowth(){
     ["2〜6時間",function(t){var m=holdMinutes(t);return isNum(m)&&m>=120&&m<360;}],
     ["6時間以上",function(t){var m=holdMinutes(t);return isNum(m)&&m>=360;}]
   ]);
-  // 逸脱の中身。1件が複数に入ることがある。下の4つはアプリが判定したもの
+  // SL の動かし方（最初の SL → 最後の SL。Dell の見張りで分かった取引だけ。#29）
+  h+=classTable("SL の動かし方", list, ["none","tighten","be","profit","widen","removed"].map(function(k){
+    return [SL_MOVE_LABEL[k].replace(/^SL /,""),function(t){ return slMoveKind(t)===k; }];
+  }));
+  // 逸脱の中身。1件が複数に入ることがある。下の5つはアプリが判定したもの
   h+=classTable("逸脱の中身", list, DEVIATIONS.map(function(o){
     return [o[1],function(t){ return Array.isArray(t.deviations)&&t.deviations.indexOf(o[0])>=0; }];
   }).concat([
     ["SLなし",function(t){return !isNum(toNum(t.sl));}],
+    ["SLを広げた・外した",function(t){var k=slMoveKind(t);return k==="widen"||k==="removed";}],
     ["逆行中の追加",function(t){return !!t.addAgainst;}],
     ["逆行中のロット増",function(t){return !!t.addLotUp;}],
     ["停止ライン到達後",function(t){return t.afterOwnStop===true;}]
