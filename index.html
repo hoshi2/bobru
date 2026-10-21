@@ -767,8 +767,10 @@ function makeAccount(o){
     _m:isNum(o._m)?o._m:undefined   // クラウド同期の「最後に変えた時刻」。無ければ JSON で消える
   };
 }
-function accountFromSettings(s){
-  return makeAccount({name:s.accountName, type:s.accountType, initialBalance:s.initialBalance, _fin:s.fin, _cur:s.currency});
+// 最初の口座の id は決め打ち。どの端末でも同じ id なので、クラウド同期で同じ名前の空の口座が増えない（#31）
+var DEFAULT_ACCOUNT_ID="acc_default";
+function accountFromSettings(s,id){
+  return makeAccount({id:id, name:s.accountName, type:s.accountType, initialBalance:s.initialBalance, _fin:s.fin, _cur:s.currency});
 }
 function findAccountIn(list,id){
   if(!Array.isArray(list)||!id) return null;
@@ -1003,7 +1005,7 @@ function labelCloseReason(v){
 
 function defaultDB(){
   var st=defaultSettings();
-  var acc=accountFromSettings(st);
+  var acc=accountFromSettings(st,DEFAULT_ACCOUNT_ID);
   st.currentAccountId=acc.id;
   return {
     version:3,
@@ -1354,6 +1356,13 @@ function cloudMerge(remote){
     if(kept.length!==merged.length) out.local=true;
     DB[col]=kept;
   });
+  // 端末で作った最初の口座（acc_default）が、クラウドに無く・取引も下書きも無いままなら外す（#31）。
+  // ほかの端末ですでに口座があるのに、空の「Fintokei」をクラウドへ足さないため。墓標は残さない（他の端末の口座は消さない）
+  var rAcc=(Array.isArray(remote.accounts)?remote.accounts:[]).filter(function(a){ return a&&a.id&&!(dead[a.id]>=recMs(a)); });
+  if(rAcc.length && !findAccountIn(rAcc,DEFAULT_ACCOUNT_ID) && findAccount(DEFAULT_ACCOUNT_ID) && !accountRecordCount(DEFAULT_ACCOUNT_ID)){
+    DB.accounts=DB.accounts.filter(function(a){ return a.id!==DEFAULT_ACCOUNT_ID; });
+    out.local=true;
+  }
   // 設定：新しい方が丸ごと勝つ。ただし「いまの口座」と為替レートは端末のものを残す
   var rs=remote.settings;
   if(rs&&typeof rs==="object"){
@@ -1373,7 +1382,7 @@ function cloudMerge(remote){
   var rKeys={}; (Array.isArray(remote.ruleHistory)?remote.ruleHistory:[]).forEach(function(h){ var k=JSON.stringify(h); rKeys[k]=1; if(!hKeys[k]){ hist.push(h); hKeys[k]=1; out.local=true; } });
   for(var hk in hKeys){ if(!rKeys[hk]) out.remote=true; }
   hist.sort(function(a,b){ return String(a.at||"").localeCompare(String(b.at||"")); });
-  if(!Array.isArray(DB.accounts)||!DB.accounts.length) DB.accounts=[accountFromSettings(DB.settings)];
+  if(!Array.isArray(DB.accounts)||!DB.accounts.length) DB.accounts=[accountFromSettings(DB.settings,DEFAULT_ACCOUNT_ID)];
   if(!findAccountIn(DB.accounts,DB.settings.currentAccountId)) DB.settings.currentAccountId=DB.accounts[0].id;
   return out;
 }

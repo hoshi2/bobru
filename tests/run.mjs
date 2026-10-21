@@ -1156,6 +1156,39 @@ group("17. SL / TP の動き");
   await page.close();
 }
 
+group("18. 端末ごとの既定口座が同期で増えない");
+{
+  const page = await open(1200, 800);
+  const r = await page.evaluate(() => {
+    const res = { firstId: DB.accounts[0].id, n0: DB.accounts.length };
+    // 別の端末で使っている口座が入ったクラウド（acc_default は無い）
+    const remoteOf = accs => { const d = JSON.parse(JSON.stringify(DB)); d.accounts = accs; d.trades = []; d.tradePlans = []; return d; };
+    const X = makeAccount({ name:"Fintokei", type:"step1", initialBalance:1000, currency:"JPY" }); X._m = Date.now() - 1000;
+    const Y = makeAccount({ name:"Funded7", type:"live", initialBalance:1000, currency:"JPY" }); Y._m = Date.now() - 1000;
+    DB.settings.theme = DB.settings.theme === "dark" ? "light" : "dark"; saveData();   // 何か触った端末（初回の丸ごと置き換えにならない）
+    cloudApplyRemote({ data: JSON.stringify(remoteOf([X, Y])) }, false);
+    saveData();
+    res.a = { ids: DB.accounts.map(a => a.id), cur: DB.settings.currentAccountId, tomb: !!cloudDead()["acc_default"], X: X.id, Y: Y.id };
+    // 既定口座に取引がある端末：外さない
+    DB = defaultDB(); cloudSeenReset();
+    DB.trades.push({ id:"tq", status:"closed", accountId:"acc_default", createdAt:"2026-10-20T01:00:00.000Z", closedAt:"2026-10-20T02:00:00.000Z", symbol:"XAUUSD", dir:"long", entry:4200, lot:1, realizedPL:100, tags:[] });
+    saveData();
+    cloudApplyRemote({ data: JSON.stringify(remoteOf([X, Y])) }, false);
+    res.b = { ids: DB.accounts.map(a => a.id) };
+    // クラウドに acc_default がある（ほかの新しい端末が使っている）：1件にまとまる
+    DB = defaultDB(); cloudSeenReset(); saveData();
+    const D = makeAccount({ id:"acc_default", name:"Fintokei", type:"step1", initialBalance:2000, currency:"JPY" }); D._m = Date.now() + 1000;
+    cloudApplyRemote({ data: JSON.stringify(remoteOf([D, Y])) }, false);
+    res.c = { ids: DB.accounts.map(a => a.id), bal: findAccount("acc_default").initialBalance };
+    return res;
+  });
+  ok("新しい端末の最初の口座は決め打ちの id（acc_default）", r.firstId === "acc_default" && r.n0 === 1);
+  ok("クラウドに口座があり、最初の口座が空なら外す（墓標は残さない・いまの口座はクラウドの口座へ）", r.a.ids.length === 2 && !r.a.ids.includes("acc_default") && r.a.cur === r.a.X && !r.a.tomb);
+  ok("最初の口座に取引があれば外さない", r.b.ids.length === 3 && r.b.ids.includes("acc_default"));
+  ok("クラウドにも acc_default があれば1件にまとまる（新しい方が勝つ）", r.c.ids.length === 2 && r.c.ids.filter(i => i === "acc_default").length === 1 && r.c.bal === 2000);
+  await page.close();
+}
+
 /* ---------- 後始末 ---------- */
 await browser.close();
 server.close();
