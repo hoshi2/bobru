@@ -1248,6 +1248,47 @@ group("19. 初期化・復元・入り直しで全端末の記録が消えない
   await page.close();
 }
 
+/* =======================================================================
+   16. 受信箱の取り込みで、口座の通貨に合ったレートが付く（R が 150 倍になった 2026-10-21 の直し）
+   ======================================================================= */
+group("16. 受信箱の記録に口座通貨のレートが付く");
+{
+  const page = await open(1200, 800);
+  const r = await page.evaluate(() => {
+    const usd = DB.accounts[0]; usd.currency = "USD"; DB.settings.currency = "USD";          // いまの口座は USD
+    const jpy = makeAccount({ name:"Funded7", type:"live", initialBalance:60000000, currency:"JPY" }); DB.accounts.push(jpy);
+    DB.settings.fx.rate = null; DB.settings.fx.quote = ""; DB.settings.fx.manual = null;        // レートはまだ無い
+    const g = { symbol:"XAUUSD", dir:"short", openedAt:"2026-10-21T05:00:00.000Z", closedAt:"2026-10-21T05:56:00.000Z", entry:4127.014, closePrice:4112.7, lot:2, net:285684, gross:286384, fee:-700, swap:0, sl:4131.61, tp:null, dealIds:["mt5:1:x"], orderIds:[], balance:null, posId:"1" };
+    ctiCommit({ accountId:jpy.id, groups:[g], choices:{ 0:"new" }, stmt:{ platform:"mt5", brokerId:"777" }, remember:false });
+    const t1 = DB.trades.filter(t => t.accountId === jpy.id)[0];
+    const s1 = { fx:t1.fxRate, pending:!!t1.fxPending, R:calcTrade(t1).realizedR };
+    DB.settings.fx.rate = 158.22; DB.settings.fx.quote = "JPY"; DB.settings.fx.at = now();     // レートが取れた
+    resolvePendingFx();
+    const s2 = { fx:t1.fxRate, pending:!!t1.fxPending, R:+calcTrade(t1).realizedR.toFixed(2) };
+    const g2 = Object.assign({}, g, { posId:"2", dealIds:["mt5:2:x"], closedAt:"2026-10-21T06:00:00.000Z" });
+    ctiCommit({ accountId:jpy.id, groups:[g2], choices:{ 0:"new" }, stmt:{ platform:"mt5", brokerId:"777" }, remember:false });
+    const t2 = DB.trades.filter(t => t.accountId === jpy.id && t !== t1)[0];
+    const s3 = { fx:t2.fxRate, pending:!!t2.fxPending };
+    // 既存データの直し：fx が null の JPY 記録は migrate で待ちになり、レートで埋まる。fx=1 の古い記録と USD建てでない銘柄は触らない
+    DB.trades.push(
+      { id:"bad1", status:"closed", accountId:jpy.id, createdAt:"2026-10-20T01:00:00.000Z", closedAt:"2026-10-20T02:00:00.000Z", symbol:"XAUUSD", dir:"short", entry:4120.27, sl:4127.92, lot:2, realizedPL:139584, fxRate:null, acctCurrency:"JPY", contractSize:100, tags:[] },
+      { id:"old1", status:"closed", accountId:jpy.id, createdAt:"2026-09-01T01:00:00.000Z", closedAt:"2026-09-01T02:00:00.000Z", symbol:"XAUUSD", dir:"long", entry:3300, sl:3290, lot:1, realizedPL:1000, fxRate:1, acctCurrency:"JPY", contractSize:100, tags:[] },
+      { id:"nk1", status:"closed", accountId:jpy.id, createdAt:"2026-10-21T01:00:00.000Z", closedAt:"2026-10-21T02:00:00.000Z", symbol:"JP225P", dir:"short", entry:64572, sl:null, lot:20, realizedPL:-216, fxRate:null, acctCurrency:"JPY", contractSize:100, tags:[] });
+    const db2 = migrate(JSON.parse(JSON.stringify(DB)));
+    const f = id => db2.trades.filter(t => t.id === id)[0];
+    const s4 = { badPending:!!f("bad1").fxPending, oldUntouched:f("old1").fxRate === 1 && !f("old1").fxPending, nkUntouched:!f("nk1").fxPending };
+    DB = db2; resolvePendingFx();
+    const s5 = { fx:findTrade("bad1").fxRate, R:+calcTrade(findTrade("bad1")).realizedR.toFixed(2) };
+    return { s1, s2, s3, s4, s5 };
+  });
+  ok("レートが無いときは待ちになり、R は出さない", r.s1.fx === null && r.s1.pending && r.s1.R === null);
+  ok("レートが取れると待っていた記録に入り、R がまともになる（いまの口座が USD のままでも）", r.s2.fx === 158.22 && !r.s2.pending && r.s2.R === 1.96);
+  ok("レートがあれば取り込み時に付く", r.s3.fx === 158.22 && !r.s3.pending);
+  ok("既存の fx 無し記録は migrate で待ちになり、fx=1 の古い記録と USD建てでない銘柄は触らない", r.s4.badPending && r.s4.oldUntouched && r.s4.nkUntouched);
+  ok("待ちになった既存記録もレートで埋まる", r.s5.fx === 158.22 && r.s5.R === 0.58);
+  await page.close();
+}
+
 /* ---------- 後始末 ---------- */
 await browser.close();
 server.close();

@@ -1203,6 +1203,16 @@ function migrate(p){
   if(!findAccountIn(db.accounts,cur)){ cur=db.accounts[0].id; db.settings.currentAccountId=cur; }
   db.trades.forEach(function(t){ if(t&&!t.accountId) t.accountId=cur; });
   db.tradePlans.forEach(function(t){ if(t&&!t.accountId) t.accountId=cur; });
+  // 2026-10-21 の直し：受信箱の取り込みが「いまの口座」と違う通貨の口座に入れた記録はレートが null のままで、
+  // 予定損失が USD のまま → R が 150 倍に見えた。口座通貨が分かっていてレートの無い USD建ての記録は「待ち」にし、
+  // レートが取れたとき（resolvePendingFx）に入れる。fxRate が 1 の古い記録（換算なしの時代）は触らない
+  db.trades.forEach(function(t){
+    if(!t || t.fxPending) return;
+    var ac=String(t.acctCurrency||"").toUpperCase(); if(!ac) return;
+    if(isNum(toNum(t.fxRate))) return;
+    if(quoteCurrencyOf(t.symbol)!=="USD" || ac==="USD") return;
+    t.fxPending=true;
+  });
   return db;
 }
 function mergeSettings(def,s){
@@ -1701,7 +1711,7 @@ function inboxOpenSync(openMap){
            symbol:d.symbol, dir:d.dir, h4env:"", m15purple:"", trigger:"", pattern:"", emaPos:"", crossB:null,
            entry:d.entry, sl:(isNum(d.slFirst)?d.slFirst:d.sl), tp:(isNum(d.tpFirst)?d.tpFirst:d.tp), lot:d.lot,
            balanceAtEntry:round2(balanceOf(acc)), contractSize:toNum(DB.settings.contractSize),
-           fxRate:(accCur===acctCurrency()?fxRateFor(d.symbol):(accCur===quoteCurrencyOf(d.symbol)?1:null)),
+           fxRate:fxRateForAccount(d.symbol, accCur).rate, fxPending:fxRateForAccount(d.symbol, accCur).pending||undefined,
            acctCurrency:accCur,
            sawLower:"", memo:"", tags:[], scenarioMode:"join", briefId:null,
            closedAt:null, closePrice:null, realizedPL:null, fee:null, swap:null,
@@ -2022,7 +2032,8 @@ function calcTrade(t){
   // 実現R = 実現損益 / 予定損失（予定損失0/未定義なら計算しない）
   c.realizedR=null;
   var pl=toNum(t.realizedPL);
-  if(t.status==="closed" && isNum(pl) && isNum(c.plannedLoss) && c.plannedLoss>0){
+  // レート待ち（fxPending）の間は予定損失が建値通貨のままなので R は出さない（レートが入れば出る）
+  if(t.status==="closed" && !t.fxPending && isNum(pl) && isNum(c.plannedLoss) && c.plannedLoss>0){
     c.realizedR=pl/c.plannedLoss;
   }
   return c;
@@ -2541,6 +2552,17 @@ function fxRateFor(symbol){
   if(q!=="USD") return null;          // USD建て以外の換算は未対応
   return usdToAcctRate();
 }
+// 口座の通貨を指定して同じことをする（受信箱の取り込み用。取り込み先の口座と「いまの口座」が違う通貨でも正しく付ける）。
+// 戻り値 {rate, pending}：rate が決められないときは pending=true（レートが取れたときに resolvePendingFx が入れる）
+function fxRateForAccount(symbol, accCur){
+  var q=quoteCurrencyOf(symbol);
+  if(q===accCur) return {rate:1, pending:false};
+  if(q!=="USD") return {rate:null, pending:false};     // USD建て以外の換算は未対応
+  var f=fxSettings();
+  if(f.quote===accCur && isNum(f.rate) && f.rate>0) return {rate:f.rate, pending:false};
+  if(accCur===acctCurrency() && isNum(f.manual) && f.manual>0) return {rate:f.manual, pending:false};
+  return {rate:null, pending:true};
+}
 // 計算に実際に使う値。換算できないときは 1 のまま（画面側で断りを出す）
 function fxRateOrOne(symbol){ var r=fxRateFor(symbol); return isNum(r)&&r>0?r:1; }
 // 換算が要る場面かどうか（＝レート行を出すか）
@@ -2563,7 +2585,7 @@ function ensureFxRate(force){
   if(!f.auto && !force) return;
   if(acctCurrency()==="USD") return;         // 換算が要らない
   if(FX.fetching) return;
-  if(!force && !fxStale()) return;
+  if(!force && !fxStale()){ resolvePendingFx(); return; }   // 取りに行かなくても、手元のレートで待っている記録を埋める
   var want=acctCurrency();
   FX.fetching=true; updateFxLine();
   fxRateProvider.fetchFirst(FX_SOURCES,{base:"USD"}).then(function(res){
@@ -4920,9 +4942,13 @@ function relabelAccountCurrency(acc, newCur){
 }
 // レートが取れたら、待っていた記録に入れる
 function resolvePendingFx(){
-  var r=usdToAcctRate(), cur=acctCurrency(); if(!isNum(r)||r<=0) return;
   var changed=false;
-  DB.trades.forEach(function(t){ if(t.fxPending && (t.acctCurrency||"")===cur){ t.fxRate=r; delete t.fxPending; changed=true; } });
+  DB.trades.forEach(function(t){
+    if(!t.fxPending) return;
+    var fr=fxRateForAccount(t.symbol, String(t.acctCurrency||"").toUpperCase());
+    if(fr.pending || !isNum(fr.rate) || fr.rate<=0) return;
+    t.fxRate=fr.rate; delete t.fxPending; changed=true;
+  });
   if(changed) saveData();
 }
 window.saveAccountRules=function(id){
@@ -5255,7 +5281,7 @@ function ctiCommit(S){
          symbol:g.symbol, dir:g.dir, h4env:"", m15purple:"", trigger:"", pattern:"", emaPos:"", crossB:null,
          entry:g.entry, sl:(isNum(g.sl)&&g.sl>0?g.sl:null), tp:(isNum(g.tp)&&g.tp>0?g.tp:null), lot:g.lot,
          balanceAtEntry:(g.balance!==null?round2(g.balance-g.net):null), contractSize:toNum(DB.settings.contractSize),
-         fxRate:(accCur===acctCurrency()?fxRateFor(g.symbol):(accCur===quoteCurrencyOf(g.symbol)?1:null)),
+         fxRate:fxRateForAccount(g.symbol, accCur).rate, fxPending:fxRateForAccount(g.symbol, accCur).pending||undefined,
          acctCurrency:accCur,
          sawLower:"", memo:"", tags:[], scenarioMode:"join", briefId:null,
          closedAt:null, closePrice:null, realizedPL:null, fee:null, swap:null,
