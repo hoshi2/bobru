@@ -2,7 +2,7 @@
  "symbol": "XAUUSD",
  "date": "2026-10-22",
  "source": "claude-code",
- "asOf": "2026-10-21T22:40:02+00:00",
+ "asOf": "2026-10-21T22:40:43+00:00",
  "price": 4134.69,
  "trend": {
   "daily": "down",
@@ -91,6 +91,6 @@
  "notes": [
   "足は先物（GC=F）をスポットに合わせて -19.31 ずらしたもの",
   "アジア時間の高安は作成時点では未確定のため null",
-  "足は先物（GC=F）をスポットに合わせてずらしたもの。前日高安・週足高安は TradingView の OANDA:XAUUSD の値"
+  "前日高安・週足高安は TradingView の OANDA:XAUUSD の値"
  ]
 }
