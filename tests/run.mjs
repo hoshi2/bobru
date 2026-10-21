@@ -1189,6 +1189,65 @@ group("18. 端末ごとの既定口座が同期で増えない");
   await page.close();
 }
 
+group("19. 初期化・復元・入り直しで全端末の記録が消えない");
+{
+  const page = await open(1200, 800);
+  page.on("dialog", d => d.accept());
+  const r = await page.evaluate(() => {
+    const T = (id, acc, m) => ({ id, status:"closed", accountId:acc, createdAt:"2026-10-17T01:00:00.000Z", closedAt:"2026-10-17T02:00:00.000Z", symbol:"XAUUSD", dir:"long", entry:4200, lot:1, realizedPL:10, tags:[], _m:m });
+    const acc = DB.accounts[0].id, old = Date.now() - 86400000;
+    const fill = n => { DB.trades = []; for (let i = 0; i < n; i++) DB.trades.push(T("tr" + i, acc, old)); };
+    const copy = () => JSON.parse(JSON.stringify(DB));
+    const res = {};
+    // #32 の再現：記録を見たあと（同期は解除中）全データ削除 → 入り直して合わせる
+    fill(15); saveData(); cloudSeenReset();
+    const cloud = copy();
+    wipeAll();
+    res.wipe = { dead: Object.keys(cloudDead()).length };
+    cloudApplyRemote({ data: JSON.stringify(cloud) }, false);
+    res.wipe.back = DB.trades.length; res.wipe.blocked = CLOUD.blocked;
+    // 復元（JSON）も墓標を作らない
+    fill(15); saveData(); cloudSeenReset();
+    const r1 = importData(JSON.stringify({ trades: [], settings: DB.settings, accounts: DB.accounts }));
+    res.imp = { ok: r1.ok, dead: Object.keys(cloudDead()).length };
+    // 自分の墓標で相手の記録が 12 件消える → 止める（自分も相手もそのまま）
+    fill(12); saveData(); cloudSeenReset(); const c2 = copy();
+    DB.trades = []; saveData();
+    const dead2 = Object.keys(cloudDead()).length;
+    cloudApplyRemote({ data: JSON.stringify(c2) }, false);
+    res.mine = { dead2, blocked: CLOUD.blocked, local: DB.trades.length, err: CLOUD.error.includes("止めました") };
+    CLOUD.blocked = 0; CLOUD.error = ""; DB.syncMetadata.deleted = {};
+    // 相手の墓標で自分の記録が 12 件消える → 止める
+    fill(12); saveData(); cloudSeenReset();
+    const c3 = copy(); c3.trades = []; c3.syncMetadata.deleted = {}; DB.trades.forEach(t => c3.syncMetadata.deleted[t.id] = Date.now());
+    cloudApplyRemote({ data: JSON.stringify(c3) }, false);
+    res.theirs = { blocked: CLOUD.blocked, local: DB.trades.length };
+    CLOUD.blocked = 0; CLOUD.error = "";
+    // 口座の削除（取引 15 件ごと）は止めずに伝わる
+    DB.syncMetadata.deleted = {}; fill(0);
+    const Z = makeAccount({ name:"消す口座", type:"step1", initialBalance:1000, currency:"USD" }); Z._m = old; DB.accounts.push(Z);
+    for (let i = 0; i < 15; i++) DB.trades.push(T("tz" + i, Z.id, old));
+    saveData(); cloudSeenReset(); const c4 = copy();
+    const dz = {}; dz[Z.id] = Date.now(); DB.trades.forEach(t => dz[t.id] = Date.now());
+    c4.accounts = c4.accounts.filter(a => a.id !== Z.id); c4.trades = []; c4.syncMetadata.deleted = dz;
+    cloudApplyRemote({ data: JSON.stringify(c4) }, false);
+    res.acc = { blocked: CLOUD.blocked, local: DB.trades.length, accGone: !findAccount(Z.id) };
+    // 1件の削除は今までどおり伝わる
+    fill(3); saveData(); cloudSeenReset(); const c5 = copy();
+    DB.trades = DB.trades.slice(1); saveData();
+    cloudApplyRemote({ data: JSON.stringify(c5) }, false);
+    res.one = { blocked: CLOUD.blocked, local: DB.trades.length };
+    return res;
+  });
+  ok("全データ削除は墓標を作らず、入り直すとクラウドの記録が全部戻る（#32 の再現）", r.wipe.dead === 0 && r.wipe.back === 15 && !r.wipe.blocked);
+  ok("JSON から復元しても墓標を作らない", r.imp.ok && r.imp.dead === 0);
+  ok("自分の墓標で相手の記録が 10 件以上消える同期は止め、どちらもそのまま", r.mine.dead2 === 12 && r.mine.blocked === 12 && r.mine.local === 0 && r.mine.err);
+  ok("相手の墓標で自分の記録が 10 件以上消える同期は止め、自分の記録は残る", r.theirs.blocked === 12 && r.theirs.local === 12);
+  ok("口座の削除（取引ごと）は止めずに伝わる", !r.acc.blocked && r.acc.local === 0 && r.acc.accGone);
+  ok("1件の削除は今までどおり伝わる", !r.one.blocked && r.one.local === 2);
+  await page.close();
+}
+
 /* ---------- 後始末 ---------- */
 await browser.close();
 server.close();

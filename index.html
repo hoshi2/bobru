@@ -1251,7 +1251,7 @@ function importData(text){
   if(!Array.isArray(payload.trades)&&!Array.isArray(payload.rules)&&!payload.settings)
     return {ok:false,msg:"ぼぶるのバックアップではないようです"};
   if(briefLossBlocked(payload)) return {ok:false,msg:"取り込みを中止しました"};
-  DB=migrate(payload); saveData();
+  DB=migrate(payload); cloudForgetLocal(); saveData();
   return {ok:true};
 }
 function syncData(mode, code){
@@ -1268,7 +1268,7 @@ function syncData(mode, code){
       var obj=JSON.parse(json);
       if(typeof obj!=="object"||obj===null) throw 0;
       if(briefLossBlocked(obj)) return {ok:false,msg:"取り込みを中止しました"};
-      DB=migrate(obj); DB.syncMetadata.lastSync=now(); saveData();
+      DB=migrate(obj); cloudForgetLocal(); DB.syncMetadata.lastSync=now(); saveData();
       return {ok:true};
     }catch(e){ return {ok:false,msg:"コードを読み込めませんでした。コピーし直して下さい"}; }
   }
@@ -1284,7 +1284,8 @@ var CLOUD_SDK=["https://www.gstatic.com/firebasejs/10.14.1/firebase-app-compat.j
                "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore-compat.js"];
 var CLOUD_COLS=["trades","tradePlans","briefs","accounts","researchItems","rules"];
 var CLOUD_DOC_LIMIT=900000;          // Firestore の1件上限（1MiB）の手前で知らせる
-var CLOUD={db:null,unsub:null,ready:false,error:"",lastData:null,lastAt:null,timer:0,renderPending:false,pushing:false,dirty:false};
+var CLOUD={db:null,unsub:null,ready:false,error:"",lastData:null,lastAt:null,timer:0,renderPending:false,pushing:false,dirty:false,blocked:0};
+var CLOUD_MASS_DELETE=10;   // 合わせ込みで墓標により消える記録がこれ以上なら止める（#33）
 var _cloudSeen={};   // 前回保存時の記録の姿 {col:{id:json}}。変わった記録に _m を押すために持つ
 
 function loadCloudCfg(){ try{ var v=JSON.parse(localStorage.getItem(KEY_CLOUD)||"null"); return (v&&v.config&&v.code)?v:null; }catch(e){ return null; } }
@@ -1332,6 +1333,7 @@ function cloudStamp(){
 function cloudMerge(remote){
   var out={local:false,remote:false};
   if(!remote||typeof remote!=="object") return out;
+  var snap=JSON.stringify(DB), killed=[];   // 墓標で消える記録（大量なら元に戻して止める）
   var dead=cloudDead(), rdead=(remote.syncMetadata&&remote.syncMetadata.deleted)||{}, id, old=Date.now()-90*86400000;
   for(id in rdead){ if(rdead[id]>old && !(dead[id]>=rdead[id])){ dead[id]=rdead[id]; out.local=true; } }
   for(id in dead){ if(dead[id]>old && !(rdead[id]>=dead[id])) out.remote=true; }
@@ -1344,7 +1346,7 @@ function cloudMerge(remote){
     rl.forEach(function(rr){
       if(!rr||!rr.id) return;
       var lr=byId[rr.id];
-      if(!lr){ if(dead[rr.id]>=recMs(rr)) return; merged.push(rr); byId[rr.id]=rr; out.local=true; return; }
+      if(!lr){ if(dead[rr.id]>=recMs(rr)){ killed.push({col:col,r:rr}); return; } merged.push(rr); byId[rr.id]=rr; out.local=true; return; }
       var rm=recMs(rr), lm=recMs(lr), take=false;
       if(rm>lm) take=true;
       else if(rm<lm) out.remote=true;
@@ -1352,10 +1354,14 @@ function cloudMerge(remote){
       if(take){ if(lr.open!==undefined) rr.open=lr.open; merged[merged.indexOf(lr)]=rr; byId[rr.id]=rr; out.local=true; }
     });
     local.forEach(function(lr){ if(lr&&lr.id&&!rById[lr.id]&&!(rdead[lr.id]>=recMs(lr))) out.remote=true; });
-    var kept=merged.filter(function(r){ return !(r&&r.id&&dead[r.id]>=recMs(r)); });
+    var kept=merged.filter(function(r){ var k=!!(r&&r.id&&dead[r.id]>=recMs(r)); if(k) killed.push({col:col,r:r}); return !k; });
     if(kept.length!==merged.length) out.local=true;
     DB[col]=kept;
   });
+  // 安全弁（#33）：消える記録が多すぎれば、合わせず・送らずに止める。口座の削除で一緒に消える取引・下書きは数えない
+  var goneAcc={}; killed.forEach(function(k){ if(k.col==="accounts") goneAcc[k.r.id]=1; });
+  var nKill=killed.filter(function(k){ return !((k.col==="trades"||k.col==="tradePlans")&&goneAcc[k.r.accountId]); }).length;
+  if(nKill>=CLOUD_MASS_DELETE){ DB=JSON.parse(snap); return {local:false,remote:false,blocked:nKill}; }
   // 端末で作った最初の口座（acc_default）が、クラウドに無く・取引も下書きも無いままなら外す（#31）。
   // ほかの端末ですでに口座があるのに、空の「Fintokei」をクラウドへ足さないため。墓標は残さない（他の端末の口座は消さない）
   var rAcc=(Array.isArray(remote.accounts)?remote.accounts:[]).filter(function(a){ return a&&a.id&&!(dead[a.id]>=recMs(a)); });
@@ -1385,6 +1391,13 @@ function cloudMerge(remote){
   if(!Array.isArray(DB.accounts)||!DB.accounts.length) DB.accounts=[accountFromSettings(DB.settings,DEFAULT_ACCOUNT_ID)];
   if(!findAccountIn(DB.accounts,DB.settings.currentAccountId)) DB.settings.currentAccountId=DB.accounts[0].id;
   return out;
+}
+// この端末だけの置き換え（全データ削除・復元・手動の同期コード）：置き換えた分を「消した」と扱わない（#33）。
+// 置き換えた直後に呼ぶ。今の姿を「見た」ことにし、墓標の一覧も空にする（入り直したときに古い「消した」を広げない）
+function cloudForgetLocal(){
+  if(!DB.syncMetadata||typeof DB.syncMetadata!=="object") DB.syncMetadata={};
+  DB.syncMetadata.deleted={};
+  cloudSeenReset();
 }
 function cloudPayload(){ return JSON.stringify(DB); }
 
@@ -1428,7 +1441,7 @@ function cloudStatusHtml(){
 // 起動時：設定があればつなぐ。クラウドが空なら自分を送り、有れば合わせてから見張る
 function initCloud(){
   var cfg=loadCloudCfg(); if(!cfg||CLOUD.connecting) return;
-  CLOUD.connecting=true; CLOUD.ready=false; CLOUD.error=""; cloudRefreshStatus();
+  CLOUD.connecting=true; CLOUD.ready=false; CLOUD.error=""; CLOUD.blocked=0; cloudRefreshStatus();
   cloudLoadSdk().then(function(){
     var app=firebase.apps.length?firebase.app():null;
     if(app && app.options && app.options.projectId!==cfg.config.projectId){ return app.delete().then(function(){ return firebase.initializeApp(cfg.config); }); }
@@ -1440,6 +1453,7 @@ function initCloud(){
     var d=snap.exists?snap.data():null;
     if(d&&d.data){ cloudApplyRemote(d,true); }
     else { CLOUD.dirty=true; }
+    if(CLOUD.blocked){ CLOUD.connecting=false; return; }
     CLOUD.ready=true; CLOUD.connecting=false; cloudSetError(null);
     if(CLOUD.dirty) cloudPushSoon();
     inboxCheck(true);   // Dell の MT5 履歴が受信箱に届いていれば入れる（設定で止められる）
@@ -1448,7 +1462,7 @@ function initCloud(){
       if(s.metadata&&s.metadata.hasPendingWrites) return;   // 自分の書き込みの返り
       if(!s.exists) return;
       var dd=s.data(); if(!dd||!dd.data||dd.data===CLOUD.lastData) return;
-      cloudApplyRemote(dd,false);
+      if(!CLOUD.blocked) cloudApplyRemote(dd,false);
     }, function(err){ cloudSetError(err); });
   }).catch(function(e){ CLOUD.connecting=false; cloudSetError(e); });
 }
@@ -1466,8 +1480,10 @@ function cloudApplyRemote(d,first){
   try{ remote=migrate(JSON.parse(d.data)); }catch(e){ console.warn("cloud data parse failed",e); return; }
   var r;
   var cfg=loadCloudCfg();
+  if(first&&cfg&&cfg.first&&DB.syncMetadata) DB.syncMetadata.deleted={};   // 入り直し：この端末の古い「消した」は広げない（#33）
   if(first&&cfg&&cfg.first&&cloudIsPristine()){ var keepTheme=DB.settings.theme; DB=remote; if(keepTheme) DB.settings.theme=keepTheme; applyTheme(); r={local:true,remote:false}; }
   else r=cloudMerge(remote);
+  if(r.blocked){ cloudBlock(r.blocked); return; }
   if(first&&cfg&&cfg.first){ cfg.first=false; saveCloudCfg(cfg); }   // 「初回接続」は一度きり
   cloudSeenReset();
   CLOUD.lastData=d.data; CLOUD.lastAt=now();
@@ -1475,16 +1491,24 @@ function cloudApplyRemote(d,first){
   if(r.remote){ CLOUD.dirty=true; if(!first) cloudPushSoon(); }
   cloudRefreshStatus();
 }
+// 大量の削除を止めたとき：見張りをやめ、送らない。直すまでこの端末の記録はそのまま（再読み込みでもう一度確かめる）
+function cloudBlock(n){
+  CLOUD.blocked=n; CLOUD.ready=false; CLOUD.dirty=false; clearTimeout(CLOUD.timer);
+  if(CLOUD.unsub){ try{ CLOUD.unsub(); }catch(e){} CLOUD.unsub=null; }
+  CLOUD.error="記録 "+n+"件がまとめて消える同期を止めました。同期は一時停止中です（この端末の記録はそのまま）。Claude に相談して下さい";
+  console.warn("cloud: mass delete blocked", n); cloudRefreshStatus();
+  toast("記録 "+n+"件がまとめて消える同期を止めました");
+}
 // 保存のたびに呼ばれる。連打は1秒にまとめる
 function cloudPushSoon(){
-  if(!cloudOn()) return;
+  if(!cloudOn()||CLOUD.blocked) return;
   CLOUD.dirty=true;
   if(!CLOUD.ready) return;
   clearTimeout(CLOUD.timer);
   CLOUD.timer=setTimeout(cloudPushNow, 1000);
 }
 function cloudPushNow(){
-  if(!CLOUD.ready) return Promise.resolve();
+  if(!CLOUD.ready||CLOUD.blocked) return Promise.resolve();
   if(CLOUD.pushing){ CLOUD.dirty=true; clearTimeout(CLOUD.timer); CLOUD.timer=setTimeout(cloudPushNow,1000); return Promise.resolve(); }   // 送信中なら、終わってから送り直す
   var data=cloudPayload();
   if(data===CLOUD.lastData){ CLOUD.dirty=false; return Promise.resolve(); }
@@ -1504,7 +1528,7 @@ function cloudPushNow(){
    口座が決まらない取引は勝手に入れず、既存の「どの口座の履歴ですか？」画面で選んでもらう。
    止めたいときは 設定 → 端末間の同期 → 「受信箱の自動取り込み」をオフ（DB.settings.inboxAuto=false）。 --- */
 var INBOX={checkedAt:0, busy:false, lastAt:null, lastImported:0, lastOpen:0, waiting:0, orphan:[], error:"", asked:false, createdAccounts:[]};
-function inboxOn(){ return cloudOn() && !(DB&&DB.settings&&DB.settings.inboxAuto===false); }
+function inboxOn(){ return cloudOn() && !CLOUD.blocked && !(DB&&DB.settings&&DB.settings.inboxAuto===false); }
 function inboxRef(){ var cfg=loadCloudCfg(); return CLOUD.db.collection(CLOUD_COLLECTION).doc(cfg.code+"__inbox"); }
 // 受信箱の1件 → 取り込みの部品（ctraderImport.groupDeals）が読む deal の形。dealId は Dell 側（push_inbox.py）と同じ作り方
 function inboxDeal(it){
@@ -5270,11 +5294,14 @@ window.ctiApply=function(){
 
 // 記録（保有中・下書き・決済済み・取消）と画像だけ消す。口座・設定・環境認識・ルールブックは残す
 window.wipeTrades=function(){
+  if(cloudOn()){ toast("クラウド同期中は消せません（全端末の記録が消えます）。先に設定で同期を解除して下さい"); return; }
   var n=(DB.trades||[]).length+(DB.tradePlans||[]).length;
   if(!n){ toast("消す記録がありません"); return; }
   if(!confirm("記録 "+n+"件（保有中・下書き・決済済み・取消）と画像を削除します。口座・設定・環境認識は残ります。よろしいですか？（1/2）")) return;
   if(!confirm("本当に削除しますか？この操作は取り消せません。（2/2）")) return;
+  cloudStamp();   // それまでの変更に時刻を押してから、消した分は墓標にしない（#33。入り直したときに広げない）
   DB.trades=[]; DB.tradePlans=[]; IMG={}; UI.tradeOpen={};
+  cloudSeenReset();
   saveData(); saveImg(); toast("記録 "+n+"件を削除しました"); TAB="home"; render();
 };
 window.wipeAll=function(){
@@ -5282,7 +5309,7 @@ window.wipeAll=function(){
   if(!confirm("全データを削除します。よろしいですか？（1/2）")) return;
   if(!confirm("本当に削除しますか？この操作は取り消せません。（2/2）")) return;
   try{ localStorage.removeItem(KEY_DATA); localStorage.removeItem(KEY_IMG); }catch(e){}
-  DB=defaultDB(); IMG={}; saveData(); saveImg(); applyTheme(); TAB="home"; toast("全データを削除しました"); render();
+  DB=defaultDB(); cloudForgetLocal(); IMG={}; saveData(); saveImg(); applyTheme(); TAB="home"; toast("全データを削除しました"); render();
 };
 function downloadFile(name,content,mime){
   try{
