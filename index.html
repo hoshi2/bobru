@@ -449,6 +449,19 @@ html[data-theme="light"] .btn.blue{background:var(--blue);color:#fff;box-shadow:
 .chartbox{margin-top:6px}
 .chartbox canvas{width:100%;display:block;border-radius:9px}
 .chartlab{font-size:11px;color:var(--txt3);margin-top:5px;text-align:center}
+/* 分類別の平均R（横棒） */
+.rbars{margin-top:8px;display:flex;flex-direction:column;gap:10px;font-variant-numeric:tabular-nums}
+.rbar{display:grid;grid-template-columns:76px 1fr 64px;align-items:center;gap:10px}
+.rb-lab{font-size:12.5px;color:var(--txt2);line-height:1.25}
+.rb-lab span{display:block;font-size:10.5px;color:var(--txt3)}
+.rb-track{position:relative;height:14px;border-radius:4px;background:var(--line)}
+.rb-track::after{content:"";position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--line2)}
+.rb-track i{position:absolute;top:0;bottom:0;border-radius:3px;min-width:2px}
+.rbar.pos i{background:var(--green)} .rbar.neg i{background:var(--red)} .rbar.zero i{background:var(--txt3)}
+.rb-val{text-align:right;font-size:13px;font-weight:600;white-space:nowrap}
+.rbar.pos .rb-val{color:var(--green)} .rbar.neg .rb-val{color:var(--red)}
+.rbar.none .rb-val{font-size:11px;font-weight:400;color:var(--txt3)}
+.rbar.none .rb-lab{color:var(--txt3)}
 .leg{display:flex;gap:14px;justify-content:center;font-size:11px;color:var(--txt2);margin-top:6px;flex-wrap:wrap}
 .leg span{display:inline-flex;align-items:center;gap:5px}
 .leg i{width:11px;height:3px;border-radius:2px;display:inline-block}
@@ -4497,8 +4510,18 @@ function viewGrowth(){
   h+="<div class='card'><h2>累積損益</h2><div class='chartbox'><canvas id='c_cumpl' height='150'></canvas></div></div>";
   h+="<div class='card'><h2>累積R</h2><div class='chartbox'><canvas id='c_cumr' height='150'></canvas></div></div>";
   h+="<div class='card'><h2>口座残高推移</h2><div class='chartbox'><canvas id='c_equity' height='150'></canvas></div></div>";
-  h+="<div class='card'><h2>パターン別 平均R</h2><div class='chartbox'><canvas id='c_patr' height='150'></canvas></div><div id='c_patr_lab' class='chartlab'></div></div>";
-  h+="<div class='card'><h2>4時間足環境別 平均R</h2><div class='chartbox'><canvas id='c_h4r' height='150'></canvas></div><div id='c_h4r_lab' class='chartlab'></div></div>";
+  h+=avgRBars("パターン別 平均R", "c_patr", list, [
+    ["パターンA",function(t){return t.pattern==="A";}],
+    ["パターンB",function(t){return t.pattern==="B";}],
+    ["レンジ戦略",function(t){return t.pattern==="range";}],
+    ["その他",function(t){return t.pattern==="other"||!t.pattern;}]
+  ]);
+  h+=avgRBars("4時間足環境別 平均R", "c_h4r", list, [
+    ["上昇",function(t){return t.h4env==="up";}],
+    ["下降",function(t){return t.h4env==="down";}],
+    ["レンジ",function(t){return t.h4env==="range";}],
+    ["未記録",function(t){return t.h4env!=="up"&&t.h4env!=="down"&&t.h4env!=="range";}]
+  ]);
   h+="</div>";
   // 日ごとの結果（月曜始まり・週の枠つき）
   h+="<div class='sect-title'>日ごとの結果</div>"+calendarCard();
@@ -5468,33 +5491,20 @@ function drawLineChart(cv,cssH,pts,color,opt){
   // last dot
   ctx.fillStyle=color; ctx.beginPath(); ctx.arc(X(n-1),Y(pts[n-1].y),3,0,Math.PI*2); ctx.fill();
 }
-function drawBarChart(cv,cssH,labels,values,opt){
-  opt=opt||{};
-  var s=setupCanvas(cv,cssH); var ctx=s.ctx,w=s.w,h=s.h;
-  var padL=44,padR=10,padT=10,padB=26;
-  ctx.clearRect(0,0,w,h);
-  if(!values.length){ return; }
-  var maxV=Math.max.apply(null,values.concat([0])), minV=Math.min.apply(null,values.concat([0]));
-  if(minV===maxV){ maxV=minV+1; minV=minV-1; }
-  var padd=(maxV-minV)*0.15; maxV+=padd; minV-=padd; if(minV>0)minV=0; if(maxV<0)maxV=0;
-  var Y=function(v){ return padT + (1-(v-minV)/(maxV-minV))*(h-padT-padB); };
-  var n=values.length; var gap=8; var bw=(w-padL-padR-gap*(n))/n;
-  ctx.strokeStyle=cssVar("--line"); ctx.fillStyle=cssVar("--txt3"); ctx.font="10px -apple-system,sans-serif";
-  var ticks=3;
-  for(var g2=0;g2<=ticks;g2++){ var val=minV+(maxV-minV)*g2/ticks; var yy=Y(val); ctx.globalAlpha=.5; ctx.beginPath(); ctx.moveTo(padL,yy); ctx.lineTo(w-padR,yy); ctx.stroke(); ctx.globalAlpha=1; ctx.textAlign="right"; ctx.textBaseline="middle"; ctx.fillText(opt.fmt?opt.fmt(val):val.toFixed(1),padL-6,yy); }
-  var zeroY=Y(0);
-  ctx.strokeStyle=cssVar("--line2"); ctx.beginPath(); ctx.moveTo(padL,zeroY); ctx.lineTo(w-padR,zeroY); ctx.stroke();
-  var green=cssVar("--green"), red=cssVar("--red");
-  for(var i=0;i<n;i++){
-    var x=padL+gap/2+i*(bw+gap); var v=values[i]; var y=Y(v);
-    ctx.fillStyle = v>=0?green:red;
-    var top=Math.min(y,zeroY), hgt=Math.abs(zeroY-y);
-    roundRect(ctx,x,top,bw,Math.max(1,hgt),3); ctx.fill();
-    ctx.fillStyle=cssVar("--txt3"); ctx.textAlign="center"; ctx.textBaseline="top";
-    ctx.fillText(labels[i], x+bw/2, h-padB+6);
-  }
+/* 分類ごとの平均R（0 を真ん中にした横棒。全項目を毎回出し、数値と件数を書く） */
+function avgRBars(title,id,list,groups){
+  var rows=groups.map(function(g){ var sub=list.filter(g[1]); var st=computeStats(sub); return {label:g[0],n:sub.length,avg:sub.length?st.avgR:null}; });
+  var scale=1; rows.forEach(function(r){ if(isNum(r.avg)) scale=Math.max(scale,Math.abs(r.avg)); });
+  var h="<div class='card'><h2>"+esc(title)+"</h2><div class='rbars' id='"+id+"'>";
+  rows.forEach(function(r){
+    var has=isNum(r.avg), pct=has?Math.abs(r.avg)/scale*50:0;
+    var cls=!has?"none":r.avg>0?"pos":r.avg<0?"neg":"zero";
+    h+="<div class='rbar "+cls+"'><div class='rb-lab'>"+esc(r.label)+"<span>"+r.n+"件</span></div>"+
+       "<div class='rb-track'>"+(has?"<i style='"+(r.avg<0?"right:50%":"left:50%")+";width:"+pct.toFixed(1)+"%'></i>":"")+"</div>"+
+       "<div class='rb-val'>"+(has?fmtR(r.avg):r.n?"—":"記録なし")+"</div></div>";
+  });
+  return h+"</div><div class='chartlab'>棒の端 = "+fmtR(scale).replace("+","±")+"</div></div>";
 }
-function roundRect(ctx,x,y,w,h,r){ r=Math.min(r,w/2,h/2); ctx.beginPath(); ctx.moveTo(x+r,y); ctx.arcTo(x+w,y,x+w,y+h,r); ctx.arcTo(x+w,y+h,x,y+h,r); ctx.arcTo(x,y+h,x,y,r); ctx.arcTo(x,y,x+w,y,r); ctx.closePath(); }
 function hexA(c,a){
   c=c.trim();
   if(c[0]==="#"){ var n=c.slice(1); if(n.length===3) n=n[0]+n[0]+n[1]+n[1]+n[2]+n[2]; var r=parseInt(n.slice(0,2),16),g=parseInt(n.slice(2,4),16),b=parseInt(n.slice(4,6),16); return "rgba("+r+","+g+","+b+","+a+")"; }
@@ -5516,24 +5526,6 @@ function drawGrowthCharts(){
   // 口座残高推移
   var ce=document.getElementById("c_equity");
   if(ce){ var init=growthInitialBalance(); var eq=init; var ptsE=[{x:0,y:init}]; list.forEach(function(t,i){ var pl=toNum(t.realizedPL); if(isNum(pl)) eq+=pl; ptsE.push({x:i+1,y:eq}); }); drawLineChart(ce,chartH(150),ptsE,cssVar("--green"),{baseline0:false,fmt:function(v){return abbr(v);}}); }
-  // パターン別平均R
-  var cpr=document.getElementById("c_patr");
-  if(cpr){
-    var groups=[["A","パターンA",function(t){return t.pattern==="A";}],["B","パターンB",function(t){return t.pattern==="B";}],["レンジ","レンジ戦略",function(t){return t.pattern==="range";}],["他","その他",function(t){return t.pattern==="other"||!t.pattern;}]];
-    var labels=[],vals=[],labtxt=[];
-    groups.forEach(function(g){ var sub=list.filter(g[2]); var st=computeStats(sub); if(sub.length){ labels.push(g[0]); vals.push(st.avgR!==null?st.avgR:0); labtxt.push(g[1]+"(n="+sub.length+")"); } });
-    if(vals.length){ drawBarChart(cpr,chartH(150),labels,vals,{fmt:function(v){return v.toFixed(1)+"R";}}); document.getElementById("c_patr_lab").textContent=labtxt.join("　"); }
-    else { document.getElementById("c_patr_lab").textContent="データなし"; document.getElementById("c_patr").style.display="none"; }
-  }
-  // 4H環境別平均R
-  var ch4=document.getElementById("c_h4r");
-  if(ch4){
-    var g4=[["上昇","上昇",function(t){return t.h4env==="up";}],["下降","下降",function(t){return t.h4env==="down";}],["レンジ","レンジ",function(t){return t.h4env==="range";}]];
-    var labels2=[],vals2=[],labtxt2=[];
-    g4.forEach(function(g){ var sub=list.filter(g[2]); var st=computeStats(sub); if(sub.length){ labels2.push(g[0]); vals2.push(st.avgR!==null?st.avgR:0); labtxt2.push(g[1]+"(n="+sub.length+")"); } });
-    if(vals2.length){ drawBarChart(ch4,chartH(150),labels2,vals2,{fmt:function(v){return v.toFixed(1)+"R";}}); document.getElementById("c_h4r_lab").textContent=labtxt2.join("　"); }
-    else { document.getElementById("c_h4r_lab").textContent="データなし"; document.getElementById("c_h4r").style.display="none"; }
-  }
 }
 
 /* ---------- テーマ ---------- */

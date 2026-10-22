@@ -1289,6 +1289,29 @@ group("16. 受信箱の記録に口座通貨のレートが付く");
   await page.close();
 }
 
+group("20. 分類別の平均R（横棒の一覧）");
+{
+  const page = await open(375, 812);
+  const r = await page.evaluate(() => {
+    DB.settings.initialBalance = 100000000; DB.trades = [];
+    for (let i = 1; i <= 5; i++) {
+      const d = new Date(Date.now() - i * 86400000).toISOString();
+      DB.trades.push({ id:"r"+i, status:"closed", dir:"long", entry:3300, sl:3290, tp:3320, lot:1, contractSize:100,
+        balanceAtEntry:100000000, realizedPL:-1000, result:"lose", pattern:"other", h4env:i <= 2 ? "up" : "", createdAt:d, closedAt:d, tags:[] });
+    }
+    saveData(); TAB = "growth"; UI.growthPeriod = "all"; render();
+    const rows = id => [...document.querySelectorAll("#" + id + " .rbar")].map(e => ({
+      lab:e.querySelector(".rb-lab").firstChild.textContent, n:e.querySelector(".rb-lab span").textContent,
+      val:e.querySelector(".rb-val").textContent, cls:e.className, bar:!!e.querySelector(".rb-track i") }));
+    return { pat:rows("c_patr"), h4:rows("c_h4r"), canvas:!!document.querySelector("canvas#c_patr, canvas#c_h4r") };
+  });
+  ok("パターン別は記録の無い項目も毎回出る（4行・空は「記録なし」）", r.pat.length === 4 && r.pat[0].val === "記録なし" && !r.pat[0].bar && r.pat[3].lab === "その他" && r.pat[3].n === "5件");
+  ok("平均R を数値で書き、マイナスは赤の棒", /^-\d+\.\d\dR$/.test(r.pat[3].val) && r.pat[3].cls.includes("neg") && r.pat[3].bar);
+  ok("4時間足環境別は 上昇・下降・レンジ・未記録 の件数が出る", r.h4.map(x => x.lab + x.n).join() === "上昇2件,下降0件,レンジ0件,未記録3件");
+  ok("古い canvas の棒グラフは残っていない", !r.canvas);
+  await page.close();
+}
+
 /* ---------- 後始末 ---------- */
 await browser.close();
 server.close();
