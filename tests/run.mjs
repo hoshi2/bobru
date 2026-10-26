@@ -1312,6 +1312,63 @@ group("20. 分類別の平均R（横棒の一覧）");
   await page.close();
 }
 
+/* =======================================================================
+   21. 手で SL を動かしたとき（最初の SL は守り、今の SL とリスクを出す）hoshi2/bob-bridge#37
+   ======================================================================= */
+group("21. 手で SL を動かしたとき");
+{
+  const page = await open(375, 812);
+  const r = await page.evaluate(async () => {
+    DB.trades = [];
+    const acc = currentAccount();
+    DB.trades.push({ id:"m1", status:"open", accountId:acc.id, createdAt:"2026-10-26T01:00:00.000Z", updatedAt:"x", savedAt:"x",
+      symbol:"XAUUSD", dir:"long", entry:4200, sl:4190, tp:4230, lot:1, contractSize:100, balanceAtEntry:1000000, fxRate:1, tags:[] });
+    saveData(); TAB = "trades"; UI.tradeTab = "open"; render();
+    const before = { note:!!document.querySelector(".slnow"), c:calcTrade(findTrade("m1")) };
+    // 編集モーダル：最初の SL 欄と今の SL 欄が分かれている
+    editTrade("m1"); await new Promise(r => setTimeout(r, 30));
+    const labels = [...document.querySelectorAll("#modalRoot .field label")].map(e => e.textContent);
+    const hasNow = !!document.getElementById("e_slnow"), hasFirst = !!document.getElementById("e_sl");
+    // 今の SL を 4195（詰めた）にして保存
+    document.getElementById("e_slnow").value = "4195"; saveEdit(); await new Promise(r => setTimeout(r, 30));
+    const t1 = findTrade("m1"), c1 = calcTrade(t1);
+    const s1 = { sl:t1.sl, last:t1.slLast, moves:(t1.sltpMoves || []).map(m => [m.sl, m.by || ""]), kind:slMoveKind(t1),
+      loss:c1.currentLoss, rr:c1.currentRR, planned:c1.plannedLoss, note:(document.querySelector(".slnow") || {}).textContent || "" };
+    // もう一度、建値 4200 へ
+    editTrade("m1"); await new Promise(r => setTimeout(r, 30));
+    const prefill = document.getElementById("e_slnow").value;
+    document.getElementById("e_slnow").value = "4200"; saveEdit(); await new Promise(r => setTimeout(r, 30));
+    const t2 = findTrade("m1"), c2 = calcTrade(t2);
+    const s2 = { sl:t2.sl, last:t2.slLast, moves:(t2.sltpMoves || []).length, kind:slMoveKind(t2), loss:c2.currentLoss, rr:c2.currentRR,
+      note:(document.querySelector(".slnow") || {}).textContent || "", pills:tradePills(t2) };
+    // 空で保存 → 変更なし。最初の SL を直すと R の元が変わる（入力ミスの修正）
+    editTrade("m1"); await new Promise(r => setTimeout(r, 30));
+    document.getElementById("e_slnow").value = ""; document.getElementById("e_sl").value = "4188"; saveEdit(); await new Promise(r => setTimeout(r, 30));
+    const t3 = findTrade("m1");
+    const s3 = { sl:t3.sl, last:t3.slLast, moves:(t3.sltpMoves || []).length };
+    // MT5 連携の記録は「今の SL」を手で変えない（欄は disabled）
+    DB.trades.push({ id:"m2", status:"open", accountId:acc.id, createdAt:"2026-10-26T02:00:00.000Z", updatedAt:"x", savedAt:"x", mt5PosId:"7001", source:"mt5",
+      symbol:"XAUUSD", dir:"short", entry:4300, sl:4310, tp:4280, lot:1, contractSize:100, balanceAtEntry:1000000, fxRate:1, mt5Sl:4305, mt5Tp:4280, tags:[] });
+    saveData(); render();
+    editTrade("m2"); await new Promise(r => setTimeout(r, 30));
+    const m2 = { disabled:document.getElementById("e_slnow").disabled, val:document.getElementById("e_slnow").value, c:calcTrade(findTrade("m2")), pills:tradePills(findTrade("m2")) };
+    closeModal();
+    // ホームの保有中カードにも同じ行
+    TAB = "home"; render();
+    const home = [...document.querySelectorAll(".slnow")].map(e => e.textContent);
+    return { before, labels, hasNow, hasFirst, s1, prefill, s2, s3, m2, home };
+  });
+  ok("動かしていない記録には「今の SL」行は出ない", !r.before.note && r.before.c.currentKnown === false && r.before.c.slMoved === false);
+  ok("編集に「最初の SL」と「今の SL」の欄が分かれている", r.hasFirst && r.hasNow && r.labels.some(l => l.startsWith("最初の SL")) && r.labels.some(l => l.startsWith("今の SL")));
+  ok("今の SL を 4195 にしても記録の SL は 4190 のまま、履歴 2 件（最初＋手動）、分類は「詰めた」", r.s1.sl === 4190 && r.s1.last === 4195 && r.s1.moves.length === 2 && r.s1.moves[1][0] === 4195 && r.s1.moves[1][1] === "manual" && r.s1.kind === "tighten");
+  ok("今のリスクは 500、予定損失は 1000 のまま、今の RR 1:6", r.s1.loss === 500 && r.s1.planned === 1000 && Math.abs(r.s1.rr - 6) < 1e-9 && /今の SL 4195/.test(r.s1.note) && /-500/.test(r.s1.note));
+  ok("次に開くと今の SL が入っている。建値 4200 へ動かすとリスク 0・RR なし・「建値へ」", r.prefill === "4195" && r.s2.sl === 4190 && r.s2.last === 4200 && r.s2.moves === 3 && r.s2.kind === "be" && r.s2.loss === 0 && r.s2.rr === null && /建値・リスク 0/.test(r.s2.note) && r.s2.pills.includes("SL を建値へ"));
+  ok("空で保存すると変更なし。最初の SL の修正は履歴に入らず R の元だけ変わる", r.s3.sl === 4188 && r.s3.last === 4200 && r.s3.moves === 3);
+  ok("MT5 連携の記録は今の SL が自動（欄は入力不可）、リスク 500、札に「MT5 の今の SL」は無い", r.m2.disabled && r.m2.val === "4305" && r.m2.c.currentLoss === 500 && r.m2.c.slMoved && !r.m2.pills.some(p => p.startsWith("MT5 の今の SL")) && r.m2.pills.some(p => p.startsWith("MT5 の今の TP")) === false);
+  ok("ホームの保有中カードにも「今の SL」行が出る", r.home.length === 2 && r.home.some(x => /建値・リスク 0/.test(x)) && r.home.some(x => /今の SL 4305/.test(x)));
+  await page.close();
+}
+
 /* ---------- 後始末 ---------- */
 await browser.close();
 server.close();

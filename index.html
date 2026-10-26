@@ -468,6 +468,9 @@ html[data-theme="light"] .btn.blue{background:var(--blue);color:#fff;box-shadow:
 
 .divider{height:1px;background:var(--line);margin:16px 0}
 .smallnote{font-size:11.5px;color:var(--txt3);margin-top:6px;line-height:1.5}
+.smallnote.slnow{margin:0 0 6px}
+.smallnote.slnow b{font-weight:700;color:var(--txt)}
+.smallnote.slnow b.pos{color:var(--green)} .smallnote.slnow b.neg{color:var(--red)}
 .moredetails{border:1px solid var(--line);border-radius:9px;margin:4px 0 12px;background:var(--card2)}
 .moredetails>summary{list-style:none;cursor:pointer;padding:11px 13px;font-size:13px;color:var(--txt2);font-weight:600;user-select:none}
 .moredetails>summary::-webkit-details-marker{display:none}
@@ -2049,7 +2052,43 @@ function calcTrade(t){
   if(t.status==="closed" && !t.fxPending && isNum(pl) && isNum(c.plannedLoss) && c.plannedLoss>0){
     c.realizedR=pl/c.plannedLoss;
   }
+  // 今の SL（動かした後）でのリスク。記録の sl（最初の SL）と R の式は変えない（hoshi2/bob-bridge#37）
+  //  currentKnown: 今の SL が分かるか / currentSl: 今の SL（null＝外した）/ currentLoss: 今の SL での損失額（建値以上なら 0）/ currentRR
+  var cur=currentSlOf(t);
+  c.currentKnown=cur.known; c.currentSl=cur.sl; c.currentLoss=null; c.currentRR=null; c.slMoved=false;
+  if(cur.known){
+    var first=toNum(t.sl), e=toNum(t.entry);
+    var eps=isNum(e)?Math.max(e*0.0002,1e-9):1e-9;
+    c.slMoved=!(isNum(first)&&isNum(cur.sl)&&Math.abs(cur.sl-first)<=eps);
+    if(isNum(cur.sl)&&isNum(e)){
+      var lot=toNum(t.lot), cs=toNum(t.contractSize); if(!isNum(cs)||cs<=0) cs=100;
+      var fx=isNum(toNum(t.fxRate))?toNum(t.fxRate):1; if(!isNum(fx)||fx<=0) fx=1;
+      var lossDist=(t.dir==="short")?(cur.sl-e):(e-cur.sl);   // 損失側の距離。負なら SL は利益側（リスク 0）
+      if(isNum(lot)&&lot>0){ c.currentLoss=Math.max(0,lossDist)*lot*cs*fx; }
+      if(isNum(c.plannedProfit)&&isNum(c.currentLoss)&&c.currentLoss>0) c.currentRR=c.plannedProfit/c.currentLoss;
+    }
+  }
   return c;
+}
+// 今の SL。保有中は MT5 の値（Dell の見張り）→ 手で書いた slLast、決済済みは slLast。{known:false} なら分からない（表示は今までどおり）
+function currentSlOf(t){
+  var v=(t.status==="open" && t.mt5Sl!==undefined) ? t.mt5Sl : t.slLast;
+  if(v===undefined) return {known:false, sl:null};
+  if(v===null) return {known:true, sl:null};
+  v=toNum(v); return isNum(v) ? {known:true, sl:v} : {known:false, sl:null};
+}
+// 手で SL を動かした（hoshi2/bob-bridge#37）。記録の sl は触らず、slLast と履歴 sltpMoves に残す。MT5 連携の記録は Dell の値が正なので使わない
+function recordManualSlMove(t, newSl){
+  newSl=toNum(newSl); if(!isNum(newSl)||newSl<=0) return false;
+  var cur=currentSlOf(t), base=cur.known?cur.sl:toNum(t.sl);
+  if(isNum(base) && Math.abs(base-newSl)<1e-9) return false;
+  var tpNow=(t.tpLast!==undefined)?toNum(t.tpLast):toNum(t.tp); if(!isNum(tpNow)) tpNow=null;
+  if(!Array.isArray(t.sltpMoves)||!t.sltpMoves.length){
+    t.sltpMoves=[{at:String(t.createdAt||now()), sl:(isNum(toNum(t.sl))?toNum(t.sl):null), tp:(isNum(toNum(t.tp))?toNum(t.tp):null)}];
+  }
+  t.sltpMoves.push({at:now(), sl:newSl, tp:tpNow, by:"manual"});
+  t.slLast=newSl;
+  return true;
 }
 
 /* ---------- 統計 ---------- */
@@ -2302,6 +2341,7 @@ function homeOpenCard(){
     h+=ti("予定損失", isNum(c.plannedLoss)?("<span class='neg'>-"+fmtMoney(c.plannedLoss)+"</span>"):"—");
     h+=ti("予定利益", isNum(c.plannedProfit)?("<span class='pos'>+"+fmtMoney(c.plannedProfit)+"</span>"):"—");
     h+="</div>";
+    h+=currentSlNote(t,c);
     var rc=resetClock(t,true); if(rc) h+="<div class='smallnote tabular' style='margin:6px 0 0'>"+rc+"</div>";
     var pills=tradePills(t).filter(function(p){ return p.indexOf("シナリオ ")!==0; });   // 上のチップと二重になるので外す
     if(pills.length){ h+="<div class='tmeta' style='margin-bottom:0'>"+pills.map(function(p){return "<span class='pill'>"+esc(p)+"</span>";}).join("")+"</div>"; }
@@ -4123,7 +4163,7 @@ function tradePills(t){
     var tps=t.sltpMoves.map(function(m){return m.tp;}); if(tps.some(function(v){return v!==tps[0];})) pills.push("TP を動かした");
   }
   if(t.status==="open"&&t.mt5PosId){
-    if(t.mt5Sl!==undefined && t.mt5Sl!==toNum(t.sl)) pills.push("MT5 の今の SL "+(t.mt5Sl===null?"なし":t.mt5Sl));
+    // 今の SL はカードの「今の SL」行に出す（#37）ので札は TP だけ
     if(t.mt5Tp!==undefined && t.mt5Tp!==toNum(t.tp)) pills.push("MT5 の今の TP "+(t.mt5Tp===null?"なし":t.mt5Tp));
   }
   if(t.noPlan) pills.push("計画なし");
@@ -4152,6 +4192,7 @@ function tradeCard(t,tab){
   h+=ti("予定損失", isNum(c.plannedLoss)?("<span class='neg'>-"+fmtMoney(c.plannedLoss)+"</span>"):"—");
   h+=ti("予定利益", isNum(c.plannedProfit)?("<span class='pos'>+"+fmtMoney(c.plannedProfit)+"</span>"):"—");
   h+="</div>";
+  h+=currentSlNote(t,c);
   if(t.status==="open"){ var rc=resetClock(t,true); if(rc) h+="<div class='smallnote tabular' style='margin:6px 0 0'>"+rc+"</div>"; }
 
   // 決済済みは実現も表示
@@ -4197,6 +4238,20 @@ function tradeCard(t,tab){
   return h;
 }
 function ti(k,v){ return "<div class='ti'><div class='k'>"+esc(k)+"</div><div class='v'>"+v+"</div></div>"; }
+// 今の SL とそのリスクの1行（SL を動かした・外した記録だけ）。c は calcTrade の結果
+function currentSlNote(t,c){
+  if(!c||!c.currentKnown||!c.slMoved) return "";
+  var h="<div class='smallnote tabular slnow'>";
+  if(c.currentSl===null){ h+="今の SL <b class='neg'>なし</b>"; }
+  else{
+    h+="今の SL <b>"+esc(c.currentSl)+"</b>";
+    if(isNum(c.currentLoss)){
+      if(c.currentLoss<=0) h+=" ・ <b class='pos'>建値・リスク 0</b>";
+      else h+=" ・ 今のリスク <b class='neg'>-"+fmtMoney(c.currentLoss)+"</b>"+(isNum(c.currentRR)?" ・ RR 1:"+c.currentRR.toFixed(2):"");
+    }
+  }
+  return h+"</div>";
+}
 
 function findTrade(id){ for(var i=0;i<DB.trades.length;i++){ if(DB.trades[i].id===id) return DB.trades[i]; } return null; }
 function findDraft(id){ for(var i=0;i<DB.tradePlans.length;i++){ if(DB.tradePlans[i].id===id) return DB.tradePlans[i]; } return null; }
@@ -4218,8 +4273,17 @@ function editForm(t,isDraft){
   h+=field("銘柄","<input type='text' id='e_sym' value='"+esc(t.symbol)+"'>");
   h+="<div class='field'><label>方向</label><div class='seg ls'>"+editSeg("dir","long","ロング")+editSeg("dir","short","ショート")+"</div></div>";
   h+=field("エントリー価格","<input type='number' inputmode='decimal' step='any' id='e_entry' value='"+esc(t.entry)+"'>");
-  h+="<div class='row2'>"+field("SL価格","<input type='number' inputmode='decimal' step='any' id='e_sl' value='"+esc(t.sl)+"'>","e_sl_err")+
+  h+="<div class='row2'>"+field(isDraft?"SL価格":"最初の SL（R の元）","<input type='number' inputmode='decimal' step='any' id='e_sl' value='"+esc(t.sl)+"'>","e_sl_err")+
      field("TP価格","<input type='number' inputmode='decimal' step='any' id='e_tp' value='"+esc(t.tp)+"'>","e_tp_err")+"</div>";
+  // 今の SL（#37）。保有中だけ。MT5 連携の記録は Dell の見張りが入れるので手では変えない
+  if(!isDraft && t.status==="open"){
+    var cur=currentSlOf(t), curTxt=cur.known?(cur.sl===null?"":String(cur.sl)):"";
+    if(t.mt5PosId){
+      h+=field("今の SL（MT5 から自動で入る）","<input type='number' id='e_slnow' value='"+esc(curTxt)+"' disabled placeholder='"+(cur.known?"なし":"まだ届いていない")+"'>");
+    }else{
+      h+=field("今の SL（動かしたら書く。空なら変更なし）","<input type='number' inputmode='decimal' step='any' id='e_slnow' value='"+esc(curTxt)+"' placeholder='"+esc(isNum(toNum(t.sl))?t.sl:"")+"'>","e_slnow_err");
+    }
+  }
   h+="<div class='row3'>"+field("ロット","<input type='number' inputmode='decimal' step='any' id='e_lot' value='"+esc(t.lot)+"'>")+
      field("口座残高","<input type='number' inputmode='decimal' step='any' id='e_bal' value='"+esc(t.balanceAtEntry)+"'>")+
      field("契約サイズ","<input type='number' inputmode='decimal' step='any' id='e_cs' value='"+esc(t.contractSize)+"'>")+"</div>";
@@ -4270,6 +4334,11 @@ window.saveEdit=function(){
     fxRate:isNum(toNum(EDIT.fxRate))?toNum(EDIT.fxRate):1});
   if(c.errSL){ setErr("e_sl_err","e_sl",c.errSL); return; } else setErr("e_sl_err","e_sl",null);
   if(c.errTP){ setErr("e_tp_err","e_tp",c.errTP); return; } else setErr("e_tp_err","e_tp",null);
+  var slNow=g("e_slnow"), slMoved=false;
+  if(!EDIT.isDraft && t.status==="open" && !t.mt5PosId && slNow!==""){
+    if(!(toNum(slNow)>0)){ setErr("e_slnow_err","e_slnow","今の SL は 0 より大きい数で"); return; } else setErr("e_slnow_err","e_slnow",null);
+    slMoved=recordManualSlMove(t, slNow);
+  }
   t.dir=EDIT.dir; t.symbol=g("e_sym")||t.symbol;
   var dt=g("e_dt"); if(dt){ var dtIso=inputToISO(dt,accountOfTrade(t)); if(dtIso) t.createdAt=dtIso; }
   t.entry=entry; t.sl=sl; t.tp=tp;
@@ -4278,7 +4347,7 @@ window.saveEdit=function(){
   t.emaPos=EDIT.emaPos; t.crossB=toNum(g("e_crossb")); t.purpleSpread=toNum(g("e_pspread"));
   t.memo=g("e_memo"); t.tags=g("e_tags").split(",").map(function(x){return x.trim();}).filter(Boolean);
   t.updatedAt=now(); collectTags(t.tags);
-  saveData(); closeModal(); toast("更新しました"); render();
+  saveData(); closeModal(); toast(slMoved?"更新しました（SL の動きを記録）":"更新しました"); render();
 };
 function toLocalInput(iso){ var d=new Date(iso); if(isNaN(d)) return nowLocalInput(); var off=d.getTimezoneOffset(); return new Date(d.getTime()-off*60000).toISOString().slice(0,16); }
 
