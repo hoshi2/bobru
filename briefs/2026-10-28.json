@@ -1,0 +1,136 @@
+{
+ "symbol": "XAUUSD",
+ "date": "2026-10-28",
+ "source": "claude-code",
+ "asOf": "2026-10-27T22:39:50+00:00",
+ "price": 4061.7,
+ "trend": {
+  "daily": "down",
+  "h4": "down",
+  "h1": "range",
+  "m15": "up"
+ },
+ "ema": {
+  "tf": "h1",
+  "e10": 4051.81,
+  "e75": 4035.44,
+  "e200": 4078.09
+ },
+ "levels": {
+  "prevHigh": 4065.7,
+  "prevLow": 3989.16,
+  "weekHigh": 4065.7,
+  "weekLow": 3978.18,
+  "recentHigh": 4065.1,
+  "recentLow": 3987.3
+ },
+ "sessions": {
+  "asia": {
+   "high": null,
+   "low": null
+  },
+  "london": {
+   "high": 4064.6,
+   "low": 3987.3
+  },
+  "newyork": {
+   "high": 4065.1,
+   "low": 4010.4
+  }
+ },
+ "scenarios": {
+  "bull": "4065.7を15分足の終値で上抜け、押しで4065を割らずに保てたら順張り買いを検討。SLの目安は押し安値の下（4050割れ）。利確は1時間足EMA200の4078手前まで。根拠：4HのBOB EDGEは紫5本が15〜30の低い帯にあり、白(a)が67まで上抜けて反発が始まった形。15分足は白(a)が28まで下がった押し目なので、ここから再び水色(b)を上抜ければ入りやすい。",
+  "bear": "4065.7〜4078（1時間足EMA200）で上値を抑えられ、1時間足EMA10の4050を下抜けたら戻り売りを検討。SLの目安は4066の上。利確は1時間足EMA75の4035、次にNY安値の4010。根拠：日足・4Hは下向きで先週は高値4190から大きく下落。15分足では白(a)が水色(b)を下抜けており短期は調整局面。紫の帯（66〜78）を水色が下抜けるなら下方向が優勢。",
+  "noTrade": "今日の日本時間の日中に重要度highの指標はないが、翌29日3:00にFOMC政策金利、3:30に議長会見。NY午後以降（日本時間深夜）は新規を避ける。21:30の米貿易収支・在庫は中程度だが前後15分は様子見。4050〜4066の狭いレンジの中、15分足の紫の広がりが縮んでいる間は待つ。上位足と逆のロングは4078を超えるまで小さく。"
+ },
+ "bias": "wait",
+ "summary": "日足・4Hの向きはまだ下だが、前日は3989から4060まで大きく戻した。いちばん意識されるのは前日高値＝今週高値の4065.7。その上の1時間足EMA200（4078）を超えられるかが分かれ目。翌29日3:00にFOMCが控える。",
+ "events": [
+  {
+   "time": "00:00",
+   "name": "Atlanta Fed GDPNow",
+   "importance": "mid"
+  },
+  {
+   "time": "00:45",
+   "name": "Atlanta Fed GDPNow",
+   "importance": "mid"
+  },
+  {
+   "time": "05:50",
+   "name": "API Crude Oil Stock Change",
+   "importance": "mid"
+  },
+  {
+   "time": "20:00",
+   "name": "MBA 30-Year Mortgage Rate",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "Goods Trade Balance Adv",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "Wholesale Inventories MoM Adv",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "Retail Inventories Ex Autos MoM Adv",
+   "importance": "mid"
+  },
+  {
+   "time": "23:30",
+   "name": "EIA Crude Oil Stocks Change",
+   "importance": "mid"
+  },
+  {
+   "time": "23:30",
+   "name": "EIA Gasoline Stocks Change",
+   "importance": "mid"
+  }
+ ],
+ "bobEdge": {
+  "m15": {
+   "a": 28.6,
+   "b": 54.4,
+   "c": 91.8,
+   "purple": [
+    78.2,
+    70.6,
+    65.9,
+    70.8,
+    68.6
+   ],
+   "spread": 12.3,
+   "slope": 3.8,
+   "trend": "up",
+   "cross": null,
+   "bar_t": 1793139300
+  },
+  "h4": {
+   "a": 67.0,
+   "b": 44.1,
+   "c": 15.1,
+   "purple": [
+    29.5,
+    25.4,
+    20.9,
+    19.2,
+    15.2
+   ],
+   "spread": 14.3,
+   "slope": -0.8,
+   "trend": "flat",
+   "cross": null,
+   "bar_t": 1793120400
+  }
+ },
+ "notes": [
+  "足は先物（GC=F）をスポットに合わせて -14.30 ずらしたもの",
+  "足は先物（GC=F）をスポットに合わせてずらしたもの。アジアセッションの高安はこの時点ではまだ無い",
+  "翌29日（日本時間）3:00にFOMC、3:30に議長会見、21:30に米GDP速報・PCE。今日の集計範囲外なのでeventsには含めていない"
+ ]
+}
