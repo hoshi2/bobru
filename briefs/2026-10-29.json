@@ -1,0 +1,152 @@
+{
+ "symbol": "XAUUSD",
+ "date": "2026-10-29",
+ "source": "claude-code",
+ "asOf": "2026-10-28T22:40:34+00:00",
+ "price": 4054.755,
+ "trend": {
+  "daily": "down",
+  "h4": "down",
+  "h1": "range",
+  "m15": "up"
+ },
+ "ema": {
+  "tf": "h1",
+  "e10": 4052.62,
+  "e75": 4041.56,
+  "e200": 4072.35
+ },
+ "levels": {
+  "prevHigh": 4082.825,
+  "prevLow": 4024.665,
+  "weekHigh": 4082.825,
+  "weekLow": 3978.18,
+  "recentHigh": 4083.555,
+  "recentLow": 4023.255
+ },
+ "sessions": {
+  "asia": {
+   "high": null,
+   "low": null
+  },
+  "london": {
+   "high": 4060.155,
+   "low": 4034.055
+  },
+  "newyork": {
+   "high": 4083.555,
+   "low": 4023.255
+  }
+ },
+ "scenarios": {
+  "bull": "1時間足EMA200の4072を15分足の終値で上抜け、押しで4060台前半を割らずに保てたら順張り買いを検討。SLの目安は押し安値の下（4050割れ）。利確は前日高値4082.8の手前まで、超えたら週高値更新で伸びる余地を見る。根拠：4HのBOB EDGEは紫5本が16〜26の低い帯にあり、白(a)が57、水色(b)が76と上にいて反発が続いている形。15分足は白(a)が38まで下がった押し目なので、ここから水色(b)を上抜ける動きを待つ。",
+  "bear": "4072〜4082.8で上値を抑えられ、1時間足EMA10の4052を下抜けてEMA75の4041も割れたら戻り売りを検討。SLの目安は4073の上。利確はロンドン安値の4034、次に前日安値の4024.7。根拠：日足・4Hは下向きで先週高値4190からの下落が続いている。15分足では白(a)が38と紫の帯（49〜74）の下にあり、水色(b)の72が65〜80の帯から紫を下抜けるなら順張り売りの形。4Hの紫はまだ低い位置で向きが上に変わっていないので、戻り売りが上位足に沿う。",
+  "noTrade": "21:30に米GDP速報・コアPCE・個人所得支出（重要度high）が重なる。前後30分は新規を避け、結果で向きが出てから入る。4041（1時間足EMA75）〜4072（EMA200）の帯の中にいる間は方向感がないので見送り。15分足の紫の向きがflatで広がりが伸びないうちは待つ。FOMC直後で値動きが落ち着かない東京朝も様子見。上位足と逆のロングは4082.8を超えるまで小さく。"
+ },
+ "bias": "wait",
+ "summary": "日足・4Hの向きはまだ下。FOMCは据え置き（4.00%）で、前日は4082.8まで戻してから4055付近へ押している。いちばん意識されるのは前日高値＝今週高値の4082.8と、その手前の1時間足EMA200（4072）。下は前日安値の4024.7。今夜21:30に米GDP速報とコアPCEが控える。",
+ "events": [
+  {
+   "time": "00:00",
+   "name": "Atlanta Fed GDPNow",
+   "importance": "mid"
+  },
+  {
+   "time": "03:00",
+   "name": "FOMC Statement",
+   "importance": "high"
+  },
+  {
+   "time": "03:00",
+   "name": "Fed Interest Rate Decision",
+   "importance": "high"
+  },
+  {
+   "time": "03:30",
+   "name": "Fed Press Conference",
+   "importance": "high"
+  },
+  {
+   "time": "21:30",
+   "name": "GDP Price Index QoQ Adv",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "Initial Jobless Claims",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "PCE Price Index YoY",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "PCE Price Index MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "21:30",
+   "name": "Core PCE Price Index MoM",
+   "importance": "high"
+  },
+  {
+   "time": "21:30",
+   "name": "GDP Growth Rate QoQ Adv",
+   "importance": "high"
+  },
+  {
+   "time": "21:30",
+   "name": "Personal Spending MoM",
+   "importance": "high"
+  },
+  {
+   "time": "21:30",
+   "name": "Personal Income MoM",
+   "importance": "high"
+  }
+ ],
+ "bobEdge": {
+  "m15": {
+   "a": 38.0,
+   "b": 71.9,
+   "c": 46.9,
+   "purple": [
+    48.9,
+    55.6,
+    61.4,
+    69.2,
+    73.5
+   ],
+   "spread": 24.6,
+   "slope": 0.2,
+   "trend": "flat",
+   "cross": null,
+   "bar_t": 1793225700
+  },
+  "h4": {
+   "a": 56.7,
+   "b": 76.5,
+   "c": 22.1,
+   "purple": [
+    26.0,
+    26.2,
+    20.9,
+    19.5,
+    15.8
+   ],
+   "spread": 10.4,
+   "slope": -0.4,
+   "trend": "flat",
+   "cross": null,
+   "bar_t": 1793206800
+  }
+ },
+ "notes": [
+  "足は先物（GC=F）をスポットに合わせて -13.64 ずらしたもの",
+  "アジアセッションの高安はこの時点ではまだ無い",
+  "3:00のFOMC政策金利は据え置き（4.00%）、3:30の議長会見も終了済み。eventsには残しているが過去の指標",
+  "0:00のAtlanta Fed GDPNowは日本時間29日0:00で、こちらも終了済み"
+ ]
+}
