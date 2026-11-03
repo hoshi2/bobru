@@ -1,0 +1,132 @@
+{
+ "symbol": "XAUUSD",
+ "date": "2026-11-04",
+ "source": "claude-code",
+ "asOf": "2026-11-03T22:39:55+00:00",
+ "price": 3930.325,
+ "trend": {
+  "daily": "down",
+  "h4": "down",
+  "h1": "down",
+  "m15": "range"
+ },
+ "ema": {
+  "tf": "h1",
+  "e10": 3928.18,
+  "e75": 3946.98,
+  "e200": 3999.7
+ },
+ "levels": {
+  "prevHigh": 3971.355,
+  "prevLow": 3895.57,
+  "weekHigh": 3971.355,
+  "weekLow": 3891.26,
+  "recentHigh": 3971.825,
+  "recentLow": 3894.225
+ },
+ "sessions": {
+  "asia": {
+   "high": null,
+   "low": null
+  },
+  "london": {
+   "high": 3971.825,
+   "low": 3894.225
+  },
+  "newyork": {
+   "high": 3971.825,
+   "low": 3917.325
+  }
+ },
+ "scenarios": {
+  "bull": "3891〜3900を割らずに15分で安値を切り上げ、1H EMA75の3947を上抜けて押しても3947の上で止まるのを確認したら買い。目安は前日高値3971、抜ければEMA200の4000。SLは3947の少し下。根拠は15分の水色bが28と低い帯にいて、ここから白aが上抜ける形なら順張り買いの形になること。ただし今の15分の白aは92と高く、上位足は全部下向きなので、追いかけずに押しを待つ。",
+  "bear": "3947〜3971への戻りが止まり、15分で白aが90台から折れて水色bへ向かったら戻り売り。SLは3971の少し上。3891を割って定着したら先週安値3870が次の目安。根拠は日足・4H・1Hが下向きで、価格がEMA75（3947）とEMA200（4000）の下にいること。4Hは水色bが36、紫が14〜17と低い位置で収束中なので、紫が下へ広がり始めるのを見てから。",
+  "noTrade": "3900〜3947の中で上下するうちは見送り。4Hの紫の広がりが2.6と小さく収束中で、15分の紫も横ばい（flat）。ISMサービス業PMI（重要度high）が日本時間5日0:00にあるので、その前後30分は新規を避ける。ADP雇用（22:15）・貿易収支（22:30）の直後も様子見。米中間選挙の開票結果が日本時間4日の日中に出てくるため、見出しで値が飛びやすい。"
+ },
+ "bias": "wait",
+ "summary": "日足・4H・1Hは下向きのまま。火曜は3896〜3971の間で上下して3930付近で引け、月曜とほぼ同じ3891〜3971のレンジが2日続いている。上は前日高値＝今週高値3971と1H EMA75の3947、下は今週安値3891と先週安値3870が意識される。4HのBOB EDGEの紫が広がり2.6と収束中で、どちらに抜けるか決まるのを待つ日。",
+ "events": [
+  {
+   "time": "00:00",
+   "name": "Durable Goods Orders Excluding Transportation",
+   "importance": "mid"
+  },
+  {
+   "time": "00:00",
+   "name": "Factory Orders MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "00:00",
+   "name": "JOLTs Job Openings",
+   "importance": "high"
+  },
+  {
+   "time": "00:00",
+   "name": "ISM Services PMI",
+   "importance": "high"
+  },
+  {
+   "time": "06:30",
+   "name": "API Crude Oil Stock Change",
+   "importance": "mid"
+  },
+  {
+   "time": "21:00",
+   "name": "MBA 30-Year Mortgage Rate",
+   "importance": "mid"
+  },
+  {
+   "time": "22:15",
+   "name": "ADP Employment Change",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Balance of Trade",
+   "importance": "mid"
+  }
+ ],
+ "bobEdge": {
+  "m15": {
+   "a": 91.7,
+   "b": 28.4,
+   "c": 40.4,
+   "purple": [
+    41.8,
+    38.3,
+    38.0,
+    45.6,
+    49.8
+   ],
+   "spread": 11.7,
+   "slope": 0.2,
+   "trend": "flat",
+   "cross": null,
+   "bar_t": 1793742300
+  },
+  "h4": {
+   "a": 46.4,
+   "b": 35.6,
+   "c": 23.6,
+   "purple": [
+    16.5,
+    17.1,
+    16.8,
+    16.3,
+    14.5
+   ],
+   "spread": 2.6,
+   "slope": -0.5,
+   "trend": "flat",
+   "cross": null,
+   "bar_t": 1793714400
+  }
+ },
+ "notes": [
+  "足は先物（GC=F）をスポットに合わせて -9.87 ずらしたもの",
+  "price・prevHigh/prevLow・weekHigh/weekLow は TradingView OANDA:XAUUSD。日足は火曜（11/3 セッション、NY 17:00 区切り）が最新の確定足で、水曜の足はまだ始まっていなかったため、prevHigh/prevLow に最後の足を使った。",
+  "日足の区切りは日本時間 7:00（米冬時間）。アジア高安は未算出（null）。",
+  "events の『00:00』は2種類。JOLTS（結果7.52M、予想7.1M）・製造業受注・耐久財受注は日本時間4日0:00で発表済み。ISMサービス業PMI（重要度high）は日本時間5日0:00（今夜）。"
+ ]
+}
