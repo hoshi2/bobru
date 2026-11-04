@@ -1,0 +1,147 @@
+{
+ "symbol": "XAUUSD",
+ "date": "2026-11-05",
+ "source": "claude-code",
+ "asOf": "2026-11-04T22:39:54+00:00",
+ "price": 4060.355,
+ "trend": {
+  "daily": "down",
+  "h4": "range",
+  "h1": "range",
+  "m15": "up"
+ },
+ "ema": {
+  "tf": "h1",
+  "e10": 4052.76,
+  "e75": 3983.32,
+  "e200": 4003.2
+ },
+ "levels": {
+  "prevHigh": 4070.43,
+  "prevLow": 3919.9,
+  "weekHigh": 4070.43,
+  "weekLow": 3891.26,
+  "recentHigh": 4069.355,
+  "recentLow": 3916.355
+ },
+ "sessions": {
+  "asia": {
+   "high": null,
+   "low": null
+  },
+  "london": {
+   "high": 4050.355,
+   "low": 4019.055
+  },
+  "newyork": {
+   "high": 4069.355,
+   "low": 4026.155
+  }
+ },
+ "scenarios": {
+  "bull": "4070を上抜けて先週高値4083も超え、押しても4070の上で止まるのを15分で確認したら買い。または4040〜4003への押しが止まり、15分で安値を切り上げて白aが水色bを上抜けたら押し目買い。SLは押しの安値の少し下（深くても4003の下）。根拠は価格がEMA75・EMA200の上にいて15分の向きが上なこと。15分の紫は83〜95と高い位置で広がり11.8あり、ここから折れ始めたら一度押しが入りやすいので、追いかけずに押しを待つ。",
+  "bear": "4070〜4083で頭が抑えられ、15分で高値を切り下げて白aが水色bを下抜けたら短めの戻り売り。目安はEMA200の4003、SLは4083の少し上。ただし1Hは上向きで4Hの紫（15〜20）はまだ下に寄ったままで向きが決まっていないので、売りは利確を早めに。4003を割って定着したら3983、前日安値3920が次の目安。",
+  "noTrade": "4070〜4083の真下で上下するうちは見送り。急騰のあとで15分の紫が高い位置にあり、押しが入るか上に抜けるかが決まるまで待つ。4Hの紫の広がりは4.7と小さく収束中なので、広がり始めてから入る。22:30の新規失業保険申請件数・労働生産性（重要度mid）の前後は新規を避ける。重要度highの指標は今日はない。"
+ },
+ "bias": "long",
+ "summary": "水曜は3920から4070まで一気に上げて4060で引け、1HのEMA75（3983）とEMA200（4003）を両方上抜けた。上は前日高値＝今週高値4070と先週高値4083、下は4003〜3983のEMA帯が意識される。日足はまだ下向き判定だが1Hは上に構造が変わったので、押し目を待って買う日。",
+ "events": [
+  {
+   "time": "00:00",
+   "name": "ISM Services PMI",
+   "importance": "high"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Ethanol Production",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Ethanol Stocks",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Crude Oil Stocks Change",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Gasoline Stocks Change",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Crude Oil Exports Change",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Unit Labour Costs QoQ Prel",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Nonfarm Productivity QoQ Prel",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Initial Jobless Claims",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "USDA Pork Net Export Sales",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "USDA Pork Gross Export Sales",
+   "importance": "mid"
+  }
+ ],
+ "bobEdge": {
+  "m15": {
+   "a": 45.2,
+   "b": 52.3,
+   "c": 83.5,
+   "purple": [
+    94.2,
+    94.6,
+    95.0,
+    89.5,
+    83.2
+   ],
+   "spread": 11.8,
+   "slope": 1.2,
+   "trend": "flat",
+   "cross": null,
+   "bar_t": 1793828700
+  },
+  "h4": {
+   "a": 91.0,
+   "b": 63.8,
+   "c": 29.3,
+   "purple": [
+    19.7,
+    18.0,
+    17.8,
+    16.7,
+    15.0
+   ],
+   "spread": 4.7,
+   "slope": 1.2,
+   "trend": "flat",
+   "cross": null,
+   "bar_t": 1793800800
+  }
+ },
+ "notes": [
+  "足は先物（GC=F）をスポットに合わせて -11.84 ずらしたもの",
+  "前日高安は11/4のセッション（日本時間11/4 7:00〜11/5 7:00）の値",
+  "ISMサービス業PMIは日本時間5日0:00に発表済み（54.5）",
+  "重要度highの指標は今日はなし"
+ ]
+}
