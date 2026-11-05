@@ -1,0 +1,137 @@
+{
+ "symbol": "XAUUSD",
+ "date": "2026-11-06",
+ "source": "claude-code",
+ "asOf": "2026-11-05T22:39:41+00:00",
+ "price": 4088.275,
+ "trend": {
+  "daily": "down",
+  "h4": "range",
+  "h1": "up",
+  "m15": "range"
+ },
+ "ema": {
+  "tf": "h1",
+  "e10": 4103.14,
+  "e75": 4044.71,
+  "e200": 4028.07
+ },
+ "levels": {
+  "prevHigh": 4146.92,
+  "prevLow": 4057.83,
+  "weekHigh": 4146.92,
+  "weekLow": 3891.26,
+  "recentHigh": 4146.175,
+  "recentLow": 4057.375
+ },
+ "sessions": {
+  "asia": {
+   "high": null,
+   "low": null
+  },
+  "london": {
+   "high": 4138.075,
+   "low": 4075.975
+  },
+  "newyork": {
+   "high": 4135.675,
+   "low": 4075.975
+  }
+ },
+ "scenarios": {
+  "bull": "4058〜4045（前日安値と1H EMA75）まで押して止まり、15分のBOB EDGEで白（24）が水色（29）を20〜35の帯で上抜けたらロング候補。目安はロンドン高値4138→前日高値4147。SLは4045割れ。根拠：4HのBOB EDGEは紫が17〜27と低い位置で向きが上、広がり9と小さい＝収束からの拡散待ちで、上に広がり始めれば買いの形。",
+  "bear": "4103（1H EMA10）〜4138を戻しても超えられず、前日安値4058を15分足が実体で割ったらショート候補。目安は1H EMA200の4028→4000。SLは4103上。根拠：15分の紫が62〜90の高い位置から下向き（広がり27）で、短期は上昇の調整局面。前日の4147上ヒゲも重し。",
+  "noTrade": "22:30の雇用統計（NFP・失業率）の前後1時間は新規なし。日付が変わって0:00のミシガン消費者信頼感も同様。4Hの紫の広がりが9と小さく収束中なので、広がり始めるまで待つ。日足下向き・1H上向きで上位足が揃わない間は、4058〜4103の中間ゾーンでは手を出さない。"
+ },
+ "bias": "wait",
+ "summary": "今週は3891から4147まで急伸したあと、前日は4147で上ヒゲを残して4088へ押し戻された。日足は下向き判定、4Hはレンジ、1Hは上向きで方向が揃っていない。今日は22:30に雇用統計があるので、意識される価格は前日高値4147、前日安値4058（1H EMA75の4045とほぼ同じ帯）。",
+ "events": [
+  {
+   "time": "00:00",
+   "name": "Michigan Consumer Sentiment Prel",
+   "importance": "high"
+  },
+  {
+   "time": "01:30",
+   "name": "4-Week Bill Auction Allotted at High",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "4-Week Bill Auction Bid-to-Cover",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "4-Week Bill Auction Total Accepted",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Average Hourly Earnings MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Average Hourly Earnings YoY",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Participation Rate",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Non Farm Payrolls",
+   "importance": "high"
+  },
+  {
+   "time": "22:30",
+   "name": "Unemployment Rate",
+   "importance": "high"
+  }
+ ],
+ "bobEdge": {
+  "m15": {
+   "a": 24.0,
+   "b": 29.4,
+   "c": 47.4,
+   "purple": [
+    62.1,
+    68.8,
+    74.9,
+    83.3,
+    89.6
+   ],
+   "spread": 27.5,
+   "slope": -3.5,
+   "trend": "down",
+   "cross": null,
+   "bar_t": 1793915100
+  },
+  "h4": {
+   "a": 76.2,
+   "b": 92.6,
+   "c": 49.6,
+   "purple": [
+    26.8,
+    24.6,
+    21.9,
+    19.3,
+    17.6
+   ],
+   "spread": 9.2,
+   "slope": 4.0,
+   "trend": "up",
+   "cross": null,
+   "bar_t": 1793887200
+  }
+ },
+ "notes": [
+  "足は先物（GC=F）をスポットに合わせて -9.62 ずらしたもの",
+  "日足の最後の足が前日（JST 11/5）の完成足だったため、前日高安はその足から取った（今日の日足はまだ始まっていない）",
+  "spot は 22:00 UTC の日次休場直前の15分足終値（06:45 JST）",
+  "ミシガン消費者信頼感の 0:00 は翌 11/7 の 0:00 JST"
+ ]
+}
