@@ -1,28 +1,28 @@
 {
  "symbol": "XAUUSD",
- "date": "2026-11-10",
+ "date": "2026-11-11",
  "source": "claude-code",
- "asOf": "2026-11-09T22:39:20+00:00",
- "price": 4140.685,
+ "asOf": "2026-11-10T22:39:54+00:00",
+ "price": 4032.515,
  "trend": {
   "daily": "down",
   "h4": "range",
-  "h1": "up",
-  "m15": "up"
+  "h1": "range",
+  "m15": "down"
  },
  "ema": {
   "tf": "h1",
-  "e10": 4126.35,
-  "e75": 4082.29,
-  "e200": 4052.11
+  "e10": 4039.96,
+  "e75": 4076.95,
+  "e200": 4057.54
  },
  "levels": {
-  "prevHigh": 4107.085,
-  "prevLow": 4029.83,
+  "prevHigh": 4146.74,
+  "prevLow": 4013.635,
   "weekHigh": 4148.71,
-  "weekLow": 4054.395,
-  "recentHigh": 4148.885,
-  "recentLow": 4053.685
+  "weekLow": 4013.635,
+  "recentHigh": 4148.215,
+  "recentLow": 4012.815
  },
  "sessions": {
   "asia": {
@@ -30,117 +30,123 @@
    "low": null
   },
   "london": {
-   "high": 4131.485,
-   "low": 4066.085
+   "high": 4122.215,
+   "low": 4022.715
   },
   "newyork": {
-   "high": 4148.885,
-   "low": 4066.085
+   "high": 4082.515,
+   "low": 4012.815
   }
  },
  "scenarios": {
-  "bull": "ロング案：4148〜4149 の週高値を明確に上抜けて、その上で押し目を作る（15分足で高値を割らずに戻す）のを待って入る。あるいは 4107（前日高値）〜4126（1時間 EMA10）まで押して反発するなら、その押し安値の少し下を SL にして入る。根拠は 4H の BOB EDGE で紫が上向き（22→40）・広がり 17.9 と拡散が始まっていること。ただし 15分足は水色 83.7 と高い帯で紫が横ばい（広がり 6.3）＝過熱・収束中なので、高値で追わない。",
-  "bear": "ショート案：4148〜4149 を上抜けできず、15分足で水色が 65〜80 の帯を下抜け（白が紫を下に抜ける）たら、直近高値の少し上を SL にして短く狙う。目安は 4107 の前日高値まで。日足が下向きなので戻り売りの形にはなるが、4H の紫が上向きのため、深追いはしない。",
-  "noTrade": "22:30（日本時間）の米 CPI の前後 30 分は新規を見送る。4107〜4149 の間で方向が出ないとき、15分足の紫の広がりが小さいまま（収束中）のとき、1時間足が上なのに日足が下という上位足のねじれの中で無理に片方へ賭けるときは見送る。"
+  "bull": "ロング案：週安値 4013〜4020 まで下げても割れずに、15分足で安値を切り上げて 4040（1時間 EMA10）を回復するなら、4013 の少し下を SL にして反発を短く狙う。目安は 4058（1時間 EMA200）〜4077（EMA75）。根拠は 15分足の BOB EDGE で赤（c）が 16.4 と売られすぎ水準にあり、4H の紫がまだ上向き（24→47、広がり 22.2）なこと。日足が下なので利は伸ばさず、戻り売りが出る EMA 帯で手じまいを考える。",
+  "bear": "ショート案：4040〜4058 の 1時間 EMA10〜EMA200 の帯まで戻して、15分足で上値が重くなる（白が紫を再び下抜ける、または水色が 65〜80 の帯から下へ抜ける）のを待って入る。SL は 4058 の少し上（戻りが深ければ 4077 の上）。目安は 4013 の週安値、割れれば 4000 前後。根拠は日足が下向き、1時間足の EMA が全部上にあること、15分足の BOB EDGE で紫が下向きに広がっていること（広がり 35.2）、4H でも白（35.6）が水色（67.6）の帯を下抜けており順張り売りの形になっていること。4013 を一度割って戻りを作ってから売り直す形も候補。",
+  "noTrade": "今日は重要度 high の米指標はない（21:00 の MBA 住宅ローン関連は影響小）。見送る条件：4013〜4040 の安値圏での新規ショート（週安値の直上で反発リスクが高い）、15分足の紫の広がりが縮んで横ばいになったとき（収束中）、4H の紫が上向きなのに 1時間・15分が下という上位足のねじれの中で無理に片方へ賭けるとき、4013 を割った直後の飛び乗り（戻りを待つ）。"
  },
- "bias": "wait",
- "summary": "日足はまだ下向きのまま、1時間足・15分足は上向きで、価格は週高値・直近高値（4148〜4149）の真下にいる。前日高値 4107 を上に抜けて走ったあとで、今夜 22:30 の米 CPI 前は様子見が基本。",
+ "bias": "short",
+ "summary": "日足は下向きで、前日は週高値 4147〜4149 の二番天井から週安値 4013 まで売られて安値圏で引けた。現在値 4032 は 1時間足の EMA10（4040）・EMA200（4058）・EMA75（4077）のすべての下にあり、戻り売り目線。ただし真下に週安値 4013 があり、安値での飛び乗りは避けたい。",
  "events": [
   {
-   "time": "01:00",
-   "name": "NY Fed Inflation Expectation 1yr",
-   "importance": "mid"
-  },
-  {
-   "time": "01:30",
-   "name": "3-Month Bill Auction",
-   "importance": "mid"
-  },
-  {
-   "time": "01:30",
-   "name": "6-Month Bill Auction",
+   "time": "02:00",
+   "name": "WASDE Poultry Production",
    "importance": "mid"
   },
   {
    "time": "03:00",
-   "name": "3-Year Note Auction",
+   "name": "10-Year Note Auction Allotted at High",
    "importance": "mid"
   },
   {
-   "time": "21:15",
-   "name": "ADP Employment Change Weekly",
+   "time": "03:00",
+   "name": "10-Year Note Auction Bid-to-Cover",
    "importance": "mid"
   },
   {
-   "time": "22:30",
-   "name": "Core Inflation Rate MoM (Oct)",
-   "importance": "high"
-  },
-  {
-   "time": "22:30",
-   "name": "Core Inflation Rate YoY (Oct)",
-   "importance": "high"
-  },
-  {
-   "time": "22:30",
-   "name": "Inflation Rate MoM (Oct)",
-   "importance": "high"
-  },
-  {
-   "time": "22:30",
-   "name": "Inflation Rate YoY (Oct)",
-   "importance": "high"
-  },
-  {
-   "time": "22:30",
-   "name": "CPI Index NSA",
+   "time": "03:00",
+   "name": "10-Year Note Auction Total Accepted",
    "importance": "mid"
   },
   {
-   "time": "22:30",
-   "name": "Real Average Weekly Earnings MoM",
+   "time": "06:30",
+   "name": "API Crude Oil Stock Change",
+   "importance": "mid"
+  },
+  {
+   "time": "21:00",
+   "name": "MBA 5/1 ARM Contract Rate",
+   "importance": "mid"
+  },
+  {
+   "time": "21:00",
+   "name": "MBA 5/1 ARM Effective Rate",
+   "importance": "mid"
+  },
+  {
+   "time": "21:00",
+   "name": "MBA 15-Year Mortgage Contract Rate",
+   "importance": "mid"
+  },
+  {
+   "time": "21:00",
+   "name": "MBA 15-Year Mortgage Effective Rate",
+   "importance": "mid"
+  },
+  {
+   "time": "21:00",
+   "name": "MBA 15-Year Mortgage Points",
+   "importance": "mid"
+  },
+  {
+   "time": "21:00",
+   "name": "MBA 30-Year Mortgage Rate",
+   "importance": "mid"
+  },
+  {
+   "time": "21:00",
+   "name": "MBA 5/1 ARM Points",
    "importance": "mid"
   }
  ],
  "bobEdge": {
   "m15": {
-   "a": 44.8,
-   "b": 83.7,
-   "c": 74.9,
+   "a": 33.4,
+   "b": 73.8,
+   "c": 16.4,
    "purple": [
-    77.3,
-    76.7,
-    77.9,
-    80.6,
-    74.3
+    10.7,
+    15.4,
+    22.2,
+    31.8,
+    45.9
    ],
-   "spread": 6.3,
-   "slope": 1.8,
-   "trend": "flat",
+   "spread": 35.2,
+   "slope": -4.0,
+   "trend": "down",
    "cross": null,
-   "bar_t": 1794260700
+   "bar_t": 1794347100
   },
   "h4": {
-   "a": 76.9,
-   "b": 63.2,
-   "c": 78.9,
+   "a": 35.6,
+   "b": 67.6,
+   "c": 81.8,
    "purple": [
-    40.5,
-    36.7,
-    32.6,
-    26.4,
-    22.6
+    46.6,
+    41.0,
+    36.8,
+    29.6,
+    24.4
    ],
-   "spread": 17.9,
-   "slope": 4.2,
+   "spread": 22.2,
+   "slope": 3.9,
    "trend": "up",
    "cross": null,
-   "bar_t": 1794247200
+   "bar_t": 1794319200
   }
  },
  "notes": [
-  "足は先物（GC=F）をスポットに合わせて -8.81 ずらしたもの",
-  "前日高安は TradingView 日足の前日（金曜）の足から。",
-  "アジア時間の高安はまだ出ていない（null）。"
+  "足は先物（GC=F）をスポットに合わせて -7.99 ずらしたもの",
+  "前日高安は、日足が 22:00Z（日本時間 7:00）区切りで作成時刻が日次の休場中だったため、最後の日足（日本時間 11/10 7:00〜11/11 7:00 の完成足）を使った",
+  "アジア時間の高安は作成時点で未開始のため null",
+  "重要度 high の米指標はなし"
  ]
 }
