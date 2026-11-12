@@ -1,0 +1,187 @@
+{
+ "symbol": "XAUUSD",
+ "date": "2026-11-13",
+ "source": "claude-code",
+ "asOf": "2026-11-12T22:40:00+00:00",
+ "price": 3877.59,
+ "trend": {
+  "daily": "down",
+  "h4": "down",
+  "h1": "down",
+  "m15": "down"
+ },
+ "ema": {
+  "tf": "h1",
+  "e10": 3888.85,
+  "e75": 3993.53,
+  "e200": 4028.02
+ },
+ "levels": {
+  "prevHigh": 4000.73,
+  "prevLow": 3852.58,
+  "weekHigh": 4148.71,
+  "weekLow": 3852.58,
+  "recentHigh": 4001.79,
+  "recentLow": 3852.59
+ },
+ "sessions": {
+  "asia": {
+   "high": null,
+   "low": null
+  },
+  "london": {
+   "high": 3966.29,
+   "low": 3852.59
+  },
+  "newyork": {
+   "high": 3950.69,
+   "low": 3852.59
+  }
+ },
+ "scenarios": {
+  "bull": "ロング案（逆張りなので小さく）：週安値 3852 を割らずに 15分足で安値を切り上げ、白（a）が紫の帯（8〜15）を上抜けて 3889（1時間 EMA10）を回復するなら、3852 の少し下を SL にして短い反発を狙う。目安は 3950（NY 高値）〜3966（ロンドン高値）、伸びても 3994〜4000（1時間 EMA75・前日高値）まで。根拠は 4H の BOB EDGE で白 13.0・水色 11.8 と極端に売られすぎで、15分の紫が 6.7 と収束して動く前の形なこと。ただし上位足が全部下なので利は伸ばさず、先週安値 3891 や EMA10 で止まったら手じまいを考える。",
+  "bear": "ショート案（本線）：3889（1時間 EMA10）〜3950（NY 高値）、深ければ 3966〜4000（ロンドン高値・EMA75・前日高値）の帯まで戻し、15分足で上値が重くなる（水色（b）が 65〜80 の帯から下へ抜ける、または白が紫を再び下抜ける）のを待って入る。SL は戻り高値の少し上（浅い戻りなら 3950 の上、深い戻りなら 4000 の上）。目安は週安値 3852、割れれば 3800 前後。根拠は 4 本の時間足がすべて下向きで、1時間の EMA がすべて上にあり、4H の赤（c）が 60.9 と売り優勢なこと。3852 を割った直後は飛び乗らず、割れた安値を上回れない戻り失敗を待つ。",
+  "noTrade": "見送る条件：日本時間 22:30 の米 PPI（重要度 high）の前後30分は新規を避け、ポジションがあれば SL を近づける。3852〜3889 の週安値の直上での新規ショート（売られすぎで反発リスクが高い）。15分の紫の広がりが 6.7 と小さいまま横ばいで白が紫の帯の中にいるとき（収束中、方向が決まる前）。4H の白・水色が 20 を割る売られすぎのまま 4H で陽線が続くとき（戻りの途中）。深夜の米 30 年債入札後の薄い時間帯の飛び乗り。"
+ },
+ "bias": "short",
+ "summary": "日足・4H・1時間・15分のすべてが下向き。前日は 4000 を高値に 3852 まで急落して週安値を更新し、現在値 3878 は 1時間 EMA10（3889）・EMA75（3994）・EMA200（4028）のすべての下にある。基本は戻り売り目線だが、安値の直上で 4H の白・水色が 12〜13 と売られすぎなので、戻りを待ってから入りたい。",
+ "events": [
+  {
+   "time": "00:00",
+   "name": "Existing Home Sales",
+   "importance": "high"
+  },
+  {
+   "time": "00:00",
+   "name": "Existing Home Sales MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "4-Week Bill Auction Allotted at High",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "4-Week Bill Auction Bid-to-Cover",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "4-Week Bill Auction Total Accepted",
+   "importance": "mid"
+  },
+  {
+   "time": "02:00",
+   "name": "EIA Ethanol Production",
+   "importance": "mid"
+  },
+  {
+   "time": "02:00",
+   "name": "EIA Ethanol Stocks",
+   "importance": "mid"
+  },
+  {
+   "time": "02:00",
+   "name": "EIA Crude Oil Stocks Change",
+   "importance": "mid"
+  },
+  {
+   "time": "02:00",
+   "name": "EIA Gasoline Stocks Change",
+   "importance": "mid"
+  },
+  {
+   "time": "02:00",
+   "name": "EIA Crude Oil Exports Change",
+   "importance": "mid"
+  },
+  {
+   "time": "03:00",
+   "name": "30-Year Bond Auction Allotted at High",
+   "importance": "mid"
+  },
+  {
+   "time": "03:00",
+   "name": "30-Year Bond Auction Bid-to-Cover",
+   "importance": "mid"
+  },
+  {
+   "time": "03:00",
+   "name": "30-Year Bond Auction Total Accepted",
+   "importance": "mid"
+  },
+  {
+   "time": "04:00",
+   "name": "Monthly Budget Statement",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "PPI MoM",
+   "importance": "high"
+  },
+  {
+   "time": "22:30",
+   "name": "Core PPI MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "PPI Machinery Manufacturing",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "USDA Pork Net Export Sales",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "USDA Pork Gross Export Sales",
+   "importance": "mid"
+  }
+ ],
+ "bobEdge": {
+  "m15": {
+   "a": 21.2,
+   "b": 51.1,
+   "c": 24.6,
+   "purple": [
+    15.2,
+    12.7,
+    10.5,
+    9.5,
+    8.5
+   ],
+   "spread": 6.7,
+   "slope": 0.5,
+   "trend": "flat",
+   "cross": null,
+   "bar_t": 1794519900
+  },
+  "h4": {
+   "a": 13.0,
+   "b": 11.8,
+   "c": 60.9,
+   "purple": [
+    55.6,
+    46.6,
+    39.7,
+    34.3,
+    26.9
+   ],
+   "spread": 28.7,
+   "slope": 1.0,
+   "trend": "flat",
+   "cross": null,
+   "bar_t": 1794492000
+  }
+ },
+ "notes": [
+  "足は先物（GC=F）をスポットに合わせて -4.11 ずらしたもの",
+  "足は先物（GC=F）をスポットに合わせてずらしたもの",
+  "日足の前日高安は日本時間 11/12 7:00〜11/13 7:00 の足（直近で閉じた足）の値",
+  "アジア時間はまだ始まっていないため sessions.asia は null"
+ ]
+}
