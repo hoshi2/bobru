@@ -1427,7 +1427,7 @@ group("22. 通常口座（XM）");
     DB.accounts = DB.accounts.filter(a => a.id !== auto.id);
     return { tplOpts, typeOpts, made, form, own, xmCard, propCard, calc, bar1, barTxt, allList, allInit, autoMade, label:labelCloseReason("stopped") };
   });
-  ok("ひな形に XM、種別に「通常口座」がある", r.tplOpts.includes("xm") && r.typeOpts.includes("normal"));
+  ok("ひな形に XM・BigBoss・Vantage、種別に「通常口座」がある", ["xm","bigboss","vantage"].every(x => r.tplOpts.includes(x)) && r.typeOpts.includes("normal"));
   ok("XM のひな形で作ると種別は通常口座・JPY・目標なし、その口座に切り替わる", r.made.type === "normal" && r.made.tpl === "xm" && r.made.cur === "JPY" && r.made.target === null && r.made.normal && r.made.switched);
   ok("口座の欄：自分ルール 3 つがあり、規約・目標の欄は無い。終了の理由は「使わなくなった」だけ", r.form.risk && r.form.blot && r.form.ownstop && !r.form.daily && !r.form.max && !r.form.target && r.form.reasons.join(",") === ",stopped" && r.label === "使わなくなった");
   ok("自分ルールは口座ごと（0.5% / 0.1 ロット / 3%）。共通設定とプロップ口座の値は変わらない", r.own.risk === 0.5 && r.own.blot === 0.1 && r.own.stop === 3 && r.own.gRisk === r.own.sRisk && r.own.gStop === r.own.sStop && r.own.sRisk === 1 && r.own.sStop === 2);

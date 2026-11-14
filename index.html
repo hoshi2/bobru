@@ -731,17 +731,20 @@ var DEVIATIONS=[["unplanned","計画外エントリー"],["slWiden","SLを遠ざ
 // 口座のひな形。選ぶと数字が入るだけで、あとから口座ごとに変えられる。
 // 出典：各社の公開条件（2026-09-22 本人がChatGPTで確認）。分配率は口座ごとの実条件で上書きする。
 var ACCOUNT_TEMPLATES=[
-  {id:"fintokei", label:"Fintokei ProTrader", currency:"JPY",
+  {id:"fintokei", label:"Fintokei", currency:"JPY",
    targets:{step1:8, step2:6, live:null},
    // 1日の区切り（日次損失のリセット・取引日の数え方）。cTrader はサーバー時間0時＝ニューヨーク17時
    // （日本時間で夏6時・冬7時）。出典：Fintokei 2025-04-30 のお知らせ。
    dayReset:{tz:"America/New_York", hour:17},
    rules:{dailyLossPct:5, maxLossPct:10, ddBasis:"equity", openRiskPct:3, minTradingDays:3, minClosedTrades:0, profitSplitPct:90}},
-  {id:"funded7", label:"Funded7 PAYG", currency:"USD",
+  {id:"funded7", label:"Funded7", currency:"USD",
    targets:{step1:8, step2:6, live:null}, consistencyMin:0.90,
    rules:{dailyLossPct:5, maxLossPct:10, ddBasis:"static", openRiskPct:3, minTradingDays:3, minClosedTrades:10, profitSplitPct:80}},
   // 通常口座のひな形。規約・目標なし。自分ルール（リスク率・基本ロット・日次停止）は口座ごとに持てる（#42）
-  {id:"xm", label:"XM", currency:"JPY", normal:true, targets:{}, rules:{}}
+  // ひな形の名前は会社名だけ（2026-11-14 本人：「ProTrader」「PAYG」は要らない）
+  {id:"xm", label:"XM", currency:"JPY", normal:true, targets:{}, rules:{}},
+  {id:"bigboss", label:"BigBoss", currency:"JPY", normal:true, targets:{}, rules:{}},
+  {id:"vantage", label:"Vantage", currency:"JPY", normal:true, targets:{}, rules:{}}
 ];
 var DD_BASIS=[["equity","有効証拠金ベース"],["static","初期資金で固定"]];
 function findTemplate(id){ for(var i=0;i<ACCOUNT_TEMPLATES.length;i++){ if(ACCOUNT_TEMPLATES[i].id===id) return ACCOUNT_TEMPLATES[i]; } return null; }
@@ -5023,7 +5026,7 @@ function newAccountBody(){
        "</select>")+"</div>";
   h+="<div class='row2'>"+field("初期残高","<input type='number' inputmode='decimal' step='any' id='a_init' placeholder='100000'>")+
      field("通貨","<select id='a_cur'>"+CURRENCIES.map(function(c){ return "<option value='"+c+"'"+(c===acctCurrency()?" selected":"")+">"+c+"</option>"; }).join("")+"</select>")+"</div>";
-  h+="<div class='smallnote' style='margin:0 0 10px'>XM など規約の無い口座は、ひな形「XM」を選ぶか種別「通常口座」にします。規約のメーターは出ず、分析もプロップ口座とは混ぜません。</div>";
+  h+="<div class='smallnote' style='margin:0 0 10px'>XM・BigBoss・Vantage など規約の無い口座は、そのひな形を選ぶか種別「通常口座」にします。規約のメーターは出ず、分析もプロップ口座とは混ぜません。</div>";
   h+="<button class='btn primary sm' onclick='addAccount()'>口座を追加して切り替える</button>";
   return h;
 }
