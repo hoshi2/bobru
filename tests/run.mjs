@@ -1369,6 +1369,77 @@ group("21. 手で SL を動かしたとき");
   await page.close();
 }
 
+/* =======================================================================
+   22. 通常口座（XM）：規約なし・自分ルールは口座ごと・分析はプロップと混ぜない（#42）
+   ======================================================================= */
+group("22. 通常口座（XM）");
+{
+  const page = await open(375, 812);
+  const r = await page.evaluate(async () => {
+    const wait = () => new Promise(r => setTimeout(r, 30));
+    const prop = currentAccount();
+    // 設定 → 新しい口座：ひな形「XM」を選んで追加
+    TAB = "settings"; render(); openNewAccount(); await wait();
+    const tplOpts = [...document.querySelectorAll("#a_tpl option")].map(o => o.value);
+    const typeOpts = [...document.querySelectorAll("#a_type option")].map(o => o.value);
+    document.getElementById("a_tpl").value = "xm"; document.getElementById("a_name").value = "XM スタンダード";
+    document.getElementById("a_init").value = "300000"; document.getElementById("a_cur").value = "JPY";
+    addAccount(); await wait();
+    const xm = currentAccount();
+    const made = { type:xm.type, tpl:xm.template, cur:xm.currency, target:xm.rules.targetPct, normal:isNormalAccount(xm), switched:xm.id !== prop.id };
+    // この口座の欄：規約の欄は無く、自分ルールの欄がある
+    render(); await wait();
+    const ids = k => !!document.getElementById("ar_" + k + "_" + xm.id);
+    const form = { risk:ids("risk"), blot:ids("blot"), ownstop:ids("ownstop"), daily:ids("daily"), max:ids("max"), target:ids("target"),
+      reasons:[...document.querySelectorAll("#ac_reason_" + xm.id + " option")].map(o => o.value) };
+    document.getElementById("ar_risk_" + xm.id).value = "0.5";
+    document.getElementById("ar_blot_" + xm.id).value = "0.1";
+    document.getElementById("ar_ownstop_" + xm.id).value = "3";
+    saveAccountRules(xm.id); await wait();
+    const own = { risk:riskPctOf(xm), blot:baseLotOf(xm), stop:ownStopPct(xm), gRisk:riskPctOf(prop), gStop:ownStopPct(prop),
+      sRisk:DB.settings.internalRiskPct, sStop:DB.settings.ownDailyStopPct, planLot:freshPlan().lot,
+      rec:calcFromInputs({dir:"long", entry:4200, sl:4190, tp:4220, lot:1, contractSize:100, balance:1000000, fxRate:1}).recLot };
+    // ホーム：XM のカードに規約のメーターは無い。プロップのカードにはある
+    TAB = "home"; render(); await wait();
+    const cards = [...document.querySelectorAll(".pair .card")].map(e => e.textContent);
+    const xmCard = cards.find(t => t.indexOf("XM スタンダード") >= 0) || "", propCard = cards.find(t => t.indexOf(prop.name) >= 0) || "";
+    // シナリオ：規約の残り枠の行は出ない
+    TAB = "plan"; PLAN = freshPlan(); PLAN.entry = "4200"; PLAN.sl = "4190"; PLAN.tp = "4220"; render(); renderPlanCalc(); await wait();
+    const calc = (document.getElementById("p_calc") || {}).textContent || "";
+    // 分析：通常口座が 1 つなら「全体」は無い。2 つになると「通常口座全体」で、プロップの記録は混ざらない
+    DB.trades = [];
+    const mk = (id, accId, pl) => ({ id, status:"closed", accountId:accId, createdAt:"2026-11-10T01:00:00.000Z", closedAt:"2026-11-10T02:00:00.000Z", updatedAt:"x", savedAt:"x",
+      symbol:"XAUUSD", dir:"long", entry:4200, sl:4190, tp:4220, lot:1, contractSize:100, balanceAtEntry:300000, fxRate:1, realizedPL:pl, tags:[] });
+    DB.trades.push(mk("p1", prop.id, 1000), mk("x1", xm.id, 200));
+    saveData(); TAB = "growth"; UI.growthPeriod = "all"; UI.acct = ""; render(); await wait();
+    const bar1 = !!document.querySelector(".scope");
+    const xm2 = makeAccount({ name:"XM マイクロ", type:"normal", template:"xm", initialBalance:50000, currency:"JPY" });
+    DB.accounts.push(xm2); DB.trades.push(mk("x2", xm2.id, -100)); saveData(); render(); await wait();
+    const barTxt = (document.querySelector(".scope") || {}).textContent || "";
+    setViewAcct("all"); await wait();
+    const allList = DB.trades.filter(t => inViewAcct(t, true)).map(t => t.id).sort();
+    const allInit = growthInitialBalance();
+    setViewAcct("");
+    // 受信箱：口座名が xm で始まれば通常口座として自動で作る
+    const auto = inboxAccountFor({ brokerId:"99001", accountName:"xm zero", currency:"USD" });
+    const autoMade = { type:auto.type, tpl:auto.template, normal:isNormalAccount(auto) };
+    // 片付け
+    DB.accounts = DB.accounts.filter(a => a.id !== auto.id);
+    return { tplOpts, typeOpts, made, form, own, xmCard, propCard, calc, bar1, barTxt, allList, allInit, autoMade, label:labelCloseReason("stopped") };
+  });
+  ok("ひな形に XM、種別に「通常口座」がある", r.tplOpts.includes("xm") && r.typeOpts.includes("normal"));
+  ok("XM のひな形で作ると種別は通常口座・JPY・目標なし、その口座に切り替わる", r.made.type === "normal" && r.made.tpl === "xm" && r.made.cur === "JPY" && r.made.target === null && r.made.normal && r.made.switched);
+  ok("口座の欄：自分ルール 3 つがあり、規約・目標の欄は無い。終了の理由は「使わなくなった」だけ", r.form.risk && r.form.blot && r.form.ownstop && !r.form.daily && !r.form.max && !r.form.target && r.form.reasons.join(",") === ",stopped" && r.label === "使わなくなった");
+  ok("自分ルールは口座ごと（0.5% / 0.1 ロット / 3%）。共通設定とプロップ口座の値は変わらない", r.own.risk === 0.5 && r.own.blot === 0.1 && r.own.stop === 3 && r.own.gRisk === r.own.sRisk && r.own.gStop === r.own.sStop && r.own.sRisk === 1 && r.own.sStop === 2);
+  ok("シナリオの初期ロットは 0.1、推奨ロットは 0.5% で計算（残高 100 万・SL 幅 10 → 5 ロット）", r.own.planLot === "0.1" && Math.abs(r.own.rec - 5) < 1e-9);
+  ok("ホーム：XM のカードに目標・日次損失上限・全体損失上限が無く、自分の日次停止（3%）はある", r.xmCard && !/目標/.test(r.xmCard) && !/日次損失上限/.test(r.xmCard) && !/全体損失上限/.test(r.xmCard) && /自分の日次停止（3%/.test(r.xmCard) && /使わなくなった/.test(r.xmCard));
+  ok("ホーム：プロップのカードは今までどおり規約のメーターがある", /日次損失上限/.test(r.propCard) && /全体損失上限/.test(r.propCard) && /合格/.test(r.propCard));
+  ok("シナリオ：通常口座では「規約の日次残り」「全体残り」の行が出ない", /自分ルール残り/.test(r.calc) && !/規約の日次残り/.test(r.calc) && !/全体残り/.test(r.calc));
+  ok("分析：通常口座が 1 つなら「全体」は出ず、2 つで「通常口座全体」。プロップの記録は混ざらず、初期残高も通常口座の合計", !r.bar1 && /通常口座全体/.test(r.barTxt) && r.allList.join(",") === "x1,x2" && r.allInit === 350000);
+  ok("受信箱：口座名が xm で始まる取引は通常口座として自動作成", r.autoMade.type === "normal" && r.autoMade.tpl === "xm" && r.autoMade.normal);
+  await page.close();
+}
+
 /* ---------- 後始末 ---------- */
 await browser.close();
 server.close();
