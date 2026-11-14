@@ -715,8 +715,13 @@ function defaultResearch(){
    種別は3つだけ。旧データの自由文字列は typeNote に残し、type は未設定のままにする。
    開始日・終了日は持たない（最初と最後のトレードから決まるため）。 */
 var CURRENCIES=["JPY","USD"];   // 口座通貨の選択肢（2026-09-24 本人：この2つだけ）
-var ACCOUNT_TYPES=[["step1","ステップ1"],["step2","ステップ2"],["live","本番"]];
+var ACCOUNT_TYPES=[["step1","ステップ1"],["step2","ステップ2"],["live","本番"],["normal","通常口座"]];
 var ACCOUNT_CLOSE_REASONS=[["pass","合格"],["fail","失格"],["expired","期限切れ"]];
+// 通常口座（XM など）には合格・失格が無いので、終了の理由はこれだけ（#42）
+var NORMAL_CLOSE_REASONS=[["stopped","使わなくなった"]];
+// 通常口座：規約も目標も無く、自分ルールだけで動かす口座。プロップ口座とは計算も分析も混ぜない（2026-11-14 本人）
+function isNormalAccount(a){ return !!(a&&a.type==="normal"); }
+function closeReasonsFor(a){ return isNormalAccount(a)?NORMAL_CLOSE_REASONS:ACCOUNT_CLOSE_REASONS; }
 // 逸脱の中身（決済時に複数選ぶ）。SLなし・逆行中の追加・ロット増・停止ライン到達後はアプリが判定するので入れない
 // 決済の理由。保有時間は入った時刻と決済時刻から計算するので、入力欄は作らない
 var EXIT_REASONS=[["sl","SL"],["tp","TP"],["premise","前提崩れ"],["eod","区切り前に手仕舞い"],
@@ -734,7 +739,9 @@ var ACCOUNT_TEMPLATES=[
    rules:{dailyLossPct:5, maxLossPct:10, ddBasis:"equity", openRiskPct:3, minTradingDays:3, minClosedTrades:0, profitSplitPct:90}},
   {id:"funded7", label:"Funded7 PAYG", currency:"USD",
    targets:{step1:8, step2:6, live:null}, consistencyMin:0.90,
-   rules:{dailyLossPct:5, maxLossPct:10, ddBasis:"static", openRiskPct:3, minTradingDays:3, minClosedTrades:10, profitSplitPct:80}}
+   rules:{dailyLossPct:5, maxLossPct:10, ddBasis:"static", openRiskPct:3, minTradingDays:3, minClosedTrades:10, profitSplitPct:80}},
+  // 通常口座のひな形。規約・目標なし。自分ルール（リスク率・基本ロット・日次停止）は口座ごとに持てる（#42）
+  {id:"xm", label:"XM", currency:"JPY", normal:true, targets:{}, rules:{}}
 ];
 var DD_BASIS=[["equity","有効証拠金ベース"],["static","初期資金で固定"]];
 function findTemplate(id){ for(var i=0;i<ACCOUNT_TEMPLATES.length;i++){ if(ACCOUNT_TEMPLATES[i].id===id) return ACCOUNT_TEMPLATES[i]; } return null; }
@@ -746,7 +753,8 @@ function normalizeRules(r, type, templateId, fin){
   var tpl=findTemplate(templateId);
   var tr=tpl?tpl.rules:{};
   var tgt=null;
-  if(r.targetPct!==undefined) tgt=(r.targetPct===null)?null:numOr(r.targetPct,null);
+  if(type==="normal") tgt=null;   // 通常口座に目標は無い
+  else if(r.targetPct!==undefined) tgt=(r.targetPct===null)?null:numOr(r.targetPct,null);
   else if(tpl && type) tgt=tpl.targets[type];
   else if(type==="step1") tgt=numOr(fin.step1TargetPct,null);
   else if(type==="step2") tgt=numOr(fin.step2TargetPct,null);
@@ -758,7 +766,9 @@ function normalizeRules(r, type, templateId, fin){
     openRiskPct:numOr(r.openRiskPct, numOr(tr.openRiskPct, numOr(fin.openRiskPct,3))),
     minTradingDays:numOr(r.minTradingDays, numOr(tr.minTradingDays, numOr(fin.minTradingDays,0))),
     minClosedTrades:numOr(r.minClosedTrades, numOr(tr.minClosedTrades,0)),
-    profitSplitPct:numOr(r.profitSplitPct, numOr(tr.profitSplitPct,null))
+    profitSplitPct:numOr(r.profitSplitPct, numOr(tr.profitSplitPct,null)),
+    // 自分ルール。通常口座だけ口座ごとに持つ。空＝設定「内部ルール」の共通値を使う
+    riskPct:numOr(r.riskPct,null), baseLot:numOr(r.baseLot,null), ownStopPct:numOr(r.ownStopPct,null)
   };
 }
 function isAccountType(v){ for(var i=0;i<ACCOUNT_TYPES.length;i++){ if(ACCOUNT_TYPES[i][0]===v) return true; } return false; }
@@ -849,9 +859,22 @@ function todayPLOf(acc){
   return pl;
 }
 // 自分の日次停止ライン。規約の日次上限とは別の、自分で決めた線。基準は規約の表示と同じ初期残高。
-function ownStopPct(){ var v=toNum(DB.settings.ownDailyStopPct); return isNum(v)&&v>=0?v:2; }
+// 口座を渡すと、通常口座はその口座の値（空なら共通値）。渡さなければ共通値
+function ownStopPct(acc){
+  if(isNormalAccount(acc)){ var o=toNum(acc.rules&&acc.rules.ownStopPct); if(isNum(o)&&o>=0) return o; }
+  var v=toNum(DB.settings.ownDailyStopPct); return isNum(v)&&v>=0?v:2;
+}
+// 1トレードのリスク率と基本ロット。通常口座は口座ごとの値、無ければ設定の共通値
+function riskPctOf(acc){
+  if(isNormalAccount(acc)){ var o=toNum(acc.rules&&acc.rules.riskPct); if(isNum(o)&&o>0) return o; }
+  return toNum(DB.settings.internalRiskPct)||1;
+}
+function baseLotOf(acc){
+  if(isNormalAccount(acc)){ var o=toNum(acc.rules&&acc.rules.baseLot); if(isNum(o)&&o>0) return o; }
+  return toNum(DB.settings.baseLot);
+}
 function ownStopOf(acc){
-  var init=toNum(acc&&acc.initialBalance)||0, lim=init*ownStopPct()/100;
+  var init=toNum(acc&&acc.initialBalance)||0, lim=init*ownStopPct(acc)/100;
   var loss=Math.max(0,-todayPLOf(acc));
   return {limit:lim, loss:loss, pct:init>0?loss/init*100:0, hit:lim>0&&loss>=lim, init:init};
 }
@@ -859,7 +882,7 @@ function ownStopOf(acc){
 function stampOwnStop(rec){
   var acc=findAccount(rec.accountId)||currentAccount(); if(!acc) return;
   var os=ownStopOf(acc);
-  rec.ownStopPct=ownStopPct();
+  rec.ownStopPct=ownStopPct(acc);
   rec.dayLossPctAtEntry=Math.round(os.pct*100)/100;
   rec.afterOwnStop=os.hit;
 }
@@ -936,25 +959,28 @@ function viewAcctId(allowAll){
   if(v && findAccount(v)) return v;
   return currentAccountId();
 }
+// 分析の「全体」は同じ種類の口座だけ（プロップはプロップ同士、通常口座は通常口座同士）。XM とプロップを混ぜない（#42）
+function sameKindAs(a,b){ return isNormalAccount(a)===isNormalAccount(b); }
+function sameKindAccounts(){ var cur=currentAccount(); return (Array.isArray(DB.accounts)?DB.accounts:[]).filter(function(a){ return sameKindAs(a,cur); }); }
 function inViewAcct(t,allowAll){
   var id=viewAcctId(allowAll);
-  if(id==="all") return true;
+  if(id==="all") return sameKindAs(findAccount(t.accountId)||currentAccount(), currentAccount());
   if(id===currentAccountId()) return !t.accountId || t.accountId===id;
   return t.accountId===id;
 }
 window.setViewAcct=function(v){ UI.acct=v; render(); };
 // 分析だけ「この口座／全体」を選べる（右上の切り替えは口座だけ。全体のままシナリオを書けないように）
 function growthAcctBar(){
-  var list=(Array.isArray(DB.accounts)?DB.accounts:[]); if(list.length<2) return "";
-  var all=(UI.acct==="all"), cur=currentAccount();
+  var list=sameKindAccounts(); if(list.length<2) return "";
+  var all=(UI.acct==="all"), normal=isNormalAccount(currentAccount());
   return "<div class='scope'><button class='"+(all?"":"on")+"' onclick=\"setViewAcct('')\">この口座</button>"+
-         "<button class='"+(all?"on":"")+"' onclick=\"setViewAcct('all')\">全体</button></div>";
+         "<button class='"+(all?"on":"")+"' onclick=\"setViewAcct('all')\">"+(normal?"通常口座":"プロップ")+"全体</button></div>";
 }
 // 分析で「全体」のときの初期残高＝全口座の合計
 function growthInitialBalance(){
   var va=findAccount(viewAcctId(true));
   if(va) return toNum(va.initialBalance)||0;
-  if(UI.acct==="all") return (Array.isArray(DB.accounts)?DB.accounts:[]).reduce(function(a,x){ return a+(toNum(x.initialBalance)||0); },0);
+  if(UI.acct==="all") return sameKindAccounts().reduce(function(a,x){ return a+(toNum(x.initialBalance)||0); },0);
   return toNum(DB.settings.initialBalance)||0;
 }
 // 追加の文脈。同じ口座・銘柄・方向の保有があるとき、直前に建てたものと比べる。
@@ -1015,7 +1041,8 @@ function stampAddContext(rec){
   rec.addLotUp=cx.lotUp;
 }
 function labelCloseReason(v){
-  for(var i=0;i<ACCOUNT_CLOSE_REASONS.length;i++){ if(ACCOUNT_CLOSE_REASONS[i][0]===v) return ACCOUNT_CLOSE_REASONS[i][1]; }
+  var all=ACCOUNT_CLOSE_REASONS.concat(NORMAL_CLOSE_REASONS);
+  for(var i=0;i<all.length;i++){ if(all[i][0]===v) return all[i][1]; }
   return "";
 }
 
@@ -1592,7 +1619,7 @@ function inboxAccountFor(d){
   var prev=same.slice().sort(function(a,b){ return String(b.created||"").localeCompare(String(a.created||"")); })[0]||null;
   var tpl=""; for(var i=0;i<ACCOUNT_TEMPLATES.length;i++){ if(name.toLowerCase().indexOf(ACCOUNT_TEMPLATES[i].id)===0) tpl=ACCOUNT_TEMPLATES[i].id; }
   var na=makeAccount({name:same.length?name+" ("+(d.brokerId||(same.length+1))+")":name,
-                      type:prev?prev.type:"", typeNote:prev?prev.typeNote:"", initialBalance:prev?prev.initialBalance:0,
+                      type:prev?prev.type:((findTemplate(tpl)||{}).normal?"normal":""), typeNote:prev?prev.typeNote:"", initialBalance:prev?prev.initialBalance:0,
                       template:prev?prev.template:tpl, currency:d.currency||(prev?prev.currency:undefined),
                       rules:prev?JSON.parse(JSON.stringify(prev.rules||{})):undefined, mt5Offset:prev?prev.mt5Offset:"auto",
                       brokerIds:d.brokerId?[d.brokerId]:[]});
@@ -2031,7 +2058,8 @@ function calcFromInputs(o){
   if(isNum(out.plannedLoss)&&isNum(bal)&&bal>0){ out.riskPct=out.plannedLoss/bal*100; }
   if(isNum(out.plannedProfit)&&isNum(out.plannedLoss)&&out.plannedLoss>0){ out.rr=out.plannedProfit/out.plannedLoss; }
   // 推奨ロット（内部リスク%に収める）
-  var riskAmt = (isNum(bal)&&bal>0) ? bal*(toNum(DB.settings.internalRiskPct)||1)/100 : null;
+  var rp=toNum(o.riskPct); if(!isNum(rp)||rp<=0) rp=riskPctOf(currentAccount());
+  var riskAmt = (isNum(bal)&&bal>0) ? bal*rp/100 : null;
   if(isNum(riskAmt)&&isNum(out.slDist)&&out.slDist>0){
     out.recLot=riskAmt/(out.slDist*cs*fx);
     if(isNum(lot)) out.lotDiff=lot-out.recLot;
@@ -2044,7 +2072,7 @@ function calcTrade(t){
   // 持っていない過去の記録は 1＝換算なしのまま動かさない。
   var c=calcFromInputs({dir:t.dir,entry:t.entry,sl:t.sl,tp:t.tp,lot:t.lot,
                         contractSize:t.contractSize,balance:t.balanceAtEntry,
-                        fxRate:isNum(toNum(t.fxRate))?toNum(t.fxRate):1});
+                        fxRate:isNum(toNum(t.fxRate))?toNum(t.fxRate):1, riskPct:riskPctOf(accountOfTrade(t))});
   // 実現R = 実現損益 / 予定損失（予定損失0/未定義なら計算しない）
   c.realizedR=null;
   var pl=toNum(t.realizedPL);
@@ -2356,7 +2384,7 @@ function accountStatusCard(acc){
   var r=acc.rules||{}, init=toNum(acc.initialBalance)||0;
   var bal=balanceOf(acc), prog=bal-init, tdl=todayPLOf(acc), orisk=openRiskOf(acc);
   var on=(acc.id===currentAccountId());
-  var tpl=findTemplate(acc.template);
+  var tpl=findTemplate(acc.template), normal=isNormalAccount(acc);
   var tag=[]; if(tpl) tag.push(tpl.label); tag.push(acc.type?labelAccountType(acc.type):"種別未設定");
   var worst=orisk.open>0?"（保有中が全部SLなら）":"";
 
@@ -2380,10 +2408,15 @@ function accountStatusCard(acc){
   var os=ownStopOf(acc);
   if(os.limit>0){
     var oUsed=os.loss+orisk.loss, oUse=oUsed/os.limit*100, oLeft=Math.max(0,os.limit-oUsed);
-    h+=meter("自分の日次停止（"+ownStopPct()+"% / "+fmtMoney(os.limit)+"）",
+    h+=meter("自分の日次停止（"+ownStopPct(acc)+"% / "+fmtMoney(os.limit)+"）",
       os.hit?("本日 −"+fmtPct(os.pct,2)+" 到達"):("残り "+fmtMoney(oLeft)+"（"+fmtPct(os.init>0?oLeft/os.init*100:0,2)+"）"+worst),
       oUse, oUse>70?"var(--red)":"var(--green)");
   }
+  // 通常口座：規約のメーターは無い。保有中の最大損失だけ事実として出す（#42）
+  if(normal && orisk.open>0){
+    h+="<div class='smallnote tabular' style='margin:10px 0 0'>保有中が全部SLなら <b class='neg'>-"+fmtMoney(orisk.loss)+"</b>（残高の "+fmtPct(bal>0?orisk.loss/bal*100:0,2)+"）</div>";
+  }
+  if(!normal){
   // 日次損失：今日の確定損失＋保有中の最大損失
   var dLim=init*numOr(r.dailyLossPct,0)/100, dUsed=Math.max(0,-tdl)+orisk.loss;
   var dPct=dLim>0?dUsed/dLim*100:0;
@@ -2412,15 +2445,16 @@ function accountStatusCard(acc){
   if(r.ddBasis) notes.push("損失の数え方："+labelDdBasis(r.ddBasis));
   if(isNum(toNum(r.profitSplitPct))) notes.push("分配 "+fmtPct(toNum(r.profitSplitPct),0));
   if(notes.length) h+="<div class='smallnote' style='margin:10px 0 0'>"+esc(notes.join(" ・ "))+"</div>";
+  }
   if(orisk.noSL>0) h+="<div class='smallnote' style='margin:4px 0 0'>SLの無い保有 "+orisk.noSL+"件は、最大損失に入っていません。</div>";
   var lotUpN=tradesOfAccount(acc.id).filter(function(t){ return t.status==="open"&&t.addLotUp; }).length;
   if(lotUpN>0) h+="<div class='smallnote' style='margin:4px 0 0'>保有中のうち、逆行中にロットを増やした追加 "+lotUpN+"件。</div>";
-  if(r.ddBasis==="equity") h+="<div class='smallnote' style='margin:4px 0 0'>含み損はぼぶるから見えないため、保有中は損切りまで行った場合で数えています。</div>";
+  if(!normal && r.ddBasis==="equity") h+="<div class='smallnote' style='margin:4px 0 0'>含み損はぼぶるから見えないため、保有中は損切りまで行った場合で数えています。</div>";
   // 終了：一覧から外れるだけで、記録と分析には残る
   h+="<details style='margin:12px 0 0'><summary class='smallnote' style='cursor:pointer'>この口座を終了する</summary>"+
      "<div style='margin:8px 0 0'>"+
      field("終了の理由","<select id='ac_reason_"+acc.id+"'><option value=''>選ぶ</option>"+
-       ACCOUNT_CLOSE_REASONS.map(function(o){ return "<option value='"+o[0]+"'>"+esc(o[1])+"</option>"; }).join("")+"</select>")+
+       closeReasonsFor(acc).map(function(o){ return "<option value='"+o[0]+"'>"+esc(o[1])+"</option>"; }).join("")+"</select>")+
      "<button class='btn sm' onclick=\"closeAccount('"+acc.id+"')\">終了する（記録は残ります）</button>"+
      "</div></details>";
   h+="</div>";
@@ -3702,7 +3736,7 @@ function freshPlan(){
     id:null, editId:null,
     datetime:nowInput(currentAccount()), timeMode:inputTimeMode(), symbol:"XAUUSD", dir:"long",
     h4env:"", m15purple:"", trigger:"", pattern:"", emaPos:"", crossB:"", purpleSpread:"",
-    entry:"", sl:"", tp:"", lot:(s.baseLot!=null?String(s.baseLot):"1.00"),
+    entry:"", sl:"", tp:"", lot:(isNum(baseLotOf(currentAccount()))?String(baseLotOf(currentAccount())):"1.00"),
     balance:String(Math.round(currentBalance())), contractSize:String(s.contractSize),
     sawLower:"", memo:"", tags:[], entryShot:null,
     scenarioMode:"join"   // 同じ方向の保有があるとき：join＝同じシナリオに足す / new＝別のシナリオにする
@@ -3868,7 +3902,7 @@ function renderPlanCalc(){
   // インラインエラー表示
   setErr("p_sl_err","p_sl",c.errSL); setErr("p_tp_err","p_tp",c.errTP);
   var s=DB.settings;
-  var acc=currentAccount(), rr=(acc&&acc.rules)||{};
+  var acc=currentAccount(), rr=(acc&&acc.rules)||{}, rp=riskPctOf(acc), normal=isNormalAccount(acc);
   var init=acc?(toNum(acc.initialBalance)||0):(toNum(DB.settings.initialBalance)||0);
   var orisk=acc?openRiskOf(acc).loss:0;   // 既に保有中のぶんは、損切りまで行った前提で先に引いておく
   var dailyLimit=init*numOr(rr.dailyLossPct,5)/100;
@@ -3883,13 +3917,15 @@ function renderPlanCalc(){
   html+="<div class='cb'><div class='ck'>予定利益</div><div class='cv pos'>"+(isNum(c.plannedProfit)?"+"+fmtMoney(c.plannedProfit,0):"—")+"</div></div>";
   html+="</div>";
 
-  // ── この損切りを食らったら（Fintokei 残り枠）──
-  html+="<div class='budget'>";
+  // ── この損切りを食らったら（残り枠）。通常口座は自分ルールだけ、規約の行は出さない ──
+  var bud="";
   var os=acc?ownStopOf(acc):null;
-  if(os&&os.limit>0) html+=budgetRow("この損切りで 自分ルール残り", os.limit-os.loss-orisk, pl, os.limit);
-  html+=budgetRow("この損切りで 規約の日次残り", dailyRemain, pl, dailyLimit);
-  html+=budgetRow("この損切りで 全体残り", totalRemain, pl, maxLimit);
-  html+="</div>";
+  if(os&&os.limit>0) bud+=budgetRow("この損切りで 自分ルール残り", os.limit-os.loss-orisk, pl, os.limit);
+  if(!normal){
+    bud+=budgetRow("この損切りで 規約の日次残り", dailyRemain, pl, dailyLimit);
+    bud+=budgetRow("この損切りで 全体残り", totalRemain, pl, maxLimit);
+  }
+  if(bud) html+="<div class='budget'>"+bud+"</div>";
 
   // シナリオ合計。同じ根拠で分けて入れたぶんを合わせて見る（1注文ではなく1シナリオで測る）
   if(acc){
@@ -3898,7 +3934,7 @@ function renderPlanCalc(){
     var sTot=sr.loss+(isNum(pl)?pl:0), sN=sr.n+1;
     var sBal=toNum(PLAN.balance);
     var sPct=(isNum(sBal)&&sBal>0)?sTot/sBal*100:null;
-    var over=isNum(sPct)&&sPct>(toNum(s.internalRiskPct)||1);
+    var over=isNum(sPct)&&sPct>rp;
     html+=cline("このシナリオ合計（"+sN+"件）",
       (sTot>0?"-"+fmtMoney(sTot,0):"—")+(isNum(sPct)?" <span class='"+(over?"gold":"")+"'>"+fmtPct(sPct,2)+"</span>":""));
   }
@@ -3913,9 +3949,9 @@ function renderPlanCalc(){
 
   html+=cline("SLまでの価格差", isNum(c.slDist)?c.slDist.toFixed(2):"—");
   html+=cline("TPまでの価格差", isNum(c.tpDist)?c.tpDist.toFixed(2):"—");
-  html+=cline("予定リスク率", isNum(c.riskPct)?("<span class='"+(c.riskPct>(toNum(s.internalRiskPct)||1)?"gold":"")+"'>"+fmtPct(c.riskPct,2)+"</span>"):"—");
+  html+=cline("予定リスク率", isNum(c.riskPct)?("<span class='"+(c.riskPct>rp?"gold":"")+"'>"+fmtPct(c.riskPct,2)+"</span>"):"—");
   html+=cline("リスクリワード比", isNum(c.rr)?("1 : "+c.rr.toFixed(2)):"—");
-  html+=cline("推奨ロット（"+fmtPct(toNum(s.internalRiskPct)||1,0)+"に収める）", isNum(c.recLot)?("<span class='gold'>"+c.recLot.toFixed(2)+"</span>"):"—");
+  html+=cline("推奨ロット（"+fmtPct(rp,1).replace(".0%","%")+"に収める）", isNum(c.recLot)?("<span class='gold'>"+c.recLot.toFixed(2)+"</span>"):"—");
   html+=cline("現ロットとの差", isNum(c.lotDiff)?((c.lotDiff>0?"+":"")+c.lotDiff.toFixed(2)):"—");
   html+="</div>";
   box.innerHTML=html;
@@ -4987,12 +5023,13 @@ function newAccountBody(){
        "</select>")+"</div>";
   h+="<div class='row2'>"+field("初期残高","<input type='number' inputmode='decimal' step='any' id='a_init' placeholder='100000'>")+
      field("通貨","<select id='a_cur'>"+CURRENCIES.map(function(c){ return "<option value='"+c+"'"+(c===acctCurrency()?" selected":"")+">"+c+"</option>"; }).join("")+"</select>")+"</div>";
+  h+="<div class='smallnote' style='margin:0 0 10px'>XM など規約の無い口座は、ひな形「XM」を選ぶか種別「通常口座」にします。規約のメーターは出ず、分析もプロップ口座とは混ぜません。</div>";
   h+="<button class='btn primary sm' onclick='addAccount()'>口座を追加して切り替える</button>";
   return h;
 }
 // いまの口座の欄。口座名・種別・初期残高もここで直す（旧「基本」の二重項目をここに寄せた）
 function accountRulesForm(a){
-  var r=a.rules||{}, id=a.id;
+  var r=a.rules||{}, id=a.id, normal=isNormalAccount(a);
   var inp=function(key,label,val,step){
     return field(label,"<input type='number' inputmode='decimal' step='"+(step||"any")+"' id='ar_"+key+"_"+id+"' value='"+esc(val===null||val===undefined?"":val)+"'>");
   };
@@ -5002,9 +5039,20 @@ function accountRulesForm(a){
        ACCOUNT_TYPES.map(function(o){ return "<option value='"+o[0]+"'"+(a.type===o[0]?" selected":"")+">"+esc(o[1])+"</option>"; }).join("")+"</select>")+"</div>";
   h+="<div class='row2'>"+inp("init","初期残高",a.initialBalance)+
      field("通貨","<select id='ar_cur_"+id+"'>"+CURRENCIES.concat(a.currency&&CURRENCIES.indexOf(a.currency)<0?[a.currency]:[]).map(function(c){ return "<option value='"+c+"'"+(c===a.currency?" selected":"")+">"+c+"</option>"; }).join("")+"</select>")+"</div>";
-  h+=inp("target","目標(%)　空欄＝目標なし",r.targetPct);
+  if(!normal) h+=inp("target","目標(%)　空欄＝目標なし",r.targetPct);
   h+=field("MT5 のサーバー時刻（「MT5 の時刻で入力」の変換に使う）","<select id='ar_mt5_"+id+"'>"+MT5_OFFSETS.map(function(o){
        return "<option value='"+o[0]+"'"+((a.mt5Offset||"auto")===o[0]?" selected":"")+">"+esc(o[1])+"</option>"; }).join("")+"</select>");
+  if(normal){
+    // 通常口座：規約の欄は無い。自分ルールを口座ごとに持てる（空欄＝設定「内部ルール」の共通値）
+    h+="<div class='sect-title' style='margin:10px 0 8px'>この口座の自分ルール（空欄＝共通の内部ルール）</div>";
+    h+="<div class='row2'>"+inp("risk","1トレードのリスク率(%)",r.riskPct)+inp("blot","基本ロット",r.baseLot)+"</div>";
+    h+="<div class='row2'>"+inp("ownstop","自分の日次停止(%)",r.ownStopPct)+
+       field("終了の理由","<select id='ac_reason_"+id+"'><option value=''>選ぶ</option>"+
+         NORMAL_CLOSE_REASONS.map(function(o){ return "<option value='"+o[0]+"'>"+esc(o[1])+"</option>"; }).join("")+"</select>")+"</div>";
+    h+="<div class='btnrow'><button class='btn sm' onclick=\"saveAccountRules('"+id+"')\">この口座を保存</button>"+
+       "<button class='btn ghost sm' onclick=\"closeAccount('"+id+"')\">この口座を終了する</button></div>";
+    return h;
+  }
   h+="<div class='sect-title' style='margin:10px 0 8px'>この口座のルール</div>";
   h+="<div class='row2'>"+inp("daily","1日の最大損失(%)",r.dailyLossPct)+inp("max","全体の最大損失(%)",r.maxLossPct)+"</div>";
   h+="<div class='row2'>"+inp("open","保有中の最大リスク(%)",r.openRiskPct)+
@@ -5065,8 +5113,15 @@ window.saveAccountRules=function(id){
   if(initEl){ var iv=toNum(initEl.value); if(isNum(iv)) a.initialBalance=iv; }
   var curEl=document.getElementById("ar_cur_"+id), curChanged=false;
   if(curEl && curEl.value && String(curEl.value).toUpperCase()!==(a.currency||"")){ a.currency=String(curEl.value).toUpperCase(); curChanged=true; }
-  var prevTarget=(a.rules||{}).targetPct;
+  var prevRules=a.rules||{}, prevTarget=prevRules.targetPct;
+  if(a.type==="normal"){
+    // 通常口座：自分ルールだけ読む。規約の値は触らない（種別を戻したとき用に残す）
+    var own={riskPct:num("risk",null), baseLot:num("blot",null), ownStopPct:num("ownstop",null)};
+    for(var pk in prevRules){ if(own[pk]===undefined && pk!=="targetPct") own[pk]=prevRules[pk]; }
+    a.rules=normalizeRules(own,"normal",a.template,DB.settings.fin);
+  } else
   a.rules={
+    riskPct:numOr(prevRules.riskPct,null), baseLot:numOr(prevRules.baseLot,null), ownStopPct:numOr(prevRules.ownStopPct,null),
     targetPct:(g("target")===""&&typeEl&&a.type!==prevType)?prevTarget:num("target",null),
     dailyLossPct:num("daily",0),
     maxLossPct:num("max",0),
@@ -5092,6 +5147,7 @@ window.switchAccount=function(id){
 window.addAccount=function(){
   var g=function(x){var e=document.getElementById(x);return e?e.value:"";};
   var name=(g("a_name")||"").trim(), type=g("a_type"), init=toNum(g("a_init")), tpl=g("a_tpl"), cur=(g("a_cur")||"").toUpperCase();
+  if((findTemplate(tpl)||{}).normal) type="normal";   // 通常口座のひな形は種別も通常口座
   if(!name){ toast("口座名を入れて下さい"); return; }
   if(!isAccountType(type)){ toast("種別を選んで下さい"); return; }
   if(!isNum(init)){ toast("初期残高を入れて下さい"); return; }
@@ -5155,7 +5211,7 @@ function viewSettings(){
      field("基本ロット","<input type='number' inputmode='decimal' step='any' id='s_blot' value='"+esc(s.baseLot)+"'>")+"</div>"+
      "<div class='row2'>"+field("連敗注意ライン","<input type='number' inputmode='numeric' step='1' id='s_streak' value='"+esc(s.lossStreakWarn)+"'>")+
      field("自分の日次停止ライン(%)","<input type='number' inputmode='decimal' step='any' id='s_ownstop' value='"+esc(ownStopPct())+"'>")+"</div>"+
-     "<div class='smallnote'>これらは自分で決めた内部基準です。口座のルール（Fintokei 公式など）とは別管理です。</div>";
+     "<div class='smallnote'>これらは自分で決めた内部基準です。口座のルール（Fintokei 公式など）とは別管理です。通常口座（XM など）は「口座」の欄で口座ごとに別の値を持てます。</div>";
 
   // ---- 右：たまに使う ----
   // 口座通貨と為替レート
