@@ -1,0 +1,172 @@
+{
+ "symbol": "XAUUSD",
+ "date": "2026-11-17",
+ "source": "claude-code",
+ "asOf": "2026-11-16T22:39:53+00:00",
+ "price": 3856.52,
+ "trend": {
+  "daily": "down",
+  "h4": "down",
+  "h1": "down",
+  "m15": "down"
+ },
+ "ema": {
+  "tf": "h1",
+  "e10": 3859.96,
+  "e75": 3909.44,
+  "e200": 3973.48
+ },
+ "levels": {
+  "prevHigh": 3901.37,
+  "prevLow": 3832.46,
+  "weekHigh": 3901.37,
+  "weekLow": 3832.46,
+  "recentHigh": 3901.82,
+  "recentLow": 3832.72
+ },
+ "sessions": {
+  "asia": {
+   "high": null,
+   "low": null
+  },
+  "london": {
+   "high": 3890.12,
+   "low": 3851.72
+  },
+  "newyork": {
+   "high": 3890.12,
+   "low": 3841.22
+  }
+ },
+ "scenarios": {
+  "bull": "ロング案は逆張りなので小さく。3832〜3841（前日安値〜NY 安値）で下げ止まり、15分で安値を切り上げて 3860（EMA10）を上抜けたら、戻り狙いで検討。SL は 3832 割れの少し下。目標は 3890〜3901 の前日高値ゾーンまでで、EMA75 3909 を超えない限り深追いしない。根拠は 4H の水色が 15 付近と売られすぎで、紫5本の幅（24）がまだあり反発の余地があること。",
+  "bear": "ショート案が本線。3890〜3909（前日高値〜1H EMA75）への戻りで上値が重くなり、15分で高値を切り下げて 3880 を割ったら売り。SL は 3910 の少し上。目標は 3841（NY 安値）→ 3832（前日安値・週安値）。根拠は全時間足の向きが下で、15分の紫5本が上から下へ順に並ぶ（46→28）下向き配列であること。3832 を明確に割れた場合は、戻りの高値を確認してからの追随売りに限る。",
+  "noTrade": "22:30 の小売売上高（重要度 high）の前後 30 分は新規を見送る。22:15 の ADP 週次、23:15 の鉱工業生産も続くので、NY 序盤は値動きの確認を優先。3841〜3890 の中間帯での往復（15分の水色 55 で方向感なし、紫の幅 18 と広がり始めていない）は見送り。4H の水色が 15 付近から急反発した直後の飛び乗り売りも避ける。"
+ },
+ "bias": "short",
+ "summary": "日足・4H・1H・15分すべて下向きで、1H の EMA75（3909 付近）と EMA200（3973 付近）の下で推移。いちばん意識されるのは前日安値＝今週安値の 3832 と、前日高値 3901〜EMA75 3909 の壁。基本は戻り売り目線だが、4H の水色（b）が 15 付近と売られすぎ圏で、安値圏の追いかけ売りは避けたい。",
+ "events": [
+  {
+   "time": "00:00",
+   "name": "Business Inventories MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "00:00",
+   "name": "NAHB Housing Market Index",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "3-Month Bill Auction Allotted at High",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "3-Month Bill Auction Bid-to-Cover",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "3-Month Bill Auction Total Accepted",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "6-Month Bill Auction Allotted at High",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "6-Month Bill Auction Bid-to-Cover",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "6-Month Bill Auction Total Accepted",
+   "importance": "mid"
+  },
+  {
+   "time": "02:00",
+   "name": "NOPA Soybean Oil Stocks",
+   "importance": "mid"
+  },
+  {
+   "time": "22:15",
+   "name": "ADP Employment Change Weekly",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "United States-Imports/Exports-Export Prices YY *",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Export Prices MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Import Prices MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Retail Sales Ex Autos MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Retail Sales MoM",
+   "importance": "high"
+  },
+  {
+   "time": "23:15",
+   "name": "Industrial Production MoM",
+   "importance": "mid"
+  }
+ ],
+ "bobEdge": {
+  "m15": {
+   "a": 42.6,
+   "b": 55.1,
+   "c": 30.3,
+   "purple": [
+    45.9,
+    43.0,
+    38.6,
+    31.8,
+    27.8
+   ],
+   "spread": 18.2,
+   "slope": 0.3,
+   "trend": "flat",
+   "cross": null,
+   "bar_t": 1794865500
+  },
+  "h4": {
+   "a": 30.8,
+   "b": 14.9,
+   "c": 23.5,
+   "purple": [
+    51.3,
+    45.8,
+    39.0,
+    32.9,
+    26.9
+   ],
+   "spread": 24.4,
+   "slope": -1.1,
+   "trend": "flat",
+   "cross": null,
+   "bar_t": 1794837600
+  }
+ },
+ "notes": [
+  "足は先物（GC=F）をスポットに合わせて -2.48 ずらしたもの",
+  "作成時刻（JST 7:39）は日足の区切り直後で、TradingView の日足はまだ月曜足が最新。prevHigh/prevLow は月曜（11/16）の値、weekHigh/weekLow は今週（月曜のみ）の値。",
+  "sessions.asia は未開始のため null。london/newyork は月曜のもの。",
+  "経済指標は TradingView カレンダー（USD・重要度 mid 以上）。0:00〜2:00 の項目は本日未明に通過済み。重要度 high は 22:30 の小売売上高（Retail Sales MoM）のみ。"
+ ]
+}

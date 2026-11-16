@@ -1,9 +1,9 @@
 {
  "symbol": "XAUUSD",
- "date": "2026-11-16",
+ "date": "2026-11-17",
  "source": "claude-code",
- "asOf": "2026-11-15T22:39:31+00:00",
- "price": 3884.685,
+ "asOf": "2026-11-16T22:39:53+00:00",
+ "price": 3856.52,
  "trend": {
   "daily": "down",
   "h4": "down",
@@ -12,17 +12,17 @@
  },
  "ema": {
   "tf": "h1",
-  "e10": 3885.09,
-  "e75": 3948.84,
-  "e200": 4002.52
+  "e10": 3859.96,
+  "e75": 3909.44,
+  "e200": 3973.48
  },
  "levels": {
-  "prevHigh": 3923.09,
-  "prevLow": 3867.67,
-  "weekHigh": 4148.71,
-  "weekLow": 3852.58,
-  "recentHigh": 3925.585,
-  "recentLow": 3869.485
+  "prevHigh": 3901.37,
+  "prevLow": 3832.46,
+  "weekHigh": 3901.37,
+  "weekLow": 3832.46,
+  "recentHigh": 3901.82,
+  "recentLow": 3832.72
  },
  "sessions": {
   "asia": {
@@ -30,68 +30,143 @@
    "low": null
   },
   "london": {
-   "high": null,
-   "low": null
+   "high": 3890.12,
+   "low": 3851.72
   },
   "newyork": {
-   "high": null,
-   "low": null
+   "high": 3890.12,
+   "low": 3841.22
   }
  },
  "scenarios": {
-  "bull": "ロング案（逆張りなので小さく）：週明けに週安値 3853〜金曜安値 3868 を割らずに 15分足で安値を切り上げ、白（a）が紫の帯（22〜33）の上に留まったまま金曜高値 3923 を上抜けるなら、3868 の少し下を SL にして短い反発を狙う。目安は 1時間 EMA75 の 3949、伸びても 4000〜4003（1時間 EMA200・心理的節目）まで。根拠は 4H の水色（b）13.5 と売られすぎで、15分の白 63.5 が紫 22〜33 の上にあり短期は反発側にいること。ただし上位足が全部下なので利は伸ばさず、3923〜3949 で止まったら手じまいを考える。",
-  "bear": "ショート案（本線）：金曜高値 3923〜1時間 EMA75 の 3949、深ければ 4000〜4003（EMA200・節目）の帯まで戻し、15分足で上値が重くなる（水色（b）が 65〜80 の帯から下へ抜ける、または白が紫の帯を再び下抜ける）のを待って入る。SL は戻り高値の少し上（浅い戻りなら 3949 の上、深い戻りなら 4003 の上）。目安は金曜安値 3868、次に週安値 3853、割れれば 3800 前後。根拠は 4 本の時間足がすべて下向きで、1時間の EMA75・200 が上にあり、4H の紫 5 本（27〜55）が広がったまま下向きに並んでいること。3853 を割った直後は飛び乗らず、割れた安値を上回れない戻り失敗を待つ。",
-  "noTrade": "見送る条件：週明け早朝（日本時間 6〜8 時）の薄い時間帯と窓の直後。3853〜3885 の週安値の直上での新規ショート（売られすぎで反発リスクが高い）。15分の紫の広がりが 11 から縮んで横ばいになり、白が紫の帯の中に戻るとき（収束中、方向が決まる前）。4H の水色（b）が 20 を割ったまま 4H で陽線が続くとき（戻りの途中）。日本時間 22:30 の NY 連銀製造業景気指数（重要度 mid）の前後は値が飛びやすいので様子見。重要度 high の指標は今日の予定になし。"
+  "bull": "ロング案は逆張りなので小さく。3832〜3841（前日安値〜NY 安値）で下げ止まり、15分で安値を切り上げて 3860（EMA10）を上抜けたら、戻り狙いで検討。SL は 3832 割れの少し下。目標は 3890〜3901 の前日高値ゾーンまでで、EMA75 3909 を超えない限り深追いしない。根拠は 4H の水色が 15 付近と売られすぎで、紫5本の幅（24）がまだあり反発の余地があること。",
+  "bear": "ショート案が本線。3890〜3909（前日高値〜1H EMA75）への戻りで上値が重くなり、15分で高値を切り下げて 3880 を割ったら売り。SL は 3910 の少し上。目標は 3841（NY 安値）→ 3832（前日安値・週安値）。根拠は全時間足の向きが下で、15分の紫5本が上から下へ順に並ぶ（46→28）下向き配列であること。3832 を明確に割れた場合は、戻りの高値を確認してからの追随売りに限る。",
+  "noTrade": "22:30 の小売売上高（重要度 high）の前後 30 分は新規を見送る。22:15 の ADP 週次、23:15 の鉱工業生産も続くので、NY 序盤は値動きの確認を優先。3841〜3890 の中間帯での往復（15分の水色 55 で方向感なし、紫の幅 18 と広がり始めていない）は見送り。4H の水色が 15 付近から急反発した直後の飛び乗り売りも避ける。"
  },
  "bias": "short",
- "summary": "日足・4H・1時間・15分のすべてが下向き。先週は 4149 から 3853 まで急落し、金曜は 3868〜3923 の狭い値幅で 3885 引けと、安値圏で足踏み中。現在値 3885 は 1時間 EMA10（3885）に張り付き、EMA75（3949）・EMA200（4003）が上に並ぶ。週明けは戻り売り目線だが、週安値 3853 の直上で 4H の水色（b）が 13.5 と売られすぎなので、戻りを待ってから入りたい。",
+ "summary": "日足・4H・1H・15分すべて下向きで、1H の EMA75（3909 付近）と EMA200（3973 付近）の下で推移。いちばん意識されるのは前日安値＝今週安値の 3832 と、前日高値 3901〜EMA75 3909 の壁。基本は戻り売り目線だが、4H の水色（b）が 15 付近と売られすぎ圏で、安値圏の追いかけ売りは避けたい。",
  "events": [
   {
+   "time": "00:00",
+   "name": "Business Inventories MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "00:00",
+   "name": "NAHB Housing Market Index",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "3-Month Bill Auction Allotted at High",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "3-Month Bill Auction Bid-to-Cover",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "3-Month Bill Auction Total Accepted",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "6-Month Bill Auction Allotted at High",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "6-Month Bill Auction Bid-to-Cover",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "6-Month Bill Auction Total Accepted",
+   "importance": "mid"
+  },
+  {
+   "time": "02:00",
+   "name": "NOPA Soybean Oil Stocks",
+   "importance": "mid"
+  },
+  {
+   "time": "22:15",
+   "name": "ADP Employment Change Weekly",
+   "importance": "mid"
+  },
+  {
    "time": "22:30",
-   "name": "NY Empire State Manufacturing Index",
+   "name": "United States-Imports/Exports-Export Prices YY *",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Export Prices MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Import Prices MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Retail Sales Ex Autos MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Retail Sales MoM",
+   "importance": "high"
+  },
+  {
+   "time": "23:15",
+   "name": "Industrial Production MoM",
    "importance": "mid"
   }
  ],
  "bobEdge": {
   "m15": {
-   "a": 63.5,
-   "b": 25.9,
-   "c": 30.5,
+   "a": 42.6,
+   "b": 55.1,
+   "c": 30.3,
    "purple": [
-    31.6,
-    33.0,
-    31.7,
-    28.8,
-    22.0
+    45.9,
+    43.0,
+    38.6,
+    31.8,
+    27.8
    ],
-   "spread": 11.0,
-   "slope": -1.5,
+   "spread": 18.2,
+   "slope": 0.3,
    "trend": "flat",
    "cross": null,
-   "bar_t": 1794606300
+   "bar_t": 1794865500
   },
   "h4": {
-   "a": 46.3,
-   "b": 13.5,
-   "c": 41.8,
+   "a": 30.8,
+   "b": 14.9,
+   "c": 23.5,
    "purple": [
-    54.7,
-    47.2,
-    38.9,
-    34.3,
+    51.3,
+    45.8,
+    39.0,
+    32.9,
     26.9
    ],
-   "spread": 27.8,
-   "slope": -0.0,
+   "spread": 24.4,
+   "slope": -1.1,
    "trend": "flat",
    "cross": null,
-   "bar_t": 1794578400
+   "bar_t": 1794837600
   }
  },
  "notes": [
-  "足は先物（GC=F）をスポットに合わせて -1.62 ずらしたもの",
-  "週明け早朝のため TradingView の足は金曜引け（11/14 6:45 JST）が最新。price は金曜終値、prevHigh/prevLow は金曜（11/13）、weekHigh/weekLow は先週（11/9〜13）の値。",
-  "セッション高安は未算出（null）。",
-  "経済指標は TradingView カレンダー（USD・重要度 mid 以上）で NY 連銀製造業景気指数のみ。重要度 high はなし。"
+  "足は先物（GC=F）をスポットに合わせて -2.48 ずらしたもの",
+  "作成時刻（JST 7:39）は日足の区切り直後で、TradingView の日足はまだ月曜足が最新。prevHigh/prevLow は月曜（11/16）の値、weekHigh/weekLow は今週（月曜のみ）の値。",
+  "sessions.asia は未開始のため null。london/newyork は月曜のもの。",
+  "経済指標は TradingView カレンダー（USD・重要度 mid 以上）。0:00〜2:00 の項目は本日未明に通過済み。重要度 high は 22:30 の小売売上高（Retail Sales MoM）のみ。"
  ]
 }
