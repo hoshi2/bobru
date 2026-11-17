@@ -2,7 +2,7 @@
  "symbol": "XAUUSD",
  "date": "2026-11-18",
  "source": "claude-code",
- "asOf": "2026-11-17T22:39:46+00:00",
+ "asOf": "2026-11-17T22:39:55+00:00",
  "price": 3849.21,
  "trend": {
   "daily": "down",
@@ -164,7 +164,6 @@
   }
  },
  "notes": [
-  "足は先物（GC=F）をスポットに合わせて -2.69 ずらしたもの",
   "足は先物（GC=F）をスポットに合わせて -2.69 ずらしたもの",
   "作成時刻（JST 7:38）は日足の区切り直後で、TradingView の日足はまだ火曜足が最新。prevHigh/prevLow は火曜（11/17）の値、weekHigh/weekLow は今週（月〜火）の値。",
   "sessions.asia は未開始のため null。london/newyork は火曜のもの。",
