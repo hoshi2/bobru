@@ -1,9 +1,9 @@
 {
  "symbol": "XAUUSD",
- "date": "2026-11-17",
+ "date": "2026-11-18",
  "source": "claude-code",
- "asOf": "2026-11-16T22:39:53+00:00",
- "price": 3856.52,
+ "asOf": "2026-11-17T22:39:46+00:00",
+ "price": 3849.21,
  "trend": {
   "daily": "down",
   "h4": "down",
@@ -12,17 +12,17 @@
  },
  "ema": {
   "tf": "h1",
-  "e10": 3859.96,
-  "e75": 3909.44,
-  "e200": 3973.48
+  "e10": 3854.98,
+  "e75": 3887.46,
+  "e200": 3950.5
  },
  "levels": {
-  "prevHigh": 3901.37,
-  "prevLow": 3832.46,
+  "prevHigh": 3891.075,
+  "prevLow": 3836.96,
   "weekHigh": 3901.37,
   "weekLow": 3832.46,
-  "recentHigh": 3901.82,
-  "recentLow": 3832.72
+  "recentHigh": 3891.31,
+  "recentLow": 3836.51
  },
  "sessions": {
   "asia": {
@@ -30,21 +30,21 @@
    "low": null
   },
   "london": {
-   "high": 3890.12,
-   "low": 3851.72
+   "high": 3891.31,
+   "low": 3836.51
   },
   "newyork": {
-   "high": 3890.12,
-   "low": 3841.22
+   "high": 3891.31,
+   "low": 3836.51
   }
  },
  "scenarios": {
-  "bull": "ロング案は逆張りなので小さく。3832〜3841（前日安値〜NY 安値）で下げ止まり、15分で安値を切り上げて 3860（EMA10）を上抜けたら、戻り狙いで検討。SL は 3832 割れの少し下。目標は 3890〜3901 の前日高値ゾーンまでで、EMA75 3909 を超えない限り深追いしない。根拠は 4H の水色が 15 付近と売られすぎで、紫5本の幅（24）がまだあり反発の余地があること。",
-  "bear": "ショート案が本線。3890〜3909（前日高値〜1H EMA75）への戻りで上値が重くなり、15分で高値を切り下げて 3880 を割ったら売り。SL は 3910 の少し上。目標は 3841（NY 安値）→ 3832（前日安値・週安値）。根拠は全時間足の向きが下で、15分の紫5本が上から下へ順に並ぶ（46→28）下向き配列であること。3832 を明確に割れた場合は、戻りの高値を確認してからの追随売りに限る。",
-  "noTrade": "22:30 の小売売上高（重要度 high）の前後 30 分は新規を見送る。22:15 の ADP 週次、23:15 の鉱工業生産も続くので、NY 序盤は値動きの確認を優先。3841〜3890 の中間帯での往復（15分の水色 55 で方向感なし、紫の幅 18 と広がり始めていない）は見送り。4H の水色が 15 付近から急反発した直後の飛び乗り売りも避ける。"
+  "bull": "ロング案は逆張りなので小さく。3832〜3837（週安値〜前日安値）で下げ止まり、15分で安値を切り上げて 3855（1H EMA10）を上抜けたら、戻り狙いで検討。SL は 3832 割れの少し下。目標は 3887〜3891（1H EMA75〜前日高値）までで、3901（週高値）を超えない限り深追いしない。根拠は 4H の水色（b）が 25 と 20〜35 の帯にあり、白（54）がその上にある反発の形で、安値が 2 日間守られていること。",
+  "bear": "ショート案が本線。3887〜3901（1H EMA75〜前日高値〜週高値）への戻りで上値が重くなり、15分で高値を切り下げて 3880 を割ったら売り。SL は 3901 の少し上。目標は 3837（前日安値）→ 3832（週安値）。根拠は全時間足の向きが下で、4H の紫5本が上から下へ順に並ぶ下向き配列（44→27）であること。3832 を明確に割れて 15分の紫が広がり始めた場合は、戻りの高値を確認してからの追随売りに限る。",
+  "noTrade": "22:30 の住宅着工件数・建設許可件数（重要度 high）の前後 30 分は新規を見送る。21:00 の MBA 住宅ローン関連、翌 0:00 の中古住宅販売保留も続くので、NY 序盤は値動きの確認を優先。15分の紫5本の幅が 7 と小さく収束中なので、広がり始めるまでは 3840〜3880 の中間帯での往復は見送り。4H の水色が 25 と低く、安値圏での追いかけ売りは避ける。アジア時間は値幅が出にくいので無理に入らない。"
  },
  "bias": "short",
- "summary": "日足・4H・1H・15分すべて下向きで、1H の EMA75（3909 付近）と EMA200（3973 付近）の下で推移。いちばん意識されるのは前日安値＝今週安値の 3832 と、前日高値 3901〜EMA75 3909 の壁。基本は戻り売り目線だが、4H の水色（b）が 15 付近と売られすぎ圏で、安値圏の追いかけ売りは避けたい。",
+ "summary": "日足・4H・1H・15分すべて下向きで、1H の EMA10（3855 付近）・EMA75（3887 付近）・EMA200（3950 付近）の下で推移。前日は 3837〜3891 と月曜の値幅（3832〜3901）の内側で動き、いちばん意識されるのは下の 3832〜3837（週安値〜前日安値）と、上の 3887〜3891（1H EMA75〜前日高値）の壁。基本は戻り売り目線だが、2日間続けて安値を割れておらず、15分の紫が収束中なので動き出しを待ちたい。",
  "events": [
   {
    "time": "00:00",
@@ -57,116 +57,117 @@
    "importance": "mid"
   },
   {
-   "time": "01:30",
-   "name": "3-Month Bill Auction Allotted at High",
+   "time": "00:00",
+   "name": "Pending Home Sales Index",
    "importance": "mid"
   },
   {
-   "time": "01:30",
-   "name": "3-Month Bill Auction Bid-to-Cover",
+   "time": "00:00",
+   "name": "Pending Home Sales MoM",
    "importance": "mid"
   },
   {
-   "time": "01:30",
-   "name": "3-Month Bill Auction Total Accepted",
+   "time": "06:30",
+   "name": "API Crude Oil Stock Change",
    "importance": "mid"
   },
   {
-   "time": "01:30",
-   "name": "6-Month Bill Auction Allotted at High",
+   "time": "21:00",
+   "name": "MBA 5/1 ARM Contract Rate",
    "importance": "mid"
   },
   {
-   "time": "01:30",
-   "name": "6-Month Bill Auction Bid-to-Cover",
+   "time": "21:00",
+   "name": "MBA 5/1 ARM Effective Rate",
    "importance": "mid"
   },
   {
-   "time": "01:30",
-   "name": "6-Month Bill Auction Total Accepted",
+   "time": "21:00",
+   "name": "MBA 15-Year Mortgage Contract Rate",
    "importance": "mid"
   },
   {
-   "time": "02:00",
-   "name": "NOPA Soybean Oil Stocks",
+   "time": "21:00",
+   "name": "MBA 15-Year Mortgage Effective Rate",
    "importance": "mid"
   },
   {
-   "time": "22:15",
-   "name": "ADP Employment Change Weekly",
+   "time": "21:00",
+   "name": "MBA 15-Year Mortgage Points",
    "importance": "mid"
   },
   {
-   "time": "22:30",
-   "name": "United States-Imports/Exports-Export Prices YY *",
+   "time": "21:00",
+   "name": "MBA 30-Year Mortgage Rate",
    "importance": "mid"
   },
   {
-   "time": "22:30",
-   "name": "Export Prices MoM",
-   "importance": "mid"
-  },
-  {
-   "time": "22:30",
-   "name": "Import Prices MoM",
+   "time": "21:00",
+   "name": "MBA 5/1 ARM Points",
    "importance": "mid"
   },
   {
    "time": "22:30",
-   "name": "Retail Sales Ex Autos MoM",
-   "importance": "mid"
-  },
-  {
-   "time": "22:30",
-   "name": "Retail Sales MoM",
+   "name": "Housing Starts",
    "importance": "high"
   },
   {
-   "time": "23:15",
-   "name": "Industrial Production MoM",
+   "time": "22:30",
+   "name": "Housing Starts MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Building Permits Prel",
+   "importance": "high"
+  },
+  {
+   "time": "22:30",
+   "name": "Building Permits MoM Prel",
    "importance": "mid"
   }
  ],
  "bobEdge": {
   "m15": {
-   "a": 42.6,
-   "b": 55.1,
-   "c": 30.3,
+   "a": 61.9,
+   "b": 25.5,
+   "c": 39.3,
    "purple": [
-    45.9,
-    43.0,
-    38.6,
-    31.8,
-    27.8
+    41.9,
+    42.8,
+    47.8,
+    48.9,
+    43.2
    ],
-   "spread": 18.2,
-   "slope": 0.3,
-   "trend": "flat",
+   "spread": 7.0,
+   "slope": -2.3,
+   "trend": "down",
    "cross": null,
-   "bar_t": 1794865500
+   "bar_t": 1794951900
   },
   "h4": {
-   "a": 30.8,
-   "b": 14.9,
-   "c": 23.5,
+   "a": 53.7,
+   "b": 25.4,
+   "c": 11.9,
    "purple": [
-    51.3,
-    45.8,
-    39.0,
-    32.9,
-    26.9
+    43.9,
+    43.8,
+    38.4,
+    31.7,
+    27.0
    ],
-   "spread": 24.4,
-   "slope": -1.1,
+   "spread": 16.9,
+   "slope": -1.9,
    "trend": "flat",
    "cross": null,
-   "bar_t": 1794837600
+   "bar_t": 1794924000
   }
  },
  "notes": [
-  "足は先物（GC=F）をスポットに合わせて -2.48 ずらしたもの",
-  "作成時刻（JST 7:39）は日足の区切り直後で、TradingView の日足はまだ月曜足が最新。prevHigh/prevLow は月曜（11/16）の値、weekHigh/weekLow は今週（月曜のみ）の値。",
-  "sessions.asia は未開始のため null。london/newyork は月曜のもの。",
-  "経済指標は TradingView カレンダー（USD・重要度 mid 以上）。0:00〜2:00 の項目は本日未明に通過済み。重要度 high は 22:30 の小売売上高（Retail Sales MoM）のみ。"
+  "足は先物（GC=F）をスポットに合わせて -2.69 ずらしたもの",
+  "足は先物（GC=F）をスポットに合わせて -2.69 ずらしたもの",
+  "作成時刻（JST 7:38）は日足の区切り直後で、TradingView の日足はまだ火曜足が最新。prevHigh/prevLow は火曜（11/17）の値、weekHigh/weekLow は今週（月〜火）の値。",
+  "sessions.asia は未開始のため null。london/newyork は火曜のもの。",
+  "経済指標は TradingView カレンダー（USD・重要度 mid 以上）。0:00〜6:30 の項目は本日未明に通過済み。重要度 high は 22:30 の住宅着工件数（Housing Starts）と建設許可件数（Building Permits Prel）。"
  ]
 }
