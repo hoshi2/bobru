@@ -1,0 +1,166 @@
+{
+ "symbol": "XAUUSD",
+ "date": "2026-11-19",
+ "source": "claude-code",
+ "asOf": "2026-11-18T22:39:37+00:00",
+ "price": 3725.18,
+ "trend": {
+  "daily": "down",
+  "h4": "down",
+  "h1": "down",
+  "m15": "down"
+ },
+ "ema": {
+  "tf": "h1",
+  "e10": 3739.12,
+  "e75": 3828.93,
+  "e200": 3911.93
+ },
+ "levels": {
+  "prevHigh": 3857.61,
+  "prevLow": 3720.02,
+  "weekHigh": 3901.37,
+  "weekLow": 3720.02,
+  "recentHigh": 3856.68,
+  "recentLow": 3719.18
+ },
+ "sessions": {
+  "asia": {
+   "high": null,
+   "low": null
+  },
+  "london": {
+   "high": 3790.28,
+   "low": 3738.18
+  },
+  "newyork": {
+   "high": 3790.28,
+   "low": 3719.18
+  }
+ },
+ "scenarios": {
+  "bull": "ロング案は逆張りなので小さく、短期の戻り狙いに限る。3720（前日安値＝週安値）を割らずに 15分で安値を切り上げ、3740（1H EMA10）を上抜けて押しても 3740 を割らなければ検討。SL は 3718（直近安値）の少し下。目標は 3790（前日 NY 高値）まで、伸びても 3829（1H EMA75）手前で利確。根拠は 4H の水色（b）が 24 と 20〜35 の帯にあり、白（15）が水色の下から上へ抜けてくれば順張り寄りの反発の形になること。白が水色を上抜けるまでは見送り。",
+  "bear": "ショート案が本線。3738〜3740（1H EMA10）か 3790（前日 NY 高値）への戻りで上値が重くなり、15分で高値を切り下げて戻り安値を割ったら売り。SL は戻り高値の少し上（3790 で売るなら 3800 の上）。目標は 3720（前日安値＝週安値）、割れれば 3700 の節目。根拠は全時間足が下向きで、4H の紫5本が 37→27 と上から下へ順に並ぶ下向き配列、紫の幅 10.6 で広がりが続いていること。3720 を割れて 15分の紫が広がり始めたら、戻りの高値を確認してからの追随売りに限る。",
+  "noTrade": "重要度 high の指標はないが、22:30 の新規失業保険申請件数・フィラデルフィア連銀製造業景況指数（重要度 mid）の前後 30 分は新規を控える。15分の紫5本が 8〜10 に張り付き幅 2.3 と強く収束中なので、広がり始めるまでは 3720〜3740 の安値圏での往復は見送り。急落翌日の安値付近での追いかけ売りは避け、戻りを待つ。4H の水色が 24、白が 15 と売られ過ぎ寄りなので、3720 割れを見てからの飛び乗りはしない。アジア時間は値幅が出にくいので無理に入らない。"
+ },
+ "bias": "short",
+ "summary": "日足・4H・1H・15分すべて下向き。前日は週安値 3832 を割って 3857→3720 まで大きく下げ、1H の EMA10（3739 付近）・EMA75（3829 付近）・EMA200（3912 付近）のはるか下で引けた。いちばん意識されるのは真下の 3720（前日安値＝週安値）と、上の 3738〜3740（1H EMA10・ロンドン安値）、戻りの壁 3790（前日 NY 高値）。基本は戻り売り目線だが、急落直後で 15分の紫は収束中なので、戻りを待ってから入りたい。",
+ "events": [
+  {
+   "time": "00:00",
+   "name": "Pending Home Sales Index",
+   "importance": "mid"
+  },
+  {
+   "time": "00:00",
+   "name": "Pending Home Sales MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Ethanol Production",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Ethanol Stocks",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Crude Oil Stocks Change",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Gasoline Stocks Change",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Crude Oil Exports Change",
+   "importance": "mid"
+  },
+  {
+   "time": "03:00",
+   "name": "20-Year Bond Auction Allotted at High",
+   "importance": "mid"
+  },
+  {
+   "time": "03:00",
+   "name": "20-Year Bond Auction Bid-to-Cover",
+   "importance": "mid"
+  },
+  {
+   "time": "03:00",
+   "name": "20-Year Bond Auction Total Accepted",
+   "importance": "mid"
+  },
+  {
+   "time": "06:00",
+   "name": "Net Long-term TIC Flows",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Philadelphia Fed Manufacturing Index",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "USDA Pork Net Export Sales",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "USDA Pork Gross Export Sales",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Initial Jobless Claims",
+   "importance": "mid"
+  }
+ ],
+ "bobEdge": {
+  "m15": {
+   "a": 31.1,
+   "b": 19.2,
+   "c": 11.2,
+   "purple": [
+    10.1,
+    9.2,
+    8.1,
+    7.8,
+    9.7
+   ],
+   "spread": 2.3,
+   "slope": -0.4,
+   "trend": "flat",
+   "cross": null,
+   "bar_t": 1795038300
+  },
+  "h4": {
+   "a": 15.5,
+   "b": 23.8,
+   "c": 8.8,
+   "purple": [
+    36.3,
+    37.3,
+    37.2,
+    31.1,
+    26.7
+   ],
+   "spread": 10.6,
+   "slope": -2.7,
+   "trend": "down",
+   "cross": null,
+   "bar_t": 1795010400
+  }
+ },
+ "notes": [
+  "足は先物（GC=F）をスポットに合わせて -2.62 ずらしたもの",
+  "日足の新しい足がまだ開いていないため、前日高安は最後に確定した足（18日 NY 引け）の値を使用。",
+  "今日の重要度 high の USD 指標は該当なし（TradingView 上はすべて mid）。"
+ ]
+}
