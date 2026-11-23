@@ -1,28 +1,28 @@
 {
  "symbol": "XAUUSD",
- "date": "2026-11-23",
+ "date": "2026-11-24",
  "source": "claude-code",
- "asOf": "2026-11-22T22:39:47+00:00",
- "price": 3538.185,
+ "asOf": "2026-11-23T22:39:52+00:00",
+ "price": 3634.795,
  "trend": {
   "daily": "down",
   "h4": "down",
   "h1": "down",
-  "m15": "down"
+  "m15": "up"
  },
  "ema": {
   "tf": "h1",
-  "e10": 3558.96,
-  "e75": 3691.72,
-  "e200": 3827.0
+  "e10": 3640.67,
+  "e75": 3652.97,
+  "e200": 3769.17
  },
  "levels": {
-  "prevHigh": 3636.925,
-  "prevLow": 3502.99,
-  "weekHigh": 3901.37,
-  "weekLow": 3502.99,
-  "recentHigh": 3660.885,
-  "recentLow": 3525.685
+  "prevHigh": 3689.865,
+  "prevLow": 3558.625,
+  "weekHigh": 3689.865,
+  "weekLow": 3558.625,
+  "recentHigh": 3691.395,
+  "recentLow": 3566.695
  },
  "sessions": {
   "asia": {
@@ -30,84 +30,129 @@
    "low": null
   },
   "london": {
-   "high": null,
-   "low": null
+   "high": 3691.395,
+   "low": 3600.295
   },
   "newyork": {
-   "high": null,
-   "low": null
+   "high": 3691.395,
+   "low": 3612.195
   }
  },
  "scenarios": {
-  "bull": "ロングは逆張りになるので小さく。3503を割らずに15分足で安値を切り上げ、3637（金曜高値）を実体で上抜けて押しを作ったら、押し目で入る案。SL は直近の押し安値の下。根拠：4H BOB EDGE は a=21・b=11・c=7 と売られすぎの帯にあり、15分では白（a=68）が水色（b=38）を上抜けて短期の戻りが始まっている。ただし紫の向きは4Hで下・15分でフラットなので、紫が上を向くまでは利確を早めに。",
-  "bear": "ショート案：3600〜3637（金曜高値）への戻りで、15分足の白が水色を下抜け（またはピンバー・包み足）したら戻り売り。SL は3637の上。狙いは3525（直近安値）→3503（先週安値）。3503を実体で下抜けて戻りが3503の下で止まるなら追随売りも可。根拠：全時間足が下向き、4H の紫は下向き（slope -4.1）で広がり12.7は拡散の途中。",
-  "noTrade": "8:00 JST の週明けオープン直後は窓とスプレッドが広がりやすいので最初の1時間は様子見。3503の真上で売る（安値掴み）のは避け、戻りを待つ。15分の紫の広がり（9.9）が縮んで横ばいなら動き出しを待つ。4Hが売られすぎの帯にあるため、3503を割っても急に戻る「だまし」に注意し、割れた直後の飛び乗りはしない。22:30 の Chicago Fed 指数、23:45 の S&P Global PMI 速報（重要度 mid）の前後15分は新規を控える。重要度 high の指標はなし。"
+  "bull": "ロング案：3600（ロンドン安値）を割らずに15分足で安値を切り上げ、3653（1H EMA75）を実体で上抜けて押しを作ったら押し目で入る。狙いは3690。SL は押し安値の下。3690を実体で上抜けて3690の上で押しが止まるなら追随買いも可（その先は1H EMA200の3769が上限目安）。根拠：4H BOB EDGE は紫が11〜29の売られすぎ帯にあり、白（a=85.5）が水色（b=26.1）を大きく上抜けて反発の形。ただし紫の向きは4Hでまだ下（slope -2.9）なので、紫が横〜上に向くまでは利確を早めに。",
+  "bear": "ショート案：3653〜3690（1H EMA75〜月曜高値）への戻りで、15分足の白が水色を下抜け（またはピンバー・包み足）したら戻り売り。SL は3690の上。狙いは3600→3559（月曜安値）。3559を実体で下抜けて戻りが3559の下で止まるなら追随売りも可で、その先は3503。根拠：日足・4H・1H は下向きで、1H EMA200（3769）がはるか上。15分の BOB EDGE は紫が58〜85の高い帯で白（a=34.7）が下に抜けており、短期の押しが始まっている。",
+  "noTrade": "8:00 JST の日足オープン直後はスプレッドが広がりやすいので最初の30分は様子見。月曜の値幅（3559〜3690）の真ん中にいる間（3600〜3650）は方向感が出にくいので、どちらかの端に寄るまで待つ。4Hの紫の広がり（17.5）が縮んで横ばいになったら動き出しを待つ。4Hが売られすぎ帯にあるため3559割れの「だまし」に注意し、割れた直後の飛び乗りはしない。重要度 high の指標はなし。22:15 ADP 週次、23:00 ケース・シラー住宅価格、25日 0:00 CB 消費者信頼感（いずれも mid）の前後15分は新規を控える。"
  },
- "bias": "short",
- "summary": "日足・4H・1H・15分とも下向きで、先週は3900台から3503まで急落して引けた。いちばん意識されるのは金曜の安値＝先週安値の3503と、戻りの上限になりやすい金曜高値3637。1H のEMA75（3692）・EMA200（3827）ははるか上にあり、戻り売りが基本線。",
+ "bias": "wait",
+ "summary": "日足・4H・1H は下向きのまま。ただし月曜は先週安値3503を試さず3559から3690まで大きく戻して3635で引けており、売られすぎからの反発局面。いちばん意識されるのは月曜高値3690（直近高値3691）と、戻りの壁になりやすい1H EMA75（3653）。下は月曜安値3559、その先に先週安値3503。",
  "events": [
   {
-   "time": "22:30",
-   "name": "Chicago Fed National Activity Index",
+   "time": "00:00",
+   "name": "CB Consumer Confidence",
    "importance": "mid"
   },
   {
-   "time": "23:45",
-   "name": "S&P Global Services PMI Flash",
+   "time": "01:30",
+   "name": "3-Month Bill Auction Allotted at High",
    "importance": "mid"
   },
   {
-   "time": "23:45",
-   "name": "S&P Global Composite PMI Flash",
+   "time": "01:30",
+   "name": "3-Month Bill Auction Bid-to-Cover",
    "importance": "mid"
   },
   {
-   "time": "23:45",
-   "name": "S&P Global Manufacturing PMI Flash",
+   "time": "01:30",
+   "name": "3-Month Bill Auction Total Accepted",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "6-Month Bill Auction Allotted at High",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "6-Month Bill Auction Bid-to-Cover",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "6-Month Bill Auction Total Accepted",
+   "importance": "mid"
+  },
+  {
+   "time": "03:00",
+   "name": "2-Year Note Auction Allotted at High",
+   "importance": "mid"
+  },
+  {
+   "time": "03:00",
+   "name": "2-Year Note Auction Bid-to-Cover",
+   "importance": "mid"
+  },
+  {
+   "time": "03:00",
+   "name": "2-Year Note Auction Total Accepted",
+   "importance": "mid"
+  },
+  {
+   "time": "22:15",
+   "name": "ADP Employment Change Weekly",
+   "importance": "mid"
+  },
+  {
+   "time": "23:00",
+   "name": "S&P/Case-Shiller 20-City Home Price MoM s.a",
+   "importance": "mid"
+  },
+  {
+   "time": "23:00",
+   "name": "S&P/Case-Shiller Home Price YoY",
    "importance": "mid"
   }
  ],
  "bobEdge": {
   "m15": {
-   "a": 68.4,
-   "b": 38.3,
-   "c": 17.9,
+   "a": 34.7,
+   "b": 13.6,
+   "c": 51.2,
    "purple": [
-    23.0,
-    21.0,
-    19.0,
-    15.7,
-    13.1
+    80.5,
+    83.8,
+    85.2,
+    76.6,
+    58.5
    ],
-   "spread": 9.9,
-   "slope": -0.2,
+   "spread": 26.7,
+   "slope": -0.3,
    "trend": "flat",
    "cross": null,
-   "bar_t": 1795211100
+   "bar_t": 1795470300
   },
   "h4": {
-   "a": 21.1,
-   "b": 10.9,
-   "c": 6.8,
+   "a": 85.5,
+   "b": 26.1,
+   "c": 9.6,
    "purple": [
-    17.3,
-    24.6,
-    27.5,
-    30.0,
-    25.3
+    11.4,
+    17.4,
+    23.5,
+    28.9,
+    25.6
    ],
-   "spread": 12.7,
-   "slope": -4.1,
+   "spread": 17.5,
+   "slope": -2.9,
    "trend": "down",
    "cross": null,
-   "bar_t": 1795183200
+   "bar_t": 1795442400
   }
  },
  "notes": [
-  "足は先物（GC=F）をスポットに合わせて +22.79 ずらしたもの",
-  "作成時刻（JST 月曜 7:40）は週明けオープン（8:00 JST）前。price は金曜（11/20）引け値で、15分足・BOB EDGE も金曜の最終足の値。",
-  "prevHigh/prevLow は TradingView 日足の最後の完成足＝金曜（11/20）の高安。weekHigh/weekLow は今週の足がまだ無いため先週（11/16〜20）の高安。",
-  "sessions は週明け前のためすべて null。",
-  "経済指標は TradingView カレンダー（USD・重要度 mid 以上）。本日は重要度 high なし。"
+  "足は先物（GC=F）をスポットに合わせて +0.40 ずらしたもの",
+  "作成時刻（JST 火曜 7:38）は日足の区切り（NY 17:00＝冬時間では JST 7:00）直後の取引休止帯。price・15分足・BOB EDGE は休止前の最終足（JST 6:45）の値。",
+  "prevHigh/prevLow は TradingView 日足の最後の完成足＝月曜（11/23）の高安。weekHigh/weekLow は今週の足（月曜のみ）の高安で、月曜と同じ値。",
+  "asia セッションは本日まだ始まっていないため null。",
+  "経済指標は TradingView カレンダー（USD・重要度 mid 以上）。本日は重要度 high なし。1:30・3:00 の米入札は作成時点で既に終了。"
  ]
 }
