@@ -1,0 +1,191 @@
+{
+ "symbol": "XAUUSD",
+ "date": "2026-11-25",
+ "source": "claude-code",
+ "asOf": "2026-11-24T22:40:01+00:00",
+ "price": 3556.365,
+ "trend": {
+  "daily": "down",
+  "h4": "down",
+  "h1": "down",
+  "m15": "down"
+ },
+ "ema": {
+  "tf": "h1",
+  "e10": 3572.18,
+  "e75": 3629.9,
+  "e200": 3736.19
+ },
+ "levels": {
+  "prevHigh": 3689.865,
+  "prevLow": 3558.625,
+  "weekHigh": 3689.865,
+  "weekLow": 3546.635,
+  "recentHigh": 3677.965,
+  "recentLow": 3546.665
+ },
+ "sessions": {
+  "asia": {
+   "high": null,
+   "low": null
+  },
+  "london": {
+   "high": 3652.665,
+   "low": 3558.665
+  },
+  "newyork": {
+   "high": 3642.665,
+   "low": 3546.665
+  }
+ },
+ "scenarios": {
+  "bull": "ロングは逆張りになるので小さく。3546〜3547（週足安値・直近安値）を下ヒゲで守って 15分足が 3560 台に戻すなら、3545 割れを SL にした反発狙い。目先は 3572（1H EMA10）、伸びても 3600 前後まで。BOB EDGE 15分は水色（b）が 20 の帯にいるが紫が下向きで広がっている（spread 38）ので、白が水色を上抜けるのを確認してから。",
+  "bear": "戻り売りが本線。3572（1H EMA10）〜3600 への戻りで 15分足が上ヒゲを作り、白（a）が再び下向きになったら売り。SL は 3610 の上。または 3546 を明確に割って 15分足が下で確定したら、3560 回復を SL にブレイク追随。4H の BOB EDGE も紫下向きで、水色（b）57 からの下抜けなら順張り売りの形になる。目安は 3520〜3500（先週安値 3503）。",
+  "noTrade": "日本時間 22:30 に重要度 high の指標（コア PCE・GDP 改定値・耐久財受注・個人所得/支出）が集中するので、前後 30 分は新規を見送る。4H の紫の広がりが小さめ（spread 17）で収束気味のため、紫が開き始めるまで大きいロットは持たない。3546〜3560 の狭いレンジの中での往復は様子見。"
+ },
+ "bias": "short",
+ "summary": "日足・4H・1H・15分すべて下向きで、1H の EMA75（3630 付近）・EMA200（3736 付近）の下にいる。前日は 3690 付近を高値に大きく下げ、今は週足安値・直近安値の 3546〜3547 のすぐ上。ここを割るか、戻してから落ちるかが今日の焦点。",
+ "events": [
+  {
+   "time": "00:00",
+   "name": "CB Consumer Confidence",
+   "importance": "mid"
+  },
+  {
+   "time": "00:00",
+   "name": "New Home Sales",
+   "importance": "mid"
+  },
+  {
+   "time": "00:00",
+   "name": "New Home Sales MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "00:00",
+   "name": "4-Week Bill Auction Bid-to-Cover",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "52-Week Bill Auction Bid-to-Cover",
+   "importance": "mid"
+  },
+  {
+   "time": "03:00",
+   "name": "5-Year Note Auction Bid-to-Cover",
+   "importance": "mid"
+  },
+  {
+   "time": "03:00",
+   "name": "2-Year FRN Auction Bid-to-Cover",
+   "importance": "mid"
+  },
+  {
+   "time": "06:30",
+   "name": "API Crude Oil Stock Change",
+   "importance": "mid"
+  },
+  {
+   "time": "21:00",
+   "name": "MBA 30-Year Mortgage Rate",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Personal Spending MoM",
+   "importance": "high"
+  },
+  {
+   "time": "22:30",
+   "name": "PCE Price Index MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Core PCE Price Index MoM",
+   "importance": "high"
+  },
+  {
+   "time": "22:30",
+   "name": "PCE Price Index YoY",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Personal Income MoM",
+   "importance": "high"
+  },
+  {
+   "time": "22:30",
+   "name": "GDP Price Index QoQ 2nd Est",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "GDP Growth Rate QoQ 2nd Est",
+   "importance": "high"
+  },
+  {
+   "time": "22:30",
+   "name": "Durable Goods Orders MoM",
+   "importance": "high"
+  },
+  {
+   "time": "22:30",
+   "name": "Durable Goods Orders Ex Transp MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Corporate Profits QoQ Prel",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Initial Jobless Claims",
+   "importance": "mid"
+  }
+ ],
+ "bobEdge": {
+  "m15": {
+   "a": 51.6,
+   "b": 20.0,
+   "c": 6.4,
+   "purple": [
+    13.9,
+    13.1,
+    16.7,
+    36.5,
+    51.5
+   ],
+   "spread": 38.4,
+   "slope": -3.1,
+   "trend": "down",
+   "cross": null,
+   "bar_t": 1795556700
+  },
+  "h4": {
+   "a": 21.1,
+   "b": 57.2,
+   "c": 16.9,
+   "purple": [
+    9.7,
+    13.0,
+    18.7,
+    25.9,
+    26.3
+   ],
+   "spread": 16.6,
+   "slope": -2.2,
+   "trend": "down",
+   "cross": null,
+   "bar_t": 1795528800
+  }
+ },
+ "notes": [
+  "足は先物（GC=F）をスポットに合わせて +1.26 ずらしたもの",
+  "前日高安・週足高安は TradingView の OANDA:XAUUSD から転記。",
+  "翌 26 日は米感謝祭で NY 休場のため、今夜は指標集中と流動性低下に注意。"
+ ]
+}

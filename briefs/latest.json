@@ -1,28 +1,28 @@
 {
  "symbol": "XAUUSD",
- "date": "2026-11-24",
+ "date": "2026-11-25",
  "source": "claude-code",
- "asOf": "2026-11-23T22:39:52+00:00",
- "price": 3634.795,
+ "asOf": "2026-11-24T22:40:01+00:00",
+ "price": 3556.365,
  "trend": {
   "daily": "down",
   "h4": "down",
   "h1": "down",
-  "m15": "up"
+  "m15": "down"
  },
  "ema": {
   "tf": "h1",
-  "e10": 3640.67,
-  "e75": 3652.97,
-  "e200": 3769.17
+  "e10": 3572.18,
+  "e75": 3629.9,
+  "e200": 3736.19
  },
  "levels": {
   "prevHigh": 3689.865,
   "prevLow": 3558.625,
   "weekHigh": 3689.865,
-  "weekLow": 3558.625,
-  "recentHigh": 3691.395,
-  "recentLow": 3566.695
+  "weekLow": 3546.635,
+  "recentHigh": 3677.965,
+  "recentLow": 3546.665
  },
  "sessions": {
   "asia": {
@@ -30,21 +30,21 @@
    "low": null
   },
   "london": {
-   "high": 3691.395,
-   "low": 3600.295
+   "high": 3652.665,
+   "low": 3558.665
   },
   "newyork": {
-   "high": 3691.395,
-   "low": 3612.195
+   "high": 3642.665,
+   "low": 3546.665
   }
  },
  "scenarios": {
-  "bull": "ロング案：3600（ロンドン安値）を割らずに15分足で安値を切り上げ、3653（1H EMA75）を実体で上抜けて押しを作ったら押し目で入る。狙いは3690。SL は押し安値の下。3690を実体で上抜けて3690の上で押しが止まるなら追随買いも可（その先は1H EMA200の3769が上限目安）。根拠：4H BOB EDGE は紫が11〜29の売られすぎ帯にあり、白（a=85.5）が水色（b=26.1）を大きく上抜けて反発の形。ただし紫の向きは4Hでまだ下（slope -2.9）なので、紫が横〜上に向くまでは利確を早めに。",
-  "bear": "ショート案：3653〜3690（1H EMA75〜月曜高値）への戻りで、15分足の白が水色を下抜け（またはピンバー・包み足）したら戻り売り。SL は3690の上。狙いは3600→3559（月曜安値）。3559を実体で下抜けて戻りが3559の下で止まるなら追随売りも可で、その先は3503。根拠：日足・4H・1H は下向きで、1H EMA200（3769）がはるか上。15分の BOB EDGE は紫が58〜85の高い帯で白（a=34.7）が下に抜けており、短期の押しが始まっている。",
-  "noTrade": "8:00 JST の日足オープン直後はスプレッドが広がりやすいので最初の30分は様子見。月曜の値幅（3559〜3690）の真ん中にいる間（3600〜3650）は方向感が出にくいので、どちらかの端に寄るまで待つ。4Hの紫の広がり（17.5）が縮んで横ばいになったら動き出しを待つ。4Hが売られすぎ帯にあるため3559割れの「だまし」に注意し、割れた直後の飛び乗りはしない。重要度 high の指標はなし。22:15 ADP 週次、23:00 ケース・シラー住宅価格、25日 0:00 CB 消費者信頼感（いずれも mid）の前後15分は新規を控える。"
+  "bull": "ロングは逆張りになるので小さく。3546〜3547（週足安値・直近安値）を下ヒゲで守って 15分足が 3560 台に戻すなら、3545 割れを SL にした反発狙い。目先は 3572（1H EMA10）、伸びても 3600 前後まで。BOB EDGE 15分は水色（b）が 20 の帯にいるが紫が下向きで広がっている（spread 38）ので、白が水色を上抜けるのを確認してから。",
+  "bear": "戻り売りが本線。3572（1H EMA10）〜3600 への戻りで 15分足が上ヒゲを作り、白（a）が再び下向きになったら売り。SL は 3610 の上。または 3546 を明確に割って 15分足が下で確定したら、3560 回復を SL にブレイク追随。4H の BOB EDGE も紫下向きで、水色（b）57 からの下抜けなら順張り売りの形になる。目安は 3520〜3500（先週安値 3503）。",
+  "noTrade": "日本時間 22:30 に重要度 high の指標（コア PCE・GDP 改定値・耐久財受注・個人所得/支出）が集中するので、前後 30 分は新規を見送る。4H の紫の広がりが小さめ（spread 17）で収束気味のため、紫が開き始めるまで大きいロットは持たない。3546〜3560 の狭いレンジの中での往復は様子見。"
  },
- "bias": "wait",
- "summary": "日足・4H・1H は下向きのまま。ただし月曜は先週安値3503を試さず3559から3690まで大きく戻して3635で引けており、売られすぎからの反発局面。いちばん意識されるのは月曜高値3690（直近高値3691）と、戻りの壁になりやすい1H EMA75（3653）。下は月曜安値3559、その先に先週安値3503。",
+ "bias": "short",
+ "summary": "日足・4H・1H・15分すべて下向きで、1H の EMA75（3630 付近）・EMA200（3736 付近）の下にいる。前日は 3690 付近を高値に大きく下げ、今は週足安値・直近安値の 3546〜3547 のすぐ上。ここを割るか、戻してから落ちるかが今日の焦点。",
  "events": [
   {
    "time": "00:00",
@@ -52,107 +52,140 @@
    "importance": "mid"
   },
   {
-   "time": "01:30",
-   "name": "3-Month Bill Auction Allotted at High",
+   "time": "00:00",
+   "name": "New Home Sales",
+   "importance": "mid"
+  },
+  {
+   "time": "00:00",
+   "name": "New Home Sales MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "00:00",
+   "name": "4-Week Bill Auction Bid-to-Cover",
    "importance": "mid"
   },
   {
    "time": "01:30",
-   "name": "3-Month Bill Auction Bid-to-Cover",
-   "importance": "mid"
-  },
-  {
-   "time": "01:30",
-   "name": "3-Month Bill Auction Total Accepted",
-   "importance": "mid"
-  },
-  {
-   "time": "01:30",
-   "name": "6-Month Bill Auction Allotted at High",
-   "importance": "mid"
-  },
-  {
-   "time": "01:30",
-   "name": "6-Month Bill Auction Bid-to-Cover",
-   "importance": "mid"
-  },
-  {
-   "time": "01:30",
-   "name": "6-Month Bill Auction Total Accepted",
+   "name": "52-Week Bill Auction Bid-to-Cover",
    "importance": "mid"
   },
   {
    "time": "03:00",
-   "name": "2-Year Note Auction Allotted at High",
+   "name": "5-Year Note Auction Bid-to-Cover",
    "importance": "mid"
   },
   {
    "time": "03:00",
-   "name": "2-Year Note Auction Bid-to-Cover",
+   "name": "2-Year FRN Auction Bid-to-Cover",
    "importance": "mid"
   },
   {
-   "time": "03:00",
-   "name": "2-Year Note Auction Total Accepted",
+   "time": "06:30",
+   "name": "API Crude Oil Stock Change",
    "importance": "mid"
   },
   {
-   "time": "22:15",
-   "name": "ADP Employment Change Weekly",
+   "time": "21:00",
+   "name": "MBA 30-Year Mortgage Rate",
    "importance": "mid"
   },
   {
-   "time": "23:00",
-   "name": "S&P/Case-Shiller 20-City Home Price MoM s.a",
+   "time": "22:30",
+   "name": "Personal Spending MoM",
+   "importance": "high"
+  },
+  {
+   "time": "22:30",
+   "name": "PCE Price Index MoM",
    "importance": "mid"
   },
   {
-   "time": "23:00",
-   "name": "S&P/Case-Shiller Home Price YoY",
+   "time": "22:30",
+   "name": "Core PCE Price Index MoM",
+   "importance": "high"
+  },
+  {
+   "time": "22:30",
+   "name": "PCE Price Index YoY",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Personal Income MoM",
+   "importance": "high"
+  },
+  {
+   "time": "22:30",
+   "name": "GDP Price Index QoQ 2nd Est",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "GDP Growth Rate QoQ 2nd Est",
+   "importance": "high"
+  },
+  {
+   "time": "22:30",
+   "name": "Durable Goods Orders MoM",
+   "importance": "high"
+  },
+  {
+   "time": "22:30",
+   "name": "Durable Goods Orders Ex Transp MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Corporate Profits QoQ Prel",
+   "importance": "mid"
+  },
+  {
+   "time": "22:30",
+   "name": "Initial Jobless Claims",
    "importance": "mid"
   }
  ],
  "bobEdge": {
   "m15": {
-   "a": 34.7,
-   "b": 13.6,
-   "c": 51.2,
+   "a": 51.6,
+   "b": 20.0,
+   "c": 6.4,
    "purple": [
-    80.5,
-    83.8,
-    85.2,
-    76.6,
-    58.5
+    13.9,
+    13.1,
+    16.7,
+    36.5,
+    51.5
    ],
-   "spread": 26.7,
-   "slope": -0.3,
-   "trend": "flat",
-   "cross": null,
-   "bar_t": 1795470300
-  },
-  "h4": {
-   "a": 85.5,
-   "b": 26.1,
-   "c": 9.6,
-   "purple": [
-    11.4,
-    17.4,
-    23.5,
-    28.9,
-    25.6
-   ],
-   "spread": 17.5,
-   "slope": -2.9,
+   "spread": 38.4,
+   "slope": -3.1,
    "trend": "down",
    "cross": null,
-   "bar_t": 1795442400
+   "bar_t": 1795556700
+  },
+  "h4": {
+   "a": 21.1,
+   "b": 57.2,
+   "c": 16.9,
+   "purple": [
+    9.7,
+    13.0,
+    18.7,
+    25.9,
+    26.3
+   ],
+   "spread": 16.6,
+   "slope": -2.2,
+   "trend": "down",
+   "cross": null,
+   "bar_t": 1795528800
   }
  },
  "notes": [
-  "足は先物（GC=F）をスポットに合わせて +0.40 ずらしたもの",
-  "作成時刻（JST 火曜 7:38）は日足の区切り（NY 17:00＝冬時間では JST 7:00）直後の取引休止帯。price・15分足・BOB EDGE は休止前の最終足（JST 6:45）の値。",
-  "prevHigh/prevLow は TradingView 日足の最後の完成足＝月曜（11/23）の高安。weekHigh/weekLow は今週の足（月曜のみ）の高安で、月曜と同じ値。",
-  "asia セッションは本日まだ始まっていないため null。",
-  "経済指標は TradingView カレンダー（USD・重要度 mid 以上）。本日は重要度 high なし。1:30・3:00 の米入札は作成時点で既に終了。"
+  "足は先物（GC=F）をスポットに合わせて +1.26 ずらしたもの",
+  "前日高安・週足高安は TradingView の OANDA:XAUUSD から転記。",
+  "翌 26 日は米感謝祭で NY 休場のため、今夜は指標集中と流動性低下に注意。"
  ]
 }
