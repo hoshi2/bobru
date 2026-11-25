@@ -1,0 +1,157 @@
+{
+ "symbol": "XAUUSD",
+ "date": "2026-11-26",
+ "source": "claude-code",
+ "asOf": "2026-11-25T22:39:48+00:00",
+ "price": 3589.435,
+ "trend": {
+  "daily": "down",
+  "h4": "down",
+  "h1": "range",
+  "m15": "range"
+ },
+ "ema": {
+  "tf": "h1",
+  "e10": 3543.0,
+  "e75": 3562.92,
+  "e200": 3667.65
+ },
+ "levels": {
+  "prevHigh": 3678.485,
+  "prevLow": 3546.635,
+  "weekHigh": 3689.865,
+  "weekLow": 3426.805,
+  "recentHigh": 3589.435,
+  "recentLow": 3425.435
+ },
+ "sessions": {
+  "asia": {
+   "high": null,
+   "low": null
+  },
+  "london": {
+   "high": 3539.035,
+   "low": 3425.435
+  },
+  "newyork": {
+   "high": 3589.435,
+   "low": 3425.435
+  }
+ },
+ "scenarios": {
+  "bull": "押し目買いなら 3547〜3563（前日安値・1H EMA75）への押しが下ヒゲで止まり、15分足が 3570 台に戻すのを待つ。SL は 3540 割れの目安。目先は 3620 前後、伸びても 3668（1H EMA200）まで。BOB EDGE 15分は紫が上向きで広がっている（spread 30）が、水色（b）が 90 と買われすぎなので、いったん水色が 65〜80 まで下がって白（a）が上抜け直すのを確認してから。",
+  "bear": "戻り売りが上位足に沿う形。3600〜3620、または 3668（1H EMA200）〜3678（前日高値）への戻りで 15分足が上ヒゲを作り、白（a）が水色（b）を下抜けたら売り。SL は直近の戻り高値の上（3630 または 3690 の目安）。または 3547 を 15分足で明確に割ったら、3560 回復を SL にブレイク追随。目安は 3500、その先は週足安値 3427。4H の BOB EDGE は紫下向きで、白 25・水色 36 の帯にいるので、下抜けなら順張り売りの形になる。",
+  "noTrade": "本日は NY 休場（感謝祭）で流動性が薄く、値が飛びやすいので基本は見送り。前日は 260 ドル幅の急落と急反発で、15分の水色（b）が 90 と買われすぎの直後。4H の紫の広がりは小さめ（spread 17）で収束中なので、開き始めるまでロットを持たない。3563〜3600 の中での往復は様子見。重要度 high の指標はなし（中程度の指標は日本時間 0:00〜1:30 にすでに通過）。"
+ },
+ "bias": "wait",
+ "summary": "日足・4H は下向きのまま。前日は週足安値 3427 まで急落したあと 3589 まで V 字で戻し、今は 1H EMA75（3563 付近）の上、EMA200（3668 付近）の下にいる。前日安値 3547 を守れるか、1H EMA200〜前日高値 3678 で頭を抑えられるかが今日の焦点。本日は米感謝祭で NY 休場のため、動きは薄い。",
+ "events": [
+  {
+   "time": "00:00",
+   "name": "New Home Sales",
+   "importance": "mid"
+  },
+  {
+   "time": "00:00",
+   "name": "New Home Sales MoM",
+   "importance": "mid"
+  },
+  {
+   "time": "00:00",
+   "name": "4-Week Bill Auction Allotted at High",
+   "importance": "mid"
+  },
+  {
+   "time": "00:00",
+   "name": "4-Week Bill Auction Bid-to-Cover",
+   "importance": "mid"
+  },
+  {
+   "time": "00:00",
+   "name": "4-Week Bill Auction Total Accepted",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Ethanol Production",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Ethanol Stocks",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Crude Oil Stocks Change",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Gasoline Stocks Change",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Crude Oil Exports Change",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "7-Year Note Auction Allotted at High",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "7-Year Note Auction Bid-to-Cover",
+   "importance": "mid"
+  },
+  {
+   "time": "01:30",
+   "name": "7-Year Note Auction Total Accepted",
+   "importance": "mid"
+  }
+ ],
+ "bobEdge": {
+  "m15": {
+   "a": 65.0,
+   "b": 89.6,
+   "c": 77.4,
+   "purple": [
+    50.5,
+    44.0,
+    34.5,
+    25.4,
+    20.8
+   ],
+   "spread": 29.7,
+   "slope": 5.8,
+   "trend": "up",
+   "cross": null,
+   "bar_t": 1795643100
+  },
+  "h4": {
+   "a": 25.0,
+   "b": 36.3,
+   "c": 18.2,
+   "purple": [
+    9.0,
+    9.5,
+    13.7,
+    22.0,
+    25.7
+   ],
+   "spread": 16.7,
+   "slope": -2.2,
+   "trend": "down",
+   "cross": null,
+   "bar_t": 1795615200
+  }
+ },
+ "notes": [
+  "足は先物（GC=F）をスポットに合わせて -28.37 ずらしたもの",
+  "前日高安・週足高安は TradingView の OANDA:XAUUSD から転記。",
+  "本日 26 日は米感謝祭で NY 休場。重要度 high の指標はなし。",
+  "前日は週足安値 3427 まで急落したあと V 字で戻しており、1H・15分の向きは range 判定。"
+ ]
+}

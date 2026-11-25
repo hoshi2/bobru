@@ -1,28 +1,28 @@
 {
  "symbol": "XAUUSD",
- "date": "2026-11-25",
+ "date": "2026-11-26",
  "source": "claude-code",
- "asOf": "2026-11-24T22:40:01+00:00",
- "price": 3556.365,
+ "asOf": "2026-11-25T22:39:48+00:00",
+ "price": 3589.435,
  "trend": {
   "daily": "down",
   "h4": "down",
-  "h1": "down",
-  "m15": "down"
+  "h1": "range",
+  "m15": "range"
  },
  "ema": {
   "tf": "h1",
-  "e10": 3572.18,
-  "e75": 3629.9,
-  "e200": 3736.19
+  "e10": 3543.0,
+  "e75": 3562.92,
+  "e200": 3667.65
  },
  "levels": {
-  "prevHigh": 3689.865,
-  "prevLow": 3558.625,
+  "prevHigh": 3678.485,
+  "prevLow": 3546.635,
   "weekHigh": 3689.865,
-  "weekLow": 3546.635,
-  "recentHigh": 3677.965,
-  "recentLow": 3546.665
+  "weekLow": 3426.805,
+  "recentHigh": 3589.435,
+  "recentLow": 3425.435
  },
  "sessions": {
   "asia": {
@@ -30,27 +30,22 @@
    "low": null
   },
   "london": {
-   "high": 3652.665,
-   "low": 3558.665
+   "high": 3539.035,
+   "low": 3425.435
   },
   "newyork": {
-   "high": 3642.665,
-   "low": 3546.665
+   "high": 3589.435,
+   "low": 3425.435
   }
  },
  "scenarios": {
-  "bull": "ロングは逆張りになるので小さく。3546〜3547（週足安値・直近安値）を下ヒゲで守って 15分足が 3560 台に戻すなら、3545 割れを SL にした反発狙い。目先は 3572（1H EMA10）、伸びても 3600 前後まで。BOB EDGE 15分は水色（b）が 20 の帯にいるが紫が下向きで広がっている（spread 38）ので、白が水色を上抜けるのを確認してから。",
-  "bear": "戻り売りが本線。3572（1H EMA10）〜3600 への戻りで 15分足が上ヒゲを作り、白（a）が再び下向きになったら売り。SL は 3610 の上。または 3546 を明確に割って 15分足が下で確定したら、3560 回復を SL にブレイク追随。4H の BOB EDGE も紫下向きで、水色（b）57 からの下抜けなら順張り売りの形になる。目安は 3520〜3500（先週安値 3503）。",
-  "noTrade": "日本時間 22:30 に重要度 high の指標（コア PCE・GDP 改定値・耐久財受注・個人所得/支出）が集中するので、前後 30 分は新規を見送る。4H の紫の広がりが小さめ（spread 17）で収束気味のため、紫が開き始めるまで大きいロットは持たない。3546〜3560 の狭いレンジの中での往復は様子見。"
+  "bull": "押し目買いなら 3547〜3563（前日安値・1H EMA75）への押しが下ヒゲで止まり、15分足が 3570 台に戻すのを待つ。SL は 3540 割れの目安。目先は 3620 前後、伸びても 3668（1H EMA200）まで。BOB EDGE 15分は紫が上向きで広がっている（spread 30）が、水色（b）が 90 と買われすぎなので、いったん水色が 65〜80 まで下がって白（a）が上抜け直すのを確認してから。",
+  "bear": "戻り売りが上位足に沿う形。3600〜3620、または 3668（1H EMA200）〜3678（前日高値）への戻りで 15分足が上ヒゲを作り、白（a）が水色（b）を下抜けたら売り。SL は直近の戻り高値の上（3630 または 3690 の目安）。または 3547 を 15分足で明確に割ったら、3560 回復を SL にブレイク追随。目安は 3500、その先は週足安値 3427。4H の BOB EDGE は紫下向きで、白 25・水色 36 の帯にいるので、下抜けなら順張り売りの形になる。",
+  "noTrade": "本日は NY 休場（感謝祭）で流動性が薄く、値が飛びやすいので基本は見送り。前日は 260 ドル幅の急落と急反発で、15分の水色（b）が 90 と買われすぎの直後。4H の紫の広がりは小さめ（spread 17）で収束中なので、開き始めるまでロットを持たない。3563〜3600 の中での往復は様子見。重要度 high の指標はなし（中程度の指標は日本時間 0:00〜1:30 にすでに通過）。"
  },
- "bias": "short",
- "summary": "日足・4H・1H・15分すべて下向きで、1H の EMA75（3630 付近）・EMA200（3736 付近）の下にいる。前日は 3690 付近を高値に大きく下げ、今は週足安値・直近安値の 3546〜3547 のすぐ上。ここを割るか、戻してから落ちるかが今日の焦点。",
+ "bias": "wait",
+ "summary": "日足・4H は下向きのまま。前日は週足安値 3427 まで急落したあと 3589 まで V 字で戻し、今は 1H EMA75（3563 付近）の上、EMA200（3668 付近）の下にいる。前日安値 3547 を守れるか、1H EMA200〜前日高値 3678 で頭を抑えられるかが今日の焦点。本日は米感謝祭で NY 休場のため、動きは薄い。",
  "events": [
-  {
-   "time": "00:00",
-   "name": "CB Consumer Confidence",
-   "importance": "mid"
-  },
   {
    "time": "00:00",
    "name": "New Home Sales",
@@ -63,129 +58,100 @@
   },
   {
    "time": "00:00",
+   "name": "4-Week Bill Auction Allotted at High",
+   "importance": "mid"
+  },
+  {
+   "time": "00:00",
    "name": "4-Week Bill Auction Bid-to-Cover",
    "importance": "mid"
   },
   {
+   "time": "00:00",
+   "name": "4-Week Bill Auction Total Accepted",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Ethanol Production",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Ethanol Stocks",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Crude Oil Stocks Change",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Gasoline Stocks Change",
+   "importance": "mid"
+  },
+  {
+   "time": "00:30",
+   "name": "EIA Crude Oil Exports Change",
+   "importance": "mid"
+  },
+  {
    "time": "01:30",
-   "name": "52-Week Bill Auction Bid-to-Cover",
+   "name": "7-Year Note Auction Allotted at High",
    "importance": "mid"
   },
   {
-   "time": "03:00",
-   "name": "5-Year Note Auction Bid-to-Cover",
+   "time": "01:30",
+   "name": "7-Year Note Auction Bid-to-Cover",
    "importance": "mid"
   },
   {
-   "time": "03:00",
-   "name": "2-Year FRN Auction Bid-to-Cover",
-   "importance": "mid"
-  },
-  {
-   "time": "06:30",
-   "name": "API Crude Oil Stock Change",
-   "importance": "mid"
-  },
-  {
-   "time": "21:00",
-   "name": "MBA 30-Year Mortgage Rate",
-   "importance": "mid"
-  },
-  {
-   "time": "22:30",
-   "name": "Personal Spending MoM",
-   "importance": "high"
-  },
-  {
-   "time": "22:30",
-   "name": "PCE Price Index MoM",
-   "importance": "mid"
-  },
-  {
-   "time": "22:30",
-   "name": "Core PCE Price Index MoM",
-   "importance": "high"
-  },
-  {
-   "time": "22:30",
-   "name": "PCE Price Index YoY",
-   "importance": "mid"
-  },
-  {
-   "time": "22:30",
-   "name": "Personal Income MoM",
-   "importance": "high"
-  },
-  {
-   "time": "22:30",
-   "name": "GDP Price Index QoQ 2nd Est",
-   "importance": "mid"
-  },
-  {
-   "time": "22:30",
-   "name": "GDP Growth Rate QoQ 2nd Est",
-   "importance": "high"
-  },
-  {
-   "time": "22:30",
-   "name": "Durable Goods Orders MoM",
-   "importance": "high"
-  },
-  {
-   "time": "22:30",
-   "name": "Durable Goods Orders Ex Transp MoM",
-   "importance": "mid"
-  },
-  {
-   "time": "22:30",
-   "name": "Corporate Profits QoQ Prel",
-   "importance": "mid"
-  },
-  {
-   "time": "22:30",
-   "name": "Initial Jobless Claims",
+   "time": "01:30",
+   "name": "7-Year Note Auction Total Accepted",
    "importance": "mid"
   }
  ],
  "bobEdge": {
   "m15": {
-   "a": 51.6,
-   "b": 20.0,
-   "c": 6.4,
+   "a": 65.0,
+   "b": 89.6,
+   "c": 77.4,
    "purple": [
-    13.9,
-    13.1,
-    16.7,
-    36.5,
-    51.5
+    50.5,
+    44.0,
+    34.5,
+    25.4,
+    20.8
    ],
-   "spread": 38.4,
-   "slope": -3.1,
-   "trend": "down",
+   "spread": 29.7,
+   "slope": 5.8,
+   "trend": "up",
    "cross": null,
-   "bar_t": 1795556700
+   "bar_t": 1795643100
   },
   "h4": {
-   "a": 21.1,
-   "b": 57.2,
-   "c": 16.9,
+   "a": 25.0,
+   "b": 36.3,
+   "c": 18.2,
    "purple": [
-    9.7,
-    13.0,
-    18.7,
-    25.9,
-    26.3
+    9.0,
+    9.5,
+    13.7,
+    22.0,
+    25.7
    ],
-   "spread": 16.6,
+   "spread": 16.7,
    "slope": -2.2,
    "trend": "down",
    "cross": null,
-   "bar_t": 1795528800
+   "bar_t": 1795615200
   }
  },
  "notes": [
-  "足は先物（GC=F）をスポットに合わせて +1.26 ずらしたもの",
+  "足は先物（GC=F）をスポットに合わせて -28.37 ずらしたもの",
   "前日高安・週足高安は TradingView の OANDA:XAUUSD から転記。",
-  "翌 26 日は米感謝祭で NY 休場のため、今夜は指標集中と流動性低下に注意。"
+  "本日 26 日は米感謝祭で NY 休場。重要度 high の指標はなし。",
+  "前日は週足安値 3427 まで急落したあと V 字で戻しており、1H・15分の向きは range 判定。"
  ]
 }
